@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true,
+    "paths": {
+      "@agent-poker/shared": ["../shared/src/index.ts"],
+      "@agent-poker/poker-engine": ["../poker-engine/src/index.ts"],
+      "@agent-poker/agent-runtime": ["../agent-runtime/src/index.ts"],
+      "@agent-poker/persistence": ["../persistence/src/index.ts"],
+      "@agent-poker/realtime": ["../realtime/src/index.ts"]
+    }
+  },
+  "references": [
+    { "path": "../shared" },
+    { "path": "../poker-engine" },
+    { "path": "../agent-runtime" },
+    { "path": "../persistence" },
+    { "path": "../realtime" }
+  ],
+  "include": ["src"]
+}

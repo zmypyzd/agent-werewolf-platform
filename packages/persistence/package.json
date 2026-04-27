@@ -1,0 +1,27 @@
+{
+  "name": "@agent-poker/persistence",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b && node --input-type=module -e \"import { mkdirSync, copyFileSync } from 'fs'; mkdirSync('dist/sqlite', { recursive: true }); copyFileSync('src/sqlite/schema.sql', 'dist/sqlite/schema.sql');\"",
+    "dev": "tsc -b --watch",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@agent-poker/shared": "workspace:*",
+    "better-sqlite3": "^11.3.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0",
+    "@types/better-sqlite3": "^7.6.11"
+  }
+}

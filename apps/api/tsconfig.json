@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true,
+    "paths": {
+      "@agent-poker/shared": ["../../packages/shared/src/index.ts"],
+      "@agent-poker/agent-protocol": ["../../packages/agent-protocol/src/index.ts"],
+      "@agent-poker/auth": ["../../packages/auth/src/index.ts"],
+      "@agent-poker/table-orchestrator": ["../../packages/table-orchestrator/src/index.ts"],
+      "@agent-poker/agent-runtime": ["../../packages/agent-runtime/src/index.ts"],
+      "@agent-poker/persistence": ["../../packages/persistence/src/index.ts"],
+      "@agent-poker/realtime": ["../../packages/realtime/src/index.ts"]
+    }
+  },
+  "references": [
+    { "path": "../../packages/shared" },
+    { "path": "../../packages/agent-protocol" },
+    { "path": "../../packages/auth" },
+    { "path": "../../packages/table-orchestrator" },
+    { "path": "../../packages/agent-runtime" },
+    { "path": "../../packages/persistence" },
+    { "path": "../../packages/realtime" }
+  ],
+  "include": ["src"]
+}

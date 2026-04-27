@@ -1,0 +1,345 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createHash, randomUUID } from 'crypto';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import type { HandSummary, ReplayEvent } from '@agent-poker/shared';
+import {
+  FileMatchArtifactStore,
+  MemoryMatchArtifactStore,
+} from '../match-artifact-store.js';
+
+function makeTmpDir(): string {
+  return path.join(os.tmpdir(), `poker-match-artifact-${randomUUID()}`);
+}
+
+const dirs: string[] = [];
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  for (const dir of dirs) {
+    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+  }
+  dirs.length = 0;
+});
+
+function sha256(raw: string): string {
+  return createHash('sha256').update(raw).digest('hex');
+}
+
+function makeHand(handNumber: number, stackAfter: number): HandSummary {
+  return {
+    handId: `hand-${String(handNumber).padStart(3, '0')}-abc123`,
+    tableId: 'tbl-12345678',
+    handNumber,
+    seed: `seed-${handNumber}`,
+    startedAt: 1_777_280_000_000 + handNumber,
+    completedAt: 1_777_280_001_000 + handNumber,
+    players: [{
+      playerId: 'player-bot-a',
+      agentId: 'bot-a',
+      seatIndex: 0,
+      stackBefore: 1000,
+      stackAfter,
+      holeCards: [{ rank: 'A', suit: 's' }, { rank: 'K', suit: 's' }],
+      handEvaluation: {
+        category: 'high_card',
+        categoryRank: 0,
+        tiebreakers: [14],
+        bestCards: [
+          { rank: 'A', suit: 's' },
+          { rank: 'K', suit: 's' },
+          { rank: 'Q', suit: 'd' },
+          { rank: 'J', suit: 'c' },
+          { rank: '9', suit: 'h' },
+        ],
+        description: 'Ace high',
+      },
+    }],
+    blindConfig: { smallBlind: 25, bigBlind: 50, ante: 0 },
+    communityCards: [],
+    allActions: [],
+    results: [],
+    finalPots: [],
+  };
+}
+
+function makeEvent(handId: string, sequence: number): ReplayEvent {
+  return {
+    eventId: `evt-${handId}-${sequence}`,
+    handId,
+    tableId: 'tbl-12345678',
+    sequence,
+    eventType: 'test.event',
+    timestamp: 1_777_280_002_000 + sequence,
+    data: { sequence },
+  };
+}
+
+function makePrivateEvent(handId: string, sequence: number): ReplayEvent {
+  return {
+    eventId: `evt-${handId}-${sequence}`,
+    handId,
+    tableId: 'tbl-12345678',
+    sequence,
+    eventType: 'hole_cards.dealt',
+    timestamp: 1_777_280_002_000 + sequence,
+    data: {
+      playerId: 'player-bot-a',
+      holeCards: [{ rank: 'A', suit: 's' }, { rank: 'K', suit: 's' }],
+    },
+  };
+}
+
+describe('MatchArtifactStore', () => {
+  it('FileMatchArtifactStore writes manifest, summary, replay JSONL, and index', async () => {
+    const dir = makeTmpDir();
+    dirs.push(dir);
+    const store = new FileMatchArtifactStore(dir);
+    const hand = makeHand(1, 1050);
+    const record = await store.saveMatchArtifact({
+      matchId: 'tbl-12345678',
+      tableId: 'tbl-12345678',
+      name: 'Daily Showcase',
+      seed: 'seed-main',
+      hands: [hand],
+      replayEvents: [makeEvent(hand.handId, 0)],
+    });
+
+    expect(record.manifest.files.summary.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(record.summary.finalStacks).toEqual({ 'bot-a': 1050 });
+    expect(fs.existsSync(path.join(dir, 'matches', 'tbl-12345678', 'manifest.json'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'matches', 'tbl-12345678', 'summary.json'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'matches', 'tbl-12345678', 'replay.jsonl'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'matches', 'index.json'))).toBe(true);
+  });
+
+  it('FileMatchArtifactStore rejects unsafe matchId path segments', async () => {
+    const dir = makeTmpDir();
+    dirs.push(dir);
+    const store = new FileMatchArtifactStore(dir);
+    const hand = makeHand(1, 1050);
+
+    await expect(store.saveMatchArtifact({
+      matchId: '../outside',
+      tableId: 'tbl-12345678',
+      name: 'Unsafe',
+      seed: 'seed-main',
+      hands: [hand],
+      replayEvents: [makeEvent(hand.handId, 0)],
+    })).rejects.toThrow('Invalid matchId path segment: ../outside');
+
+    expect(fs.existsSync(path.join(dir, 'outside'))).toBe(false);
+    expect(fs.existsSync(path.join(path.dirname(dir), 'outside'))).toBe(false);
+  });
+
+  it('FileMatchArtifactStore manifest checksums and bytes match written files', async () => {
+    const dir = makeTmpDir();
+    dirs.push(dir);
+    const store = new FileMatchArtifactStore(dir);
+    const hand = makeHand(1, 1050);
+    const record = await store.saveMatchArtifact({
+      matchId: 'tbl-12345678',
+      tableId: 'tbl-12345678',
+      name: 'Daily Showcase',
+      seed: 'seed-main',
+      hands: [hand],
+      replayEvents: [makeEvent(hand.handId, 0), makeEvent(hand.handId, 1)],
+    });
+
+    const summaryRaw = fs.readFileSync(
+      path.join(dir, 'matches', 'tbl-12345678', 'summary.json'),
+      'utf-8',
+    );
+    const replayRaw = fs.readFileSync(
+      path.join(dir, 'matches', 'tbl-12345678', 'replay.jsonl'),
+      'utf-8',
+    );
+
+    expect(record.manifest.files.summary.sha256).toBe(sha256(summaryRaw));
+    expect(record.manifest.files.summary.bytes).toBe(Buffer.byteLength(summaryRaw, 'utf-8'));
+    expect(record.manifest.files.replay.sha256).toBe(sha256(replayRaw));
+    expect(record.manifest.files.replay.bytes).toBe(Buffer.byteLength(replayRaw, 'utf-8'));
+  });
+
+  it('FileMatchArtifactStore writes public-safe summary and replay artifacts', async () => {
+    const dir = makeTmpDir();
+    dirs.push(dir);
+    const store = new FileMatchArtifactStore(dir);
+    const hand = makeHand(1, 1050);
+    await store.saveMatchArtifact({
+      matchId: 'tbl-12345678',
+      tableId: 'tbl-12345678',
+      name: 'Daily Showcase',
+      seed: 'seed-main',
+      hands: [hand],
+      replayEvents: [makePrivateEvent(hand.handId, 0), makeEvent(hand.handId, 1)],
+    });
+
+    const summaryRaw = fs.readFileSync(
+      path.join(dir, 'matches', 'tbl-12345678', 'summary.json'),
+      'utf-8',
+    );
+    const replayRaw = fs.readFileSync(
+      path.join(dir, 'matches', 'tbl-12345678', 'replay.jsonl'),
+      'utf-8',
+    );
+
+    expect(summaryRaw).not.toContain('"holeCards"');
+    expect(summaryRaw).not.toContain('"handEvaluation"');
+    expect(replayRaw).not.toContain('"holeCards"');
+    expect(replayRaw).not.toContain('hole_cards.dealt');
+  });
+
+  it('FileMatchArtifactStore loads a saved artifact', async () => {
+    const dir = makeTmpDir();
+    dirs.push(dir);
+    const store = new FileMatchArtifactStore(dir);
+    const hand = makeHand(1, 1050);
+    await store.saveMatchArtifact({
+      matchId: 'tbl-12345678',
+      tableId: 'tbl-12345678',
+      name: 'Daily Showcase',
+      seed: 'seed-main',
+      hands: [hand],
+      replayEvents: [makeEvent(hand.handId, 0), makeEvent(hand.handId, 1)],
+    });
+
+    const loaded = await store.getMatchArtifact('tbl-12345678');
+    expect(loaded?.summary.matchId).toBe('tbl-12345678');
+    expect(loaded?.replayEvents).toHaveLength(2);
+  });
+
+  it('FileMatchArtifactStore can load metadata without reading the replay file', async () => {
+    const dir = makeTmpDir();
+    dirs.push(dir);
+    const store = new FileMatchArtifactStore(dir);
+    const hand = makeHand(1, 1050);
+    await store.saveMatchArtifact({
+      matchId: 'tbl-12345678',
+      tableId: 'tbl-12345678',
+      name: 'Daily Showcase',
+      seed: 'seed-main',
+      hands: [hand],
+      replayEvents: [makeEvent(hand.handId, 0), makeEvent(hand.handId, 1)],
+    });
+    fs.unlinkSync(path.join(dir, 'matches', 'tbl-12345678', 'replay.jsonl'));
+
+    const loaded = await store.getMatchArtifact('tbl-12345678', { includeReplayEvents: false });
+    expect(loaded?.summary.matchId).toBe('tbl-12345678');
+    expect(loaded?.replayEvents).toEqual([]);
+  });
+
+  it('FileMatchArtifactStore lists newest index entries first', async () => {
+    const dir = makeTmpDir();
+    dirs.push(dir);
+    const store = new FileMatchArtifactStore(dir);
+    await store.saveMatchArtifact({
+      matchId: 'match-a',
+      tableId: 'tbl-a',
+      name: 'A',
+      seed: 'seed-a',
+      hands: [makeHand(1, 1000)],
+      replayEvents: [],
+    });
+    await store.saveMatchArtifact({
+      matchId: 'match-b',
+      tableId: 'tbl-b',
+      name: 'B',
+      seed: 'seed-b',
+      hands: [makeHand(2, 1100)],
+      replayEvents: [],
+    });
+
+    const entries = await store.listMatchArtifacts();
+    expect(entries.map(e => e.matchId)).toEqual(['match-b', 'match-a']);
+  });
+
+  it('MemoryMatchArtifactStore stores and loads records', async () => {
+    const store = new MemoryMatchArtifactStore();
+    const hand = makeHand(1, 1050);
+    await store.saveMatchArtifact({
+      matchId: 'tbl-12345678',
+      tableId: 'tbl-12345678',
+      name: 'Daily Showcase',
+      seed: 'seed-main',
+      hands: [hand],
+      replayEvents: [makeEvent(hand.handId, 0)],
+    });
+
+    const entries = await store.listMatchArtifacts();
+    const loaded = await store.getMatchArtifact('tbl-12345678');
+    expect(entries).toHaveLength(1);
+    expect(loaded?.summary.agentIds).toEqual(['bot-a']);
+  });
+
+  it('MemoryMatchArtifactStore returns public-safe records', async () => {
+    const store = new MemoryMatchArtifactStore();
+    const hand = makeHand(1, 1050);
+    const record = await store.saveMatchArtifact({
+      matchId: 'tbl-12345678',
+      tableId: 'tbl-12345678',
+      name: 'Daily Showcase',
+      seed: 'seed-main',
+      hands: [hand],
+      replayEvents: [makePrivateEvent(hand.handId, 0), makeEvent(hand.handId, 1)],
+    });
+
+    expect(JSON.stringify(record)).not.toContain('"holeCards"');
+    expect(JSON.stringify(record)).not.toContain('"handEvaluation"');
+    expect(record.replayEvents.map(event => event.eventType)).not.toContain('hole_cards.dealt');
+  });
+
+  it('MemoryMatchArtifactStore lists newest first when saves share the same millisecond', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_777_280_000_000);
+    const store = new MemoryMatchArtifactStore();
+    await store.saveMatchArtifact({
+      matchId: 'match-a',
+      tableId: 'tbl-a',
+      name: 'A',
+      seed: 'seed-a',
+      hands: [makeHand(1, 1000)],
+      replayEvents: [],
+    });
+    await store.saveMatchArtifact({
+      matchId: 'match-b',
+      tableId: 'tbl-b',
+      name: 'B',
+      seed: 'seed-b',
+      hands: [makeHand(2, 1100)],
+      replayEvents: [],
+    });
+
+    const entries = await store.listMatchArtifacts();
+    expect(entries.map(e => e.matchId)).toEqual(['match-b', 'match-a']);
+  });
+
+  it('sorts multi-hand summaries and replay events by hand number then sequence', async () => {
+    const store = new MemoryMatchArtifactStore();
+    const firstHand = makeHand(1, 1050);
+    const secondHand = makeHand(2, 900);
+
+    const record = await store.saveMatchArtifact({
+      matchId: 'match-multi',
+      tableId: 'tbl-12345678',
+      name: 'Multi',
+      seed: 'seed-main',
+      hands: [secondHand, firstHand],
+      replayEvents: [
+        makeEvent(secondHand.handId, 1),
+        makeEvent(firstHand.handId, 2),
+        makeEvent(secondHand.handId, 0),
+        makeEvent(firstHand.handId, 1),
+      ],
+    });
+
+    expect(record.summary.handIds).toEqual([firstHand.handId, secondHand.handId]);
+    expect(record.summary.finalStacks).toEqual({ 'bot-a': 900 });
+    expect(record.replayEvents.map(event => `${event.handId}:${event.sequence}`)).toEqual([
+      `${firstHand.handId}:1`,
+      `${firstHand.handId}:2`,
+      `${secondHand.handId}:0`,
+      `${secondHand.handId}:1`,
+    ]);
+  });
+});

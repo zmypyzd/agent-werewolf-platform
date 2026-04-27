@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.tsbuildinfo
+examples/local-simulation/output/**/*.jsonl
+examples/local-simulation/output/**/*.json
+!examples/local-simulation/output/.gitkeep
+.env
+coverage/
+.DS_Store
+.claude/
+.teamagent/

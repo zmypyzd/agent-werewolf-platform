@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true,
+    "paths": {
+      "@agent-poker/shared": ["../shared/src/index.ts"],
+      "@agent-poker/persistence": ["../persistence/src/index.ts"]
+    }
+  },
+  "references": [
+    { "path": "../shared" },
+    { "path": "../persistence" }
+  ],
+  "include": ["src"]
+}

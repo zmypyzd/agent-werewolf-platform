@@ -1,0 +1,19 @@
+{
+  "name": "local-simulation",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx run-simulation.ts",
+    "build": "echo 'No build for examples'"
+  },
+  "dependencies": {
+    "@agent-poker/shared": "workspace:*",
+    "@agent-poker/table-orchestrator": "workspace:*",
+    "@agent-poker/agent-runtime": "workspace:*",
+    "@agent-poker/persistence": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "tsx": "^4.0.0"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "composite": true,
+    "paths": {
+      "@agent-poker/shared": ["../../packages/shared/src/index.ts"],
+      "@agent-poker/table-orchestrator": ["../../packages/table-orchestrator/src/index.ts"],
+      "@agent-poker/agent-runtime": ["../../packages/agent-runtime/src/index.ts"],
+      "@agent-poker/persistence": ["../../packages/persistence/src/index.ts"]
+    }
+  },
+  "references": [
+    { "path": "../../packages/shared" },
+    { "path": "../../packages/table-orchestrator" },
+    { "path": "../../packages/agent-runtime" },
+    { "path": "../../packages/persistence" }
+  ],
+  "include": ["run-simulation.ts"]
+}
