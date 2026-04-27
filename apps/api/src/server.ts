@@ -4,7 +4,6 @@ import { TableOrchestrator } from '@agent-poker/table-orchestrator';
 import {
   MemoryTableStore,
   MemoryHandStore,
-  MemoryMatchArtifactStore,
   openDatabase,
   SqliteUserStore,
   SqliteSessionStore,
@@ -28,6 +27,7 @@ import { authRoutes } from './routes/auth.js';
 import { wsRoutes } from './routes/ws.js';
 import { meAgentsRoutes } from './routes/me-agents.js';
 import { healthRoutes } from './routes/health.js';
+import { createMatchArtifactStore } from './match-artifact-store-factory.js';
 
 export interface BuildServerOptions {
   orchestrator?: TableOrchestrator;
@@ -52,7 +52,7 @@ export function buildServer(opts: BuildServerOptions = {}) {
 
   const tableStore = new MemoryTableStore();
   const hs = opts.handStore ?? new MemoryHandStore();
-  const matchArtifactStore = opts.matchArtifactStore || new MemoryMatchArtifactStore();
+  const matchArtifactStore = opts.matchArtifactStore || createMatchArtifactStore();
   const hub = opts.hub ?? new RealtimeHub();
   const orch = opts.orchestrator ?? new TableOrchestrator(tableStore, hs, hub);
 
