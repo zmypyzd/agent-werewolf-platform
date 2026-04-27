@@ -1,5 +1,11 @@
 import { randomUUID } from 'crypto';
-import type { IHandStore, IMatchArtifactStore, ITableStore } from '@agent-poker/persistence';
+import {
+  MemoryDecisionTraceStore,
+  type IDecisionTraceStore,
+  type IHandStore,
+  type IMatchArtifactStore,
+  type ITableStore,
+} from '@agent-poker/persistence';
 import {
   AggressiveAgent,
   AlwaysCallAgent,
@@ -32,6 +38,7 @@ export class ScheduledMatchRunner {
     private readonly tableStore: ITableStore,
     private readonly handStore: IHandStore,
     private readonly matchArtifactStore: IMatchArtifactStore,
+    private readonly decisionTraceStore: IDecisionTraceStore = new MemoryDecisionTraceStore(),
   ) {}
 
   async run(definition: ScheduledMatchDefinition): Promise<ScheduledMatchResult> {
@@ -42,7 +49,12 @@ export class ScheduledMatchRunner {
       throw new Error('scheduled match requires at least 2 agents');
     }
 
-    const orchestrator = new TableOrchestrator(this.tableStore, this.handStore);
+    const orchestrator = new TableOrchestrator(
+      this.tableStore,
+      this.handStore,
+      null,
+      this.decisionTraceStore,
+    );
     const table = await orchestrator.createTable({
       name: definition.name,
       maxSeats: Math.max(2, Math.min(9, definition.agents.length)),

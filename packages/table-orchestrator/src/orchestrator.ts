@@ -14,7 +14,7 @@ import {
 import { createShuffledDeck } from '@agent-poker/poker-engine';
 import type { IAgent } from '@agent-poker/agent-runtime';
 import { HumanAgent } from '@agent-poker/agent-runtime';
-import type { ITableStore, IHandStore } from '@agent-poker/persistence';
+import { MemoryDecisionTraceStore, type IDecisionTraceStore, type IHandStore, type ITableStore } from '@agent-poker/persistence';
 import type { RealtimeHub } from '@agent-poker/realtime';
 import { replayEventToPublic } from '@agent-poker/realtime';
 import { HandRunner } from './hand-runner.js';
@@ -42,6 +42,7 @@ export class TableOrchestrator {
     private tableStore: ITableStore,
     private handStore: IHandStore,
     private hub: RealtimeHub | null = null,
+    private decisionTraceStore: IDecisionTraceStore = new MemoryDecisionTraceStore(),
   ) {}
 
   async createTable(
@@ -510,6 +511,8 @@ export class TableOrchestrator {
       this.handStore,
       emitter,
       timeoutMs,
+      this.decisionTraceStore,
+      tableId,
     );
 
     const cancelStaleHumanRequests = () => {

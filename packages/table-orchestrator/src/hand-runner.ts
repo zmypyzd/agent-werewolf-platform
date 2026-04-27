@@ -1,10 +1,11 @@
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
 import type {
   GameState, HandSummary, HandPlayerSummary, HandResult, ReplayEvent,
   PlayerInHand, HandPhase, Pot, GameAction, BettingRoundState,
   PublicGameState, PublicPlayer, LegalAction, AgentDecisionRequest,
-  AgentDecisionResponse, ActionType,
+  AgentDecisionResponse, ActionType, DecisionTrace, DecisionTraceFallbackReason,
+  DecisionTracePhase,
 } from '@agent-poker/shared';
 import {
   createShuffledDeck, deal,
@@ -14,7 +15,7 @@ import {
 import type { PotAward } from '@agent-poker/poker-engine';
 import type { IAgent } from '@agent-poker/agent-runtime';
 import { TimeoutHandler } from '@agent-poker/agent-runtime';
-import type { IHandStore } from '@agent-poker/persistence';
+import type { IDecisionTraceStore, IHandStore } from '@agent-poker/persistence';
 
 export class HandRunner {
   private eventSequence = 0;
@@ -26,6 +27,8 @@ export class HandRunner {
     private handStore: IHandStore,
     private emitter: EventEmitter,
     private timeoutMs: number,
+    private decisionTraceStore: IDecisionTraceStore | null = null,
+    private matchId: string = gameState.tableId,
   ) {}
 
   async run(): Promise<HandSummary> {
@@ -189,7 +192,7 @@ export class HandRunner {
     this.gameState = { ...this.gameState, deck };
   }
 
-  private async runBettingRound(phase: HandPhase): Promise<void> {
+  private async runBettingRound(phase: DecisionTracePhase): Promise<void> {
     const activePlayers = this.gameState.players.filter(p => p.status === 'active' || p.status === 'all-in');
     const nonFoldedActive = this.gameState.players.filter(p => p.status === 'active');
 
@@ -269,49 +272,60 @@ export class HandRunner {
       });
 
       const agentInstance = this.agents.get(actor.agentId);
+      const decisionStartedAt = Date.now();
+      let response: AgentDecisionResponse | null = null;
+      let timedOut = false;
+      let invalidReason: string | null = null;
+      let fallbackReason: DecisionTraceFallbackReason | undefined;
+      let action: AgentDecisionResponse;
+
       if (!agentInstance) {
-        // Fallback
-        const fallback = this.getFallback(legalActions, req.requestId, req.agentId);
-        roundState = applyAction(roundState, { playerId: actor.playerId, actionType: fallback.actionType, amount: fallback.amount ?? 0 });
-        continue;
-      }
+        action = this.getFallback(legalActions, req.requestId, req.agentId);
+        fallbackReason = 'missing_agent';
+      } else {
+        const handler = new TimeoutHandler(agentInstance, this.timeoutMs);
+        const result = await handler.requestDecision(req);
+        response = result.response;
+        timedOut = result.timedOut;
 
-      const handler = new TimeoutHandler(agentInstance, this.timeoutMs);
-      const { response, timedOut } = await handler.requestDecision(req);
+        if (timedOut) {
+          fallbackReason = 'timeout';
+          this.emit('agent.timeout', {
+            agentId: actor.agentId,
+            requestId: req.requestId,
+            elapsedMs: this.timeoutMs,
+            fallbackAction: { actionType: response.actionType },
+          });
+        }
 
-      if (timedOut) {
-        this.emit('agent.timeout', {
+        const validated = this.validateAndNormalize(response, legalActions, req);
+        action = validated.action;
+        if (!validated.valid) {
+          invalidReason = validated.reason;
+          fallbackReason = timedOut ? 'timeout' : 'invalid_action';
+          this.emit('agent.invalid_action', {
+            agentId: actor.agentId,
+            requestId: req.requestId,
+            received: { actionType: response.actionType, amount: response.amount },
+            reason: validated.reason,
+            fallbackAction: { actionType: validated.action.actionType },
+          });
+        }
+
+        this.emit('action.received', {
           agentId: actor.agentId,
           requestId: req.requestId,
-          elapsedMs: this.timeoutMs,
-          fallbackAction: { actionType: response.actionType },
+          actionType: action.actionType,
+          amount: action.amount,
+          wasTimeout: timedOut,
+          wasInvalid: !validated.valid,
         });
       }
-
-      const validated = this.validateAndNormalize(response, legalActions, req);
-      if (!validated.valid) {
-        this.emit('agent.invalid_action', {
-          agentId: actor.agentId,
-          requestId: req.requestId,
-          received: { actionType: response.actionType, amount: response.amount },
-          reason: validated.reason,
-          fallbackAction: { actionType: validated.action.actionType },
-        });
-      }
-
-      this.emit('action.received', {
-        agentId: actor.agentId,
-        requestId: req.requestId,
-        actionType: validated.action.actionType,
-        amount: validated.action.amount,
-        wasTimeout: timedOut,
-        wasInvalid: !validated.valid,
-      });
 
       roundState = applyAction(roundState, {
         playerId: actor.playerId,
-        actionType: validated.action.actionType,
-        amount: validated.action.amount ?? 0,
+        actionType: action.actionType,
+        amount: action.amount ?? 0,
       });
 
       const lastAction = roundState.roundActions[roundState.roundActions.length - 1]!;
@@ -319,11 +333,23 @@ export class HandRunner {
         actionId: lastAction.actionId,
         playerId: actor.playerId,
         phase,
-        actionType: validated.action.actionType,
+        actionType: action.actionType,
         amount: lastAction.amount,
         stackAfter: lastAction.stackAfter,
         sequence: this.gameState.allActions.length,
         potTotal: roundState.players.reduce((s, p) => s + p.totalBetInHand, 0),
+      });
+
+      await this.appendDecisionTrace({
+        req,
+        actor,
+        phase,
+        response,
+        lastAction,
+        latencyMs: Date.now() - decisionStartedAt,
+        timedOut,
+        invalidReason,
+        ...(fallbackReason !== undefined ? { fallbackReason } : {}),
       });
 
       // Sync game state players
@@ -434,6 +460,51 @@ export class HandRunner {
     }
 
     return { valid: true, action: response, reason: '' };
+  }
+
+  private async appendDecisionTrace(input: {
+    req: AgentDecisionRequest;
+    actor: PlayerInHand;
+    phase: DecisionTracePhase;
+    response: AgentDecisionResponse | null;
+    lastAction: GameAction;
+    latencyMs: number;
+    timedOut: boolean;
+    invalidReason: string | null;
+    fallbackReason?: DecisionTraceFallbackReason;
+  }): Promise<void> {
+    if (!this.decisionTraceStore) return;
+    const { req, actor, phase, response, lastAction } = input;
+    const trace: DecisionTrace = {
+      traceId: randomUUID(),
+      matchId: this.matchId,
+      handId: req.handId,
+      actionId: lastAction.actionId,
+      requestId: req.requestId,
+      agentId: req.agentId,
+      playerId: actor.playerId,
+      phase,
+      publicStateHash: sha256Json(req.publicState),
+      privateStateHash: sha256Json(req.privateState),
+      legalActions: req.legalActions,
+      responseAction: response
+        ? {
+            actionType: response.actionType,
+            ...(response.amount !== undefined ? { amount: response.amount } : {}),
+          }
+        : null,
+      appliedAction: {
+        actionType: lastAction.actionType,
+        amount: lastAction.amount,
+        ...(input.fallbackReason !== undefined ? { fallbackReason: input.fallbackReason } : {}),
+      },
+      latencyMs: input.latencyMs,
+      timedOut: input.timedOut,
+      invalidReason: input.invalidReason,
+      reasoningSummary: response?.reasoningSummary ?? null,
+      createdAt: Date.now(),
+    };
+    await this.decisionTraceStore.appendDecisionTrace(trace);
   }
 
   private getFallback(legalActions: LegalAction[], requestId: string, agentId: string): AgentDecisionResponse {
@@ -589,4 +660,8 @@ export class HandRunner {
   getPlayers(): PlayerInHand[] {
     return this.gameState.players;
   }
+}
+
+function sha256Json(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }

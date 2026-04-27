@@ -192,8 +192,12 @@ The analysis layer has a first-stage public-safe decision trace boundary:
   memory/file usage and future serverless object stores share the same boundary.
 - Trace writes enforce per-trace, per-match byte limits and per-match count
   limits.
+- The hand runtime records traces for normal decisions, timeouts, invalid
+  actions, and missing-agent fallbacks.
 
-Runtime trace capture and replay UI inspection are intentionally not wired yet.
+Until a separate match identity is modeled in the runtime, decision traces use
+`tableId` as the temporary `matchId`. Replay artifact bundling and replay UI
+inspection are intentionally not wired yet.
 
 The web client exposes the same artifact at:
 
@@ -231,7 +235,7 @@ examples/local-simulation - CLI demo script
 ## Current Limitations
 
 - Hosted serverless deployment is not implemented yet.
-- Decision trace capture/replay UI, forensics, scheduled league, and ladder flows are not implemented yet.
+- Decision trace replay UI, forensics, scheduled league, and ladder flows are not implemented yet.
 - Runtime and match artifact hosting are still mostly local/in-memory.
 - Hosted serverless bindings are not implemented yet; this milestone provides
   the provider-neutral persistence boundary and local object-store adapter.
