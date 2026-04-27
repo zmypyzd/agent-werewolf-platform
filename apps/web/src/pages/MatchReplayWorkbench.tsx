@@ -34,7 +34,7 @@ export function ReplayWorkbench({
   const selectedHand = hands.find(hand => hand.handId === selectedHandId) ?? null;
   const selectedHandView = handViews.find(hand => hand.handId === selectedHand?.handId) ?? null;
   const timeline = buildActionTimeline(selectedHand, replayEvents);
-  const selectedAction = timeline.find(action => action.id === selectedActionId) ?? null;
+  const selectedAction = timeline.find(action => action.id === selectedActionId) ?? timeline[0] ?? null;
   const stackEntries = Object.entries(finalStacks);
 
   return (
@@ -49,7 +49,7 @@ export function ReplayWorkbench({
       {replayError ? <div className="error">{replayError}</div> : null}
       {replayLoading ? <p className="muted">Loading replay events...</p> : null}
 
-      <div className="stack-strip">
+      <div aria-label="Final stacks" className="stack-strip">
         {stackEntries.length === 0 ? (
           <p className="muted">No final stacks recorded.</p>
         ) : (
@@ -72,7 +72,7 @@ export function ReplayWorkbench({
           hand={selectedHand}
           handView={selectedHandView}
           timeline={timeline}
-          selectedActionId={selectedActionId}
+          selectedActionId={selectedAction?.id ?? null}
           onSelectAction={onSelectAction}
         />
         <ActionInspector hand={selectedHand} selectedAction={selectedAction} />
@@ -91,7 +91,7 @@ function HandRail({
   onSelectHand: (handId: string) => void;
 }) {
   return (
-    <aside className="hand-rail">
+    <aside aria-label="Hands" className="hand-rail">
       <h3>Hands</h3>
       {handViews.length === 0 ? (
         <p className="muted">No hands recorded.</p>
@@ -107,6 +107,10 @@ function HandRail({
             <strong>Hand {hand.handNumber}</strong>
             <span>{hand.actionCount} actions</span>
             <span>{hand.eventCount} events</span>
+            <span>{hand.communityCardCount} board cards</span>
+            <span>
+              {hand.biggestNetChange === null ? 'no net result' : `biggest net ${hand.biggestNetChange}`}
+            </span>
           </button>
         ))
       )}
@@ -148,7 +152,7 @@ function HandBoard({
 
       <div>
         <h4>Board</h4>
-        <div className="community-row">
+        <div aria-label="Community cards" className="community-row">
           {hand.communityCards.length === 0 ? (
             <span className="muted">No community cards.</span>
           ) : (
@@ -195,7 +199,7 @@ function HandBoard({
               <span>{action.ordinal}</span>
               <strong>{action.playerId}</strong>
               <span>{formatCountLabel(action.actionType)}</span>
-              <span>{action.amount}</span>
+              <span>{formatTimelineAmount(action.amount)}</span>
               <span>{action.street ? formatCountLabel(action.street) : 'unknown'}</span>
             </button>
           ))
@@ -219,19 +223,37 @@ function ActionInspector({
       {hand && !selectedAction ? <p className="muted">No action selected.</p> : null}
       {selectedAction ? (
         <dl>
-          <dt>Player</dt>
-          <dd>{selectedAction.playerId}</dd>
-          <dt>Action</dt>
-          <dd>{formatCountLabel(selectedAction.actionType)}</dd>
-          <dt>Amount</dt>
-          <dd>{selectedAction.amount}</dd>
-          <dt>Street</dt>
-          <dd>{selectedAction.street ? formatCountLabel(selectedAction.street) : 'unknown'}</dd>
-          <dt>Event</dt>
-          <dd>{selectedAction.eventId ?? selectedAction.eventType ?? 'No linked event'}</dd>
+          <div>
+            <dt>Player</dt>
+            <dd>{selectedAction.playerId}</dd>
+          </div>
+          <div>
+            <dt>Action</dt>
+            <dd>{formatCountLabel(selectedAction.actionType)}</dd>
+          </div>
+          <div>
+            <dt>Amount</dt>
+            <dd>{formatInspectorAmount(selectedAction.amount)}</dd>
+          </div>
+          <div>
+            <dt>Street</dt>
+            <dd>{selectedAction.street ? formatCountLabel(selectedAction.street) : 'unknown'}</dd>
+          </div>
+          <div>
+            <dt>Event</dt>
+            <dd>{selectedAction.eventId ?? selectedAction.eventType ?? 'No linked event'}</dd>
+          </div>
         </dl>
       ) : null}
       <p className="muted">Only aggregate analysis is available for this action.</p>
     </aside>
   );
+}
+
+function formatTimelineAmount(amount: number): string {
+  return amount === 0 ? '' : String(amount);
+}
+
+function formatInspectorAmount(amount: number): string {
+  return amount === 0 ? 'n/a' : String(amount);
 }

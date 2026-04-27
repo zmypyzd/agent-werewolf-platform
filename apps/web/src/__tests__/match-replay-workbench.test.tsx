@@ -58,7 +58,14 @@ const replayEvents: ReplayEvent[] = [{
   sequence: 1,
   eventType: 'action.applied',
   timestamp: 1,
-  data: { actionId: 'action-1', phase: 'preflop' },
+  data: {
+    actionId: 'action-1',
+    phase: 'preflop',
+    holeCards: ['AS', 'KS'],
+    rawChainOfThought: 'secret',
+    keyObservations: ['secret'],
+    consideredActions: [{ reason: 'secret' }],
+  },
 }];
 
 describe('ReplayWorkbench', () => {
@@ -69,7 +76,7 @@ describe('ReplayWorkbench', () => {
         replayEvents={replayEvents}
         finalStacks={{ 'bot-a': 950, 'bot-b': 1150 }}
         selectedHandId="hand-1"
-        selectedActionId="hand-1:1"
+        selectedActionId="hand-1:0"
         replayLoading={false}
         replayError={null}
         onSelectHand={() => undefined}
@@ -78,7 +85,12 @@ describe('ReplayWorkbench', () => {
     );
 
     expect(html).toContain('Replay Workbench');
+    expect(html).toContain('aria-label="Final stacks"');
+    expect(html).toContain('aria-label="Hands"');
+    expect(html).toContain('aria-label="Community cards"');
     expect(html).toContain('Hand 1');
+    expect(html).toContain('3 board cards');
+    expect(html).toContain('biggest net 150');
     expect(html).toContain('AS');
     expect(html).toContain('KH');
     expect(html).toContain('QD');
@@ -86,7 +98,57 @@ describe('ReplayWorkbench', () => {
     expect(html).toContain('raise');
     expect(html).toContain('150');
     expect(html).toContain('Selected Action');
+    expect(html).toContain('aria-pressed="true" class="timeline-row"');
+    expect(html).toContain('<div><dt>Player</dt><dd>bot-a</dd></div>');
+    expect(html).toContain('<div><dt>Action</dt><dd>call</dd></div>');
+    expect(html).toContain('<div><dt>Amount</dt><dd>50</dd></div>');
+    expect(html).toContain('<div><dt>Street</dt><dd>preflop</dd></div>');
+    expect(html).toContain('<div><dt>Event</dt><dd>event-1</dd></div>');
     expect(html).toContain('Only aggregate analysis is available for this action.');
+    expect(html).not.toContain('holeCards');
+    expect(html).not.toContain('rawChainOfThought');
+    expect(html).not.toContain('keyObservations');
+    expect(html).not.toContain('consideredActions');
+    expect(html).not.toContain('secret');
+  });
+
+  it('falls back to the first action when selection is empty or stale', () => {
+    const zeroAmountHand: HandSummary = {
+      ...hand,
+      allActions: [
+        {
+          ...hand.allActions[0]!,
+          actionType: 'check',
+          amount: 0,
+        },
+        hand.allActions[1]!,
+      ],
+    };
+
+    for (const selectedActionId of [null, 'stale-action']) {
+      const html = renderToStaticMarkup(
+        <ReplayWorkbench
+          hands={[zeroAmountHand]}
+          replayEvents={replayEvents}
+          finalStacks={{ 'bot-a': 950, 'bot-b': 1150 }}
+          selectedHandId="hand-1"
+          selectedActionId={selectedActionId}
+          replayLoading={false}
+          replayError={null}
+          onSelectHand={() => undefined}
+          onSelectAction={() => undefined}
+        />,
+      );
+
+      expect(html).toContain('aria-pressed="true" class="timeline-row"');
+      expect(html).toContain(
+        '<span>1</span><strong>bot-a</strong><span>check</span><span></span><span>preflop</span>',
+      );
+      expect(html).toContain('<div><dt>Player</dt><dd>bot-a</dd></div>');
+      expect(html).toContain('<div><dt>Action</dt><dd>check</dd></div>');
+      expect(html).toContain('<div><dt>Amount</dt><dd>n/a</dd></div>');
+      expect(html).toContain('<div><dt>Event</dt><dd>event-1</dd></div>');
+    }
   });
 
   it('renders explicit empty states without private surfaces', () => {
