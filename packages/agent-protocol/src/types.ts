@@ -5,6 +5,11 @@ import type {
   PublicGameStateSchema,
   PrivatePlayerStateSchema,
   LegalActionSchema,
+  ReasoningConsideredActionSchema,
+  ReasoningSummarySchema,
+  DecisionTraceActionSchema,
+  DecisionTraceAppliedActionSchema,
+  DecisionTraceSchema,
   GameActionSchema,
   HandSummarySchema,
   ReplayEventSchema,
@@ -31,6 +36,11 @@ export type AgentDecisionResponseZod = z.infer<typeof AgentDecisionResponseSchem
 export type PublicGameStateZod = z.infer<typeof PublicGameStateSchema>;
 export type PrivatePlayerStateZod = z.infer<typeof PrivatePlayerStateSchema>;
 export type LegalActionZod = z.infer<typeof LegalActionSchema>;
+export type ReasoningConsideredActionZod = z.infer<typeof ReasoningConsideredActionSchema>;
+export type ReasoningSummaryZod = z.infer<typeof ReasoningSummarySchema>;
+export type DecisionTraceActionZod = z.infer<typeof DecisionTraceActionSchema>;
+export type DecisionTraceAppliedActionZod = z.infer<typeof DecisionTraceAppliedActionSchema>;
+export type DecisionTraceZod = z.infer<typeof DecisionTraceSchema>;
 export type GameActionZod = z.infer<typeof GameActionSchema>;
 export type HandSummaryZod = z.infer<typeof HandSummarySchema>;
 export type ReplayEventZod = z.infer<typeof ReplayEventSchema>;

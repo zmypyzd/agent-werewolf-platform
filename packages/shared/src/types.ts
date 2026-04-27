@@ -14,10 +14,22 @@ export interface Deck {
 
 export type ActionType = 'fold'|'check'|'call'|'bet'|'raise'|'all-in';
 export type HandPhase = 'preflop'|'flop'|'turn'|'river'|'showdown'|'complete';
+export type DecisionTracePhase = 'preflop'|'flop'|'turn'|'river';
 export type PlayerStatus = 'waiting'|'active'|'folded'|'all-in'|'sitting-out';
 export type TableStatus = 'preparing'|'in_hand'|'paused'|'completed';
 export type SeatAdapterType = 'human'|'http'|'mock';
 export type AgentAdapterType = 'mock'|'http'|'websocket'|'openclaw';
+export type ReasoningIntent =
+  | 'value'
+  | 'bluff'
+  | 'semi_bluff'
+  | 'pot_control'
+  | 'protection'
+  | 'information'
+  | 'survival'
+  | 'unknown';
+export type ReasoningRiskLevel = 'low'|'medium'|'high';
+export type DecisionTraceFallbackReason = 'timeout'|'invalid_action'|'missing_agent';
 export type HandRankCategory =
   | 'high_card'|'one_pair'|'two_pair'|'three_of_a_kind'
   | 'straight'|'flush'|'full_house'|'four_of_a_kind'|'straight_flush';
@@ -133,11 +145,58 @@ export interface AgentDecisionRequest {
   timeoutMs: number;
 }
 
+export interface ReasoningConsideredAction {
+  actionType: ActionType;
+  amount?: number;
+  reason: string;
+}
+
+export interface ReasoningSummary {
+  intent: ReasoningIntent;
+  confidence: number;
+  riskLevel: ReasoningRiskLevel;
+  keyObservations: string[];
+  consideredActions: ReasoningConsideredAction[];
+}
+
 export interface AgentDecisionResponse {
   requestId: string;
   agentId: string;
   actionType: ActionType;
   amount?: number;
+  reasoningSummary?: ReasoningSummary;
+}
+
+export interface DecisionTraceAction {
+  actionType: ActionType;
+  amount?: number;
+}
+
+export interface DecisionTraceAppliedAction {
+  actionType: ActionType;
+  amount: number;
+  fallbackReason?: DecisionTraceFallbackReason;
+}
+
+export interface DecisionTrace {
+  traceId: string;
+  matchId: string;
+  handId: string;
+  actionId: string | null;
+  requestId: string;
+  agentId: string;
+  playerId: string;
+  phase: DecisionTracePhase;
+  publicStateHash: string;
+  privateStateHash: string;
+  legalActions: LegalAction[];
+  responseAction: DecisionTraceAction | null;
+  appliedAction: DecisionTraceAppliedAction;
+  latencyMs: number;
+  timedOut: boolean;
+  invalidReason: string | null;
+  reasoningSummary: ReasoningSummary | null;
+  createdAt: number;
 }
 
 export interface HandEvaluation {

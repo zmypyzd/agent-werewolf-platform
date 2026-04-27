@@ -1,5 +1,6 @@
-import type { AgentDecisionRequest, AgentDecisionResponse } from '@agent-poker/shared';
+import type { AgentDecisionRequest, AgentDecisionResponse, ReasoningSummary } from '@agent-poker/shared';
 import { AgentDecisionResponseSchema } from '@agent-poker/agent-protocol';
+import type { AgentDecisionResponseZod } from '@agent-poker/agent-protocol';
 import type { IAgent } from './agent-interface.js';
 
 export interface HttpAgentAdapterOptions {
@@ -78,12 +79,27 @@ export class HttpAgentAdapter implements IAgent {
         `HttpAgentAdapter ${this.agentId}: response does not match AgentDecisionResponseSchema (${parsed.error.message})`,
       );
     }
-    const { requestId, agentId, actionType, amount } = parsed.data;
+    const { requestId, agentId, actionType, amount, reasoningSummary } = parsed.data;
     return {
       requestId,
       agentId,
       actionType,
       ...(amount !== undefined ? { amount } : {}),
+      ...(reasoningSummary !== undefined ? { reasoningSummary: toReasoningSummary(reasoningSummary) } : {}),
     };
   }
+}
+
+function toReasoningSummary(summary: NonNullable<AgentDecisionResponseZod['reasoningSummary']>): ReasoningSummary {
+  return {
+    intent: summary.intent,
+    confidence: summary.confidence,
+    riskLevel: summary.riskLevel,
+    keyObservations: [...summary.keyObservations],
+    consideredActions: summary.consideredActions.map(action => ({
+      actionType: action.actionType,
+      ...(action.amount !== undefined ? { amount: action.amount } : {}),
+      reason: action.reason,
+    })),
+  };
 }

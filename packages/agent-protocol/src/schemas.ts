@@ -10,8 +10,21 @@ export const CardSchema = z.object({
 
 export const ActionTypeSchema = z.enum(['fold','check','call','bet','raise','all-in']);
 export const HandPhaseSchema = z.enum(['preflop','flop','turn','river','showdown','complete']);
+export const DecisionTracePhaseSchema = z.enum(['preflop','flop','turn','river']);
 export const PlayerStatusSchema = z.enum(['waiting','active','folded','all-in','sitting-out']);
 export const AgentAdapterTypeSchema = z.enum(['mock','http','websocket','openclaw']);
+export const ReasoningIntentSchema = z.enum([
+  'value',
+  'bluff',
+  'semi_bluff',
+  'pot_control',
+  'protection',
+  'information',
+  'survival',
+  'unknown',
+]);
+export const ReasoningRiskLevelSchema = z.enum(['low','medium','high']);
+export const DecisionTraceFallbackReasonSchema = z.enum(['timeout','invalid_action','missing_agent']);
 export const HandRankCategorySchema = z.enum([
   'high_card','one_pair','two_pair','three_of_a_kind',
   'straight','flush','full_house','four_of_a_kind','straight_flush'
@@ -82,12 +95,62 @@ export const AgentDecisionRequestSchema = z.object({
   timeoutMs: z.number().int().positive(),
 });
 
+const ReasoningTextSchema = z.string().min(1).max(160);
+const Sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
+
+export const ReasoningConsideredActionSchema = z.object({
+  actionType: ActionTypeSchema,
+  amount: z.number().int().nonnegative().optional(),
+  reason: ReasoningTextSchema,
+}).strict();
+
+export const ReasoningSummarySchema = z.object({
+  intent: ReasoningIntentSchema,
+  confidence: z.number().min(0).max(1),
+  riskLevel: ReasoningRiskLevelSchema,
+  keyObservations: z.array(ReasoningTextSchema).max(5),
+  consideredActions: z.array(ReasoningConsideredActionSchema).max(6),
+}).strict();
+
 export const AgentDecisionResponseSchema = z.object({
   requestId: z.string(),
   agentId: z.string(),
   actionType: ActionTypeSchema,
   amount: z.number().int().nonnegative().optional(),
+  reasoningSummary: ReasoningSummarySchema.optional(),
 });
+
+export const DecisionTraceActionSchema = z.object({
+  actionType: ActionTypeSchema,
+  amount: z.number().int().nonnegative().optional(),
+}).strict();
+
+export const DecisionTraceAppliedActionSchema = z.object({
+  actionType: ActionTypeSchema,
+  amount: z.number().int().nonnegative(),
+  fallbackReason: DecisionTraceFallbackReasonSchema.optional(),
+}).strict();
+
+export const DecisionTraceSchema = z.object({
+  traceId: z.string().min(1),
+  matchId: z.string().min(1),
+  handId: z.string().min(1),
+  actionId: z.string().min(1).nullable(),
+  requestId: z.string().min(1),
+  agentId: z.string().min(1),
+  playerId: z.string().min(1),
+  phase: DecisionTracePhaseSchema,
+  publicStateHash: Sha256Schema,
+  privateStateHash: Sha256Schema,
+  legalActions: z.array(LegalActionSchema).max(16),
+  responseAction: DecisionTraceActionSchema.nullable(),
+  appliedAction: DecisionTraceAppliedActionSchema,
+  latencyMs: z.number().int().nonnegative(),
+  timedOut: z.boolean(),
+  invalidReason: z.string().max(500).nullable(),
+  reasoningSummary: ReasoningSummarySchema.nullable(),
+  createdAt: z.number().int().positive(),
+}).strict();
 
 export const BlindConfigSchema = z.object({
   smallBlind: z.number().int().positive(),

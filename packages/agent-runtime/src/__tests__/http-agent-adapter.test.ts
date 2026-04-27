@@ -77,6 +77,32 @@ describe('HttpAgentAdapter', () => {
     expect(stub.received[0]!.body).toMatchObject({ requestId: 'req-1', agentId: 'agent-1' });
   });
 
+  it('preserves structured public reasoning summaries from HTTP agents', async () => {
+    stub = await startStub(() => ({
+      body: {
+        requestId: 'req-1',
+        agentId: 'agent-1',
+        actionType: 'check',
+        reasoningSummary: {
+          intent: 'pot_control',
+          confidence: 0.6,
+          riskLevel: 'low',
+          keyObservations: ['No need to grow the pot out of position'],
+          consideredActions: [
+            { actionType: 'check', reason: 'Preserves showdown value' },
+          ],
+        },
+      },
+    }));
+    const adapter = new HttpAgentAdapter({
+      agentId: 'agent-1', name: 'A', endpointUrl: stub.url, timeoutMs: 1000,
+    });
+
+    const resp = await adapter.requestDecision(baseReq);
+    expect(resp.reasoningSummary?.intent).toBe('pot_control');
+    expect(resp.reasoningSummary?.consideredActions[0]?.reason).toBe('Preserves showdown value');
+  });
+
   it('non-2xx response throws (TimeoutHandler then converts to fallback)', async () => {
     stub = await startStub(() => ({ status: 500, body: { error: 'boom' } }));
     const adapter = new HttpAgentAdapter({

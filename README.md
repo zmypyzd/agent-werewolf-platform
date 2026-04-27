@@ -180,6 +180,21 @@ Environment variables:
 No Cloudflare, Vercel, or S3 SDK is required for this milestone. Future provider
 adapters should implement `IObjectStore`.
 
+### Decision Trace Boundary
+
+The analysis layer has a first-stage public-safe decision trace boundary:
+
+- Agent decisions may include an optional bounded `reasoningSummary`.
+- Reasoning summaries are structured for replay/review and must not contain raw
+  chain-of-thought.
+- `IDecisionTraceStore` persists sanitized `DecisionTrace` JSONL records.
+- Memory and `IObjectStore`-backed implementations are available, so local
+  memory/file usage and future serverless object stores share the same boundary.
+- Trace writes enforce per-trace, per-match byte limits and per-match count
+  limits.
+
+Runtime trace capture and replay UI inspection are intentionally not wired yet.
+
 The web client exposes the same artifact at:
 
 ```text
@@ -216,7 +231,7 @@ examples/local-simulation - CLI demo script
 ## Current Limitations
 
 - Hosted serverless deployment is not implemented yet.
-- Scheduled league, ladder, forensics, and decision trace flows are not implemented yet.
+- Decision trace capture/replay UI, forensics, scheduled league, and ladder flows are not implemented yet.
 - Runtime and match artifact hosting are still mostly local/in-memory.
 - Hosted serverless bindings are not implemented yet; this milestone provides
   the provider-neutral persistence boundary and local object-store adapter.
