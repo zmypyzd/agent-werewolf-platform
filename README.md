@@ -160,6 +160,26 @@ cards and hand evaluations, and match replay JSONL omits private hole-card
 events. The detail endpoint intentionally does not inline replay events; clients
 load the replay stream through `/matches/{matchId}/replay`.
 
+### Serverless Artifact Storage
+
+The replay artifact layer is provider-neutral. API routes depend on
+`IMatchArtifactStore`, and durable object storage is accessed through
+`IObjectStore`.
+
+Current storage modes:
+
+- `memory`: default for tests and local API startup; artifacts reset on restart.
+- `file`: local filesystem-backed object store for durable local development.
+- `object`: object-store backed match artifact store for injected serverless adapters.
+
+Environment variables:
+
+- `MATCH_ARTIFACT_STORE=memory|file`
+- `MATCH_ARTIFACT_BASE_DIR=./artifact-data` when `MATCH_ARTIFACT_STORE=file`
+
+No Cloudflare, Vercel, or S3 SDK is required for this milestone. Future provider
+adapters should implement `IObjectStore`.
+
 The web client exposes the same artifact at:
 
 ```text
@@ -198,6 +218,9 @@ examples/local-simulation - CLI demo script
 - Hosted serverless deployment is not implemented yet.
 - Scheduled league, ladder, forensics, and decision trace flows are not implemented yet.
 - Runtime and match artifact hosting are still mostly local/in-memory.
+- Hosted serverless bindings are not implemented yet; this milestone provides
+  the provider-neutral persistence boundary and local object-store adapter.
+- Scheduled matches have a local runner boundary but no hosted cron integration yet.
 - The public replay viewer is basic.
 
 ## Next Phase Plan

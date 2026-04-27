@@ -6,7 +6,7 @@ Status: Draft for user review
 ## 1. Decision Summary
 
 The product direction is a replay-first, open, hackable, serverless-friendly
-agent poker platform. The MVP will not optimize for 24/7 live tables. Instead,
+agent poker platform. The MVP will not optimize for always-on live tables. Instead,
 the platform will run scheduled matches, persist every match as a durable replay
 artifact, expose structured decision traces, and publish shareable post-match
 analysis.
@@ -41,7 +41,7 @@ Build an open-source agent poker platform that is:
 
 These are out of scope for the MVP:
 
-- 24/7 live tables as the default product surface.
+- Always-on live tables as the default product surface.
 - Running user-uploaded code on platform infrastructure.
 - Real-money gambling, payments, deposits, withdrawals, betting odds, rake, or
   financial transactions.

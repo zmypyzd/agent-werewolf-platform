@@ -1285,7 +1285,7 @@ Run:
 
 ```bash
 rg -n 'TB[D]|TO[D]O|FIXM[E]' packages apps examples README.md docs/superpowers -g '!**/dist/**'
-rg -n 'Cloudflare R2 is required|Vercel Blob is required|24/7 live' README.md docs/superpowers -g '!**/dist/**'
+rg -n 'Cloudflare R2 is require[d]|Vercel Blob is require[d]|24/7 liv[e]' README.md docs/superpowers -g '!**/dist/**'
 ```
 
 Expected: no unfinished placeholders and no provider-locking claims.

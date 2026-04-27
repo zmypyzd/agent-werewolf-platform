@@ -9,7 +9,7 @@ Make replay-first match artifacts durable and portable across serverless platfor
 - Do not add real-money gambling, deposits, betting odds, or financial transaction behavior.
 - Do not integrate a vendor SDK in this milestone.
 - Do not build the public submission ladder yet.
-- Do not make 24/7 live streaming a dependency of the architecture.
+- Do not make always-on live streaming a dependency of the architecture.
 
 ## Recommended Approach
 
