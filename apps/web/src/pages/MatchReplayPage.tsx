@@ -92,16 +92,20 @@ export function MatchReplayPageContent({
       <div className="tabs" role="tablist" aria-label="Match detail views">
         <button
           type="button"
+          id="match-replay-tab"
           role="tab"
           aria-selected={activeTab === 'replay'}
+          aria-controls="match-replay-panel"
           onClick={() => onSelectTab('replay')}
         >
           Replay
         </button>
         <button
           type="button"
+          id="match-analysis-tab"
           role="tab"
           aria-selected={activeTab === 'analysis'}
+          aria-controls="match-analysis-panel"
           onClick={() => onSelectTab('analysis')}
         >
           Analysis
@@ -109,25 +113,37 @@ export function MatchReplayPageContent({
       </div>
 
       {activeTab === 'replay' ? (
-        <ReplayWorkbench
-          hands={record.summary.hands}
-          replayEvents={replayEvents}
-          finalStacks={record.summary.finalStacks}
-          selectedHandId={selectedHandId}
-          selectedActionId={selectedActionId}
-          replayLoading={replayLoading}
-          replayError={replayError}
-          onSelectHand={onSelectHand}
-          onSelectAction={onSelectAction}
-        />
+        <div
+          id="match-replay-panel"
+          role="tabpanel"
+          aria-labelledby="match-replay-tab"
+        >
+          <ReplayWorkbench
+            hands={record.summary.hands}
+            replayEvents={replayEvents}
+            finalStacks={record.summary.finalStacks}
+            selectedHandId={selectedHandId}
+            selectedActionId={selectedActionId}
+            replayLoading={replayLoading}
+            replayError={replayError}
+            onSelectHand={onSelectHand}
+            onSelectAction={onSelectAction}
+          />
+        </div>
       ) : null}
 
       {activeTab === 'analysis' ? (
-        <MatchAnalysisPanel
-          analysis={analysis}
-          loading={analysisLoading}
-          error={analysisError}
-        />
+        <div
+          id="match-analysis-panel"
+          role="tabpanel"
+          aria-labelledby="match-analysis-tab"
+        >
+          <MatchAnalysisPanel
+            analysis={analysis}
+            loading={analysisLoading}
+            error={analysisError}
+          />
+        </div>
       ) : null}
 
       <section className="artifact-metadata">

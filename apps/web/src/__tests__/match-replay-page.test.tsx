@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server';
+import { readFileSync } from 'node:fs';
 import { StaticRouter } from 'react-router-dom/server.js';
 import { describe, expect, it } from 'vitest';
 import type { MatchAnalysisSummary } from '../lib/api.js';
@@ -8,6 +9,27 @@ import { MatchReplayPageContent } from '../pages/MatchReplayPage.js';
 function hasClassToken(html: string, className: string): boolean {
   return [...html.matchAll(/class="([^"]+)"/g)]
     .some(match => match[1]!.split(/\s+/).includes(className));
+}
+
+function getAttributes(source: string): Record<string, string> {
+  return Object.fromEntries(
+    [...source.matchAll(/([\w:-]+)="([^"]*)"/g)]
+      .map(match => [match[1]!, match[2]!]),
+  );
+}
+
+function getButtonAttributes(html: string, label: string): Record<string, string> {
+  const pattern = new RegExp(`<button([^>]*)>${label}</button>`);
+  const match = html.match(pattern);
+  expect(match).not.toBeNull();
+  return getAttributes(match![1]!);
+}
+
+function getElementAttributesById(html: string, id: string): Record<string, string> {
+  const pattern = new RegExp(`<[^>]*id="${id}"[^>]*>`);
+  const match = html.match(pattern);
+  expect(match).not.toBeNull();
+  return getAttributes(match![0]!);
 }
 
 const record: MatchArtifactRecord = {
@@ -176,5 +198,46 @@ describe('MatchReplayPageContent', () => {
     expect(html).toContain('No analysis summary published.');
     expect(html).toContain('<strong>n/a</strong><span>decisions</span>');
     expect(html).not.toContain('Decision Analysis');
+  });
+
+  it('associates tab buttons with active tabpanel regions', () => {
+    const replayHtml = renderContent('replay');
+    const replayTab = getButtonAttributes(replayHtml, 'Replay');
+    const replayPanel = getElementAttributesById(replayHtml, 'match-replay-panel');
+
+    expect(replayTab).toMatchObject({
+      id: 'match-replay-tab',
+      role: 'tab',
+      'aria-selected': 'true',
+      'aria-controls': 'match-replay-panel',
+    });
+    expect(replayPanel).toMatchObject({
+      role: 'tabpanel',
+      'aria-labelledby': 'match-replay-tab',
+    });
+
+    const analysisHtml = renderContent('analysis');
+    const analysisTab = getButtonAttributes(analysisHtml, 'Analysis');
+    const analysisPanel = getElementAttributesById(analysisHtml, 'match-analysis-panel');
+
+    expect(analysisTab).toMatchObject({
+      id: 'match-analysis-tab',
+      role: 'tab',
+      'aria-selected': 'true',
+      'aria-controls': 'match-analysis-panel',
+    });
+    expect(analysisPanel).toMatchObject({
+      role: 'tabpanel',
+      'aria-labelledby': 'match-analysis-tab',
+    });
+  });
+
+  it('stacks the replay workbench at medium widths before the grid can overflow', () => {
+    const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+    const mediumQuery = css.match(/@media\s*\(max-width:\s*1000px\)\s*\{[\s\S]*?\n\}/);
+
+    expect(mediumQuery).not.toBeNull();
+    expect(mediumQuery![0]).toContain('.workbench-grid');
+    expect(mediumQuery![0]).toContain('grid-template-columns: 1fr;');
   });
 });
