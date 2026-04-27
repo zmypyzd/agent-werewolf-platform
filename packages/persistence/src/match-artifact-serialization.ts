@@ -12,6 +12,7 @@ import type {
   ReplayEvent,
 } from '@agent-poker/shared';
 import { serializeDecisionTraces, toPublicDecisionTrace } from './decision-trace-serialization.js';
+import { buildAnalysisSummary, serializeAnalysisSummary } from './match-analysis-summary.js';
 import type { SaveMatchArtifactInput } from './match-artifact-store.js';
 
 export interface SerializedMatchArtifact {
@@ -19,6 +20,7 @@ export interface SerializedMatchArtifact {
   summaryRaw: string;
   replayRaw: string;
   decisionTraceRaw: string;
+  analysisSummaryRaw: string;
   manifestRaw: string;
 }
 
@@ -78,9 +80,11 @@ export function buildArtifact(input: SaveMatchArtifactInput, createdAt = Date.no
   const summary = buildSummary(input);
   const replayEvents = toPublicReplayEvents(sortReplayEvents(summary, input.replayEvents));
   const decisionTraces = toPublicDecisionTraces(sortDecisionTraces(summary, input.decisionTraces ?? []));
+  const analysisSummary = buildAnalysisSummary(summary, decisionTraces, createdAt);
   const summaryRaw = serializeJson(summary);
   const replayRaw = serializeReplayEvents(replayEvents);
   const decisionTraceRaw = serializeDecisionTraces(decisionTraces);
+  const analysisSummaryRaw = serializeAnalysisSummary(analysisSummary);
 
   const manifest: MatchArtifactManifest = {
     artifactVersion: 1,
@@ -92,15 +96,17 @@ export function buildArtifact(input: SaveMatchArtifactInput, createdAt = Date.no
       summary: fileRef('summary.json', summaryRaw, 'application/json'),
       replay: fileRef('replay.jsonl', replayRaw, 'application/x-ndjson'),
       decisionTrace: fileRef('decision-trace.jsonl', decisionTraceRaw, 'application/x-ndjson'),
+      analysisSummary: fileRef('analysis-summary.json', analysisSummaryRaw, 'application/json'),
     },
   };
 
-  const record = { manifest, summary, replayEvents, decisionTraces };
+  const record = { manifest, summary, replayEvents, decisionTraces, analysisSummary };
   return {
     record,
     summaryRaw,
     replayRaw,
     decisionTraceRaw,
+    analysisSummaryRaw,
     manifestRaw: serializeJson(manifest),
   };
 }

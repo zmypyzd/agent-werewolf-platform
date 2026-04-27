@@ -11,6 +11,7 @@ import type {
 } from '@agent-poker/shared';
 import { ArtifactLimitExceededError } from '@agent-poker/shared';
 import { parseDecisionTraces } from './decision-trace-serialization.js';
+import { parseAnalysisSummary } from './match-analysis-summary.js';
 import {
   buildArtifact,
   safePathSegment,
@@ -48,6 +49,7 @@ export interface MatchArtifactCostLimits {
   maxReplayBytes: number;
   maxSummaryBytes: number;
   maxDecisionTraceBytes: number;
+  maxAnalysisSummaryBytes: number;
   maxIndexEntries: number;
 }
 
@@ -55,6 +57,7 @@ const DEFAULT_MATCH_ARTIFACT_COST_LIMITS: MatchArtifactCostLimits = {
   maxReplayBytes: 1024 * 1024,
   maxSummaryBytes: 256 * 1024,
   maxDecisionTraceBytes: 512 * 1024,
+  maxAnalysisSummaryBytes: 128 * 1024,
   maxIndexEntries: 100,
 };
 
@@ -120,13 +123,15 @@ export class FileMatchArtifactStore implements IMatchArtifactStore {
 
   async saveMatchArtifact(input: SaveMatchArtifactInput): Promise<MatchArtifactRecord> {
     safePathSegment(input.matchId);
-    const { record, summaryRaw, replayRaw, decisionTraceRaw, manifestRaw } = buildArtifact(input);
+    const { record, summaryRaw, replayRaw, decisionTraceRaw, analysisSummaryRaw, manifestRaw } =
+      buildArtifact(input);
     this.ensureMatchDir(record.manifest.matchId);
 
     const dir = this.matchDir(record.manifest.matchId);
     fs.writeFileSync(path.join(dir, 'summary.json'), summaryRaw, 'utf-8');
     fs.writeFileSync(path.join(dir, 'replay.jsonl'), replayRaw, 'utf-8');
     fs.writeFileSync(path.join(dir, 'decision-trace.jsonl'), decisionTraceRaw, 'utf-8');
+    fs.writeFileSync(path.join(dir, 'analysis-summary.json'), analysisSummaryRaw, 'utf-8');
     fs.writeFileSync(path.join(dir, 'manifest.json'), manifestRaw, 'utf-8');
 
     await this.upsertIndex(toIndexEntry(record));
@@ -142,6 +147,7 @@ export class FileMatchArtifactStore implements IMatchArtifactStore {
     const summaryFile = path.join(dir, 'summary.json');
     const replayFile = path.join(dir, 'replay.jsonl');
     const decisionTraceFile = path.join(dir, 'decision-trace.jsonl');
+    const analysisSummaryFile = path.join(dir, 'analysis-summary.json');
     if (!fs.existsSync(manifestFile) || !fs.existsSync(summaryFile)) {
       return null;
     }
@@ -164,7 +170,10 @@ export class FileMatchArtifactStore implements IMatchArtifactStore {
       decisionTraces = parseDecisionTraces(fs.readFileSync(decisionTraceFile, 'utf-8'));
     }
 
-    return { manifest, summary, replayEvents, decisionTraces };
+    if (!fs.existsSync(analysisSummaryFile)) return null;
+    const analysisSummary = parseAnalysisSummary(fs.readFileSync(analysisSummaryFile, 'utf-8'));
+
+    return { manifest, summary, replayEvents, decisionTraces, analysisSummary };
   }
 
   async listMatchArtifacts(): Promise<MatchArtifactIndexEntry[]> {
@@ -197,8 +206,9 @@ export class ObjectMatchArtifactStore implements IMatchArtifactStore {
 
   async saveMatchArtifact(input: SaveMatchArtifactInput): Promise<MatchArtifactRecord> {
     safePathSegment(input.matchId);
-    const { record, summaryRaw, replayRaw, decisionTraceRaw, manifestRaw } = buildArtifact(input);
-    this.assertWithinLimits(summaryRaw, replayRaw, decisionTraceRaw);
+    const { record, summaryRaw, replayRaw, decisionTraceRaw, analysisSummaryRaw, manifestRaw } =
+      buildArtifact(input);
+    this.assertWithinLimits(summaryRaw, replayRaw, decisionTraceRaw, analysisSummaryRaw);
     const matchPrefix = `matches/${record.manifest.matchId}`;
 
     await this.objectStore.putText({
@@ -215,6 +225,11 @@ export class ObjectMatchArtifactStore implements IMatchArtifactStore {
       key: `${matchPrefix}/decision-trace.jsonl`,
       body: decisionTraceRaw,
       contentType: 'application/x-ndjson',
+    });
+    await this.objectStore.putText({
+      key: `${matchPrefix}/analysis-summary.json`,
+      body: analysisSummaryRaw,
+      contentType: 'application/json',
     });
     await this.objectStore.putText({
       key: `${matchPrefix}/manifest.json`,
@@ -254,7 +269,11 @@ export class ObjectMatchArtifactStore implements IMatchArtifactStore {
       decisionTraces = parseDecisionTraces(decisionTraceRaw);
     }
 
-    return { manifest, summary, replayEvents, decisionTraces };
+    const analysisSummaryRaw = await this.objectStore.getText(`${matchPrefix}/analysis-summary.json`);
+    if (analysisSummaryRaw === null) return null;
+    const analysisSummary = parseAnalysisSummary(analysisSummaryRaw);
+
+    return { manifest, summary, replayEvents, decisionTraces, analysisSummary };
   }
 
   async listMatchArtifacts(): Promise<MatchArtifactIndexEntry[]> {
@@ -264,10 +283,16 @@ export class ObjectMatchArtifactStore implements IMatchArtifactStore {
     return entries.sort((a, b) => b.createdAt - a.createdAt);
   }
 
-  private assertWithinLimits(summaryRaw: string, replayRaw: string, decisionTraceRaw: string): void {
+  private assertWithinLimits(
+    summaryRaw: string,
+    replayRaw: string,
+    decisionTraceRaw: string,
+    analysisSummaryRaw: string,
+  ): void {
     const summaryBytes = Buffer.byteLength(summaryRaw, 'utf-8');
     const replayBytes = Buffer.byteLength(replayRaw, 'utf-8');
     const decisionTraceBytes = Buffer.byteLength(decisionTraceRaw, 'utf-8');
+    const analysisSummaryBytes = Buffer.byteLength(analysisSummaryRaw, 'utf-8');
     if (summaryBytes > this.limits.maxSummaryBytes) {
       throw new ArtifactLimitExceededError(
         `Match summary is ${summaryBytes} bytes; limit is ${this.limits.maxSummaryBytes}`,
@@ -281,6 +306,11 @@ export class ObjectMatchArtifactStore implements IMatchArtifactStore {
     if (decisionTraceBytes > this.limits.maxDecisionTraceBytes) {
       throw new ArtifactLimitExceededError(
         `Match decision trace is ${decisionTraceBytes} bytes; limit is ${this.limits.maxDecisionTraceBytes}`,
+      );
+    }
+    if (analysisSummaryBytes > this.limits.maxAnalysisSummaryBytes) {
+      throw new ArtifactLimitExceededError(
+        `Match analysis summary is ${analysisSummaryBytes} bytes; limit is ${this.limits.maxAnalysisSummaryBytes}`,
       );
     }
   }

@@ -234,6 +234,43 @@ export const MatchArtifactFileRefSchema = z.object({
   contentType: z.string().min(1),
 });
 
+const ActionCountMapSchema = z.record(ActionTypeSchema, z.number().int().nonnegative());
+const StreetActionCountMapSchema = z.record(DecisionTracePhaseSchema, ActionCountMapSchema);
+const IntentCountMapSchema = z.record(ReasoningIntentSchema, z.number().int().nonnegative());
+const RiskCountMapSchema = z.record(ReasoningRiskLevelSchema, z.number().int().nonnegative());
+
+export const AnalysisMetricSummarySchema = z.object({
+  decisionCount: z.number().int().nonnegative(),
+  actionCounts: ActionCountMapSchema,
+  streetCounts: StreetActionCountMapSchema,
+  intentCounts: IntentCountMapSchema,
+  riskCounts: RiskCountMapSchema,
+  missingReasoningCount: z.number().int().nonnegative(),
+  timeoutCount: z.number().int().nonnegative(),
+  invalidActionCount: z.number().int().nonnegative(),
+  fallbackCount: z.number().int().nonnegative(),
+  averageConfidence: z.number().min(0).max(1).nullable(),
+  averageLatencyMs: z.number().nonnegative().nullable(),
+  maxLatencyMs: z.number().int().nonnegative().nullable(),
+}).strict();
+
+export const AgentAnalysisSummarySchema = AnalysisMetricSummarySchema.extend({
+  agentId: z.string().min(1),
+  playerIds: z.array(z.string().min(1)),
+  handIds: z.array(z.string().min(1)),
+}).strict();
+
+export const MatchAnalysisSummarySchema = z.object({
+  matchId: z.string().min(1),
+  tableId: z.string().min(1),
+  generatedAt: z.number().int().positive(),
+  handCount: z.number().int().nonnegative(),
+  agentCount: z.number().int().nonnegative(),
+  decisionCount: z.number().int().nonnegative(),
+  totals: AnalysisMetricSummarySchema,
+  agents: z.array(AgentAnalysisSummarySchema),
+}).strict();
+
 export const MatchSummarySchema = z.object({
   matchId: z.string().min(1),
   tableId: z.string().min(1),
@@ -257,6 +294,7 @@ export const MatchArtifactManifestSchema = z.object({
     summary: MatchArtifactFileRefSchema,
     replay: MatchArtifactFileRefSchema,
     decisionTrace: MatchArtifactFileRefSchema,
+    analysisSummary: MatchArtifactFileRefSchema,
   }),
 });
 
@@ -278,6 +316,7 @@ export const MatchArtifactRecordSchema = z.object({
   summary: MatchSummarySchema,
   replayEvents: z.array(ReplayEventSchema),
   decisionTraces: z.array(DecisionTraceSchema),
+  analysisSummary: MatchAnalysisSummarySchema,
 }).superRefine((record, ctx) => {
   if (record.manifest.matchId !== record.summary.matchId) {
     ctx.addIssue({
@@ -331,6 +370,22 @@ export const MatchArtifactRecordSchema = z.object({
   });
 
   const summaryHandIdSet = new Set(summaryHandIds);
+  if (record.analysisSummary.matchId !== record.summary.matchId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'analysis summary matchId must match summary.matchId',
+      path: ['analysisSummary', 'matchId'],
+    });
+  }
+
+  if (record.analysisSummary.tableId !== record.summary.tableId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'analysis summary tableId must match summary.tableId',
+      path: ['analysisSummary', 'tableId'],
+    });
+  }
+
   record.replayEvents.forEach((event, index) => {
     if (event.tableId !== record.summary.tableId) {
       ctx.addIssue({

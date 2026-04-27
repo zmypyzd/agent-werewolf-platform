@@ -142,11 +142,20 @@ describe('MatchArtifactStore', () => {
 
     expect(record.manifest.files.summary.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(record.manifest.files.decisionTrace.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(record.manifest.files.analysisSummary.path).toBe('analysis-summary.json');
     expect(record.summary.finalStacks).toEqual({ 'bot-a': 1050 });
+    expect(record.analysisSummary.totals.actionCounts.call).toBe(1);
+    expect(record.analysisSummary.agents[0]).toMatchObject({
+      agentId: 'bot-a',
+      decisionCount: 1,
+      timeoutCount: 0,
+      invalidActionCount: 0,
+    });
     expect(fs.existsSync(path.join(dir, 'matches', 'tbl-12345678', 'manifest.json'))).toBe(true);
     expect(fs.existsSync(path.join(dir, 'matches', 'tbl-12345678', 'summary.json'))).toBe(true);
     expect(fs.existsSync(path.join(dir, 'matches', 'tbl-12345678', 'replay.jsonl'))).toBe(true);
     expect(fs.existsSync(path.join(dir, 'matches', 'tbl-12345678', 'decision-trace.jsonl'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'matches', 'tbl-12345678', 'analysis-summary.json'))).toBe(true);
     expect(fs.existsSync(path.join(dir, 'matches', 'index.json'))).toBe(true);
   });
 
@@ -196,6 +205,10 @@ describe('MatchArtifactStore', () => {
       path.join(dir, 'matches', 'tbl-12345678', 'decision-trace.jsonl'),
       'utf-8',
     );
+    const analysisSummaryRaw = fs.readFileSync(
+      path.join(dir, 'matches', 'tbl-12345678', 'analysis-summary.json'),
+      'utf-8',
+    );
 
     expect(record.manifest.files.summary.sha256).toBe(sha256(summaryRaw));
     expect(record.manifest.files.summary.bytes).toBe(Buffer.byteLength(summaryRaw, 'utf-8'));
@@ -203,6 +216,8 @@ describe('MatchArtifactStore', () => {
     expect(record.manifest.files.replay.bytes).toBe(Buffer.byteLength(replayRaw, 'utf-8'));
     expect(record.manifest.files.decisionTrace.sha256).toBe(sha256(decisionTraceRaw));
     expect(record.manifest.files.decisionTrace.bytes).toBe(Buffer.byteLength(decisionTraceRaw, 'utf-8'));
+    expect(record.manifest.files.analysisSummary.sha256).toBe(sha256(analysisSummaryRaw));
+    expect(record.manifest.files.analysisSummary.bytes).toBe(Buffer.byteLength(analysisSummaryRaw, 'utf-8'));
   });
 
   it('FileMatchArtifactStore writes public-safe summary and replay artifacts', async () => {
@@ -239,6 +254,10 @@ describe('MatchArtifactStore', () => {
       path.join(dir, 'matches', 'tbl-12345678', 'decision-trace.jsonl'),
       'utf-8',
     );
+    const analysisSummaryRaw = fs.readFileSync(
+      path.join(dir, 'matches', 'tbl-12345678', 'analysis-summary.json'),
+      'utf-8',
+    );
 
     expect(summaryRaw).not.toContain('"holeCards"');
     expect(summaryRaw).not.toContain('"handEvaluation"');
@@ -247,6 +266,9 @@ describe('MatchArtifactStore', () => {
     expect(decisionTraceRaw).not.toContain('"holeCards"');
     expect(decisionTraceRaw).not.toContain('rawChainOfThought');
     expect(decisionTraceRaw).not.toContain('private hidden reasoning');
+    expect(analysisSummaryRaw).not.toContain('"holeCards"');
+    expect(analysisSummaryRaw).not.toContain('rawChainOfThought');
+    expect(analysisSummaryRaw).not.toContain('private hidden reasoning');
   });
 
   it('FileMatchArtifactStore loads a saved artifact', async () => {
@@ -268,6 +290,7 @@ describe('MatchArtifactStore', () => {
     expect(loaded?.summary.matchId).toBe('tbl-12345678');
     expect(loaded?.replayEvents).toHaveLength(2);
     expect(loaded?.decisionTraces).toHaveLength(1);
+    expect(loaded?.analysisSummary.totals.intentCounts.pot_control).toBe(1);
   });
 
   it('FileMatchArtifactStore can load metadata without reading the replay file', async () => {
@@ -401,6 +424,8 @@ describe('MatchArtifactStore', () => {
 
     expect(record.summary.handIds).toEqual([firstHand.handId, secondHand.handId]);
     expect(record.summary.finalStacks).toEqual({ 'bot-a': 900 });
+    expect(record.analysisSummary.handCount).toBe(2);
+    expect(record.analysisSummary.decisionCount).toBe(2);
     expect(record.replayEvents.map(event => `${event.handId}:${event.sequence}`)).toEqual([
       `${firstHand.handId}:1`,
       `${firstHand.handId}:2`,
@@ -433,6 +458,7 @@ describe('MatchArtifactStore', () => {
     expect(await objectStore.exists('matches/tbl-12345678/summary.json')).toBe(true);
     expect(await objectStore.exists('matches/tbl-12345678/replay.jsonl')).toBe(true);
     expect(await objectStore.exists('matches/tbl-12345678/decision-trace.jsonl')).toBe(true);
+    expect(await objectStore.exists('matches/tbl-12345678/analysis-summary.json')).toBe(true);
     expect(await objectStore.exists('matches/index.json')).toBe(true);
   });
 

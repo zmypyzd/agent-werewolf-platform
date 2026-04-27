@@ -154,6 +154,7 @@ async function main() {
   console.log(`Match summary: ${OUTPUT_DIR}/matches/${artifact.manifest.matchId}/summary.json`);
   console.log(`Match replay: ${OUTPUT_DIR}/matches/${artifact.manifest.matchId}/replay.jsonl`);
   console.log(`Match decision traces: ${OUTPUT_DIR}/matches/${artifact.manifest.matchId}/decision-trace.jsonl`);
+  console.log(`Match analysis summary: ${OUTPUT_DIR}/matches/${artifact.manifest.matchId}/analysis-summary.json`);
   console.log('');
   console.log('====================================');
   console.log('Simulation complete!');

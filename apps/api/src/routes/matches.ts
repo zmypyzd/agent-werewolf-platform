@@ -60,7 +60,7 @@ export async function matchesRoutes(app: FastifyInstance, opts: MatchesPluginOpt
     const record = await getMatchArtifactOrThrow(
       matchArtifactStore,
       req.params.matchId,
-      { includeReplayEvents: false },
+      { includeReplayEvents: false, includeDecisionTraces: false },
     );
     reply.send({
       data: {
@@ -82,5 +82,14 @@ export async function matchesRoutes(app: FastifyInstance, opts: MatchesPluginOpt
       { includeReplayEvents: false },
     );
     reply.send({ data: record.decisionTraces });
+  });
+
+  app.get<{ Params: { matchId: string } }>('/matches/:matchId/analysis', async (req, reply) => {
+    const record = await getMatchArtifactOrThrow(
+      matchArtifactStore,
+      req.params.matchId,
+      { includeReplayEvents: false, includeDecisionTraces: false },
+    );
+    reply.send({ data: record.analysisSummary });
   });
 }

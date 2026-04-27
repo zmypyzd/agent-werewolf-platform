@@ -312,6 +312,38 @@ export interface MatchArtifactFileRef {
   contentType: string;
 }
 
+export interface AnalysisMetricSummary {
+  decisionCount: number;
+  actionCounts: Partial<Record<ActionType, number>>;
+  streetCounts: Partial<Record<DecisionTracePhase, Partial<Record<ActionType, number>>>>;
+  intentCounts: Partial<Record<ReasoningIntent, number>>;
+  riskCounts: Partial<Record<ReasoningRiskLevel, number>>;
+  missingReasoningCount: number;
+  timeoutCount: number;
+  invalidActionCount: number;
+  fallbackCount: number;
+  averageConfidence: number | null;
+  averageLatencyMs: number | null;
+  maxLatencyMs: number | null;
+}
+
+export interface AgentAnalysisSummary extends AnalysisMetricSummary {
+  agentId: string;
+  playerIds: string[];
+  handIds: string[];
+}
+
+export interface MatchAnalysisSummary {
+  matchId: string;
+  tableId: string;
+  generatedAt: number;
+  handCount: number;
+  agentCount: number;
+  decisionCount: number;
+  totals: AnalysisMetricSummary;
+  agents: AgentAnalysisSummary[];
+}
+
 export interface MatchSummary {
   matchId: string;
   tableId: string;
@@ -335,6 +367,7 @@ export interface MatchArtifactManifest {
     summary: MatchArtifactFileRef;
     replay: MatchArtifactFileRef;
     decisionTrace: MatchArtifactFileRef;
+    analysisSummary: MatchArtifactFileRef;
   };
 }
 
@@ -356,4 +389,5 @@ export interface MatchArtifactRecord {
   summary: MatchSummary;
   replayEvents: ReplayEvent[];
   decisionTraces: DecisionTrace[];
+  analysisSummary: MatchAnalysisSummary;
 }

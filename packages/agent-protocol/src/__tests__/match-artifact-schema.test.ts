@@ -35,6 +35,31 @@ const artifactFiles = {
   summary: fileRef,
   replay: { ...fileRef, path: 'replay.jsonl', contentType: 'application/x-ndjson' },
   decisionTrace: { ...fileRef, path: 'decision-trace.jsonl', contentType: 'application/x-ndjson' },
+  analysisSummary: { ...fileRef, path: 'analysis-summary.json', contentType: 'application/json' },
+};
+
+const analysisSummary = {
+  matchId: 'tbl-12345678',
+  tableId: 'tbl-12345678',
+  generatedAt: now + 1500,
+  handCount: 1,
+  agentCount: 1,
+  decisionCount: 0,
+  totals: {
+    decisionCount: 0,
+    actionCounts: {},
+    streetCounts: {},
+    intentCounts: {},
+    riskCounts: {},
+    missingReasoningCount: 0,
+    timeoutCount: 0,
+    invalidActionCount: 0,
+    fallbackCount: 0,
+    averageConfidence: null,
+    averageLatencyMs: null,
+    maxLatencyMs: null,
+  },
+  agents: [],
 };
 
 describe('match artifact schemas', () => {
@@ -81,6 +106,7 @@ describe('match artifact schemas', () => {
 
     expect(entry.artifactPath).toBe('matches/tbl-12345678/manifest.json');
     expect(manifest.files.decisionTrace.path).toBe('decision-trace.jsonl');
+    expect(manifest.files.analysisSummary.path).toBe('analysis-summary.json');
   });
 
   it('accepts a complete artifact record', () => {
@@ -107,10 +133,12 @@ describe('match artifact schemas', () => {
       },
       replayEvents: [],
       decisionTraces: [],
+      analysisSummary,
     });
 
     expect(record.summary.hands).toHaveLength(1);
     expect(record.decisionTraces).toEqual([]);
+    expect(record.analysisSummary.matchId).toBe('tbl-12345678');
   });
 
   it('rejects an artifact record with inconsistent match ids', () => {

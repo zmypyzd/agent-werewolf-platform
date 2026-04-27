@@ -157,14 +157,21 @@ curl http://localhost:3000/api/v1/matches/{matchId}/replay
 
 # Read decision traces only
 curl http://localhost:3000/api/v1/matches/{matchId}/decision-trace
+
+# Read deterministic analysis summary only
+curl http://localhost:3000/api/v1/matches/{matchId}/analysis
 ```
 
 Match artifacts are public-safe by default: match summaries omit private hole
 cards and hand evaluations, and match replay JSONL omits private hole-card
 events. Decision trace JSONL stores state hashes and bounded reasoning summaries,
-not full private state or raw chain-of-thought. The detail endpoint intentionally
-does not inline replay events or decision traces; clients load those streams
-through `/matches/{matchId}/replay` and `/matches/{matchId}/decision-trace`.
+not full private state or raw chain-of-thought. Analysis summary JSON stores
+bounded aggregate decision statistics only; it does not include observation text,
+considered-action reasons, private cards, or raw chain-of-thought. The detail
+endpoint intentionally does not inline replay events, decision traces, or
+analysis summaries; clients load those resources through
+`/matches/{matchId}/replay`, `/matches/{matchId}/decision-trace`, and
+`/matches/{matchId}/analysis`.
 
 ### Serverless Artifact Storage
 
@@ -194,6 +201,8 @@ The analysis layer has a first-stage public-safe decision trace boundary:
 - Reasoning summaries are structured for replay/review and must not contain raw
   chain-of-thought.
 - `IDecisionTraceStore` persists sanitized `DecisionTrace` JSONL records.
+- Match artifacts include a deterministic `analysis-summary.json` generated
+  from public match summaries and public-safe decision traces.
 - Memory and `IObjectStore`-backed implementations are available, so local
   memory/file usage and future serverless object stores share the same boundary.
 - Trace writes enforce per-trace, per-match byte limits and per-match count
@@ -202,8 +211,7 @@ The analysis layer has a first-stage public-safe decision trace boundary:
   actions, and missing-agent fallbacks.
 
 Until a separate match identity is modeled in the runtime, decision traces use
-`tableId` as the temporary `matchId`. Replay artifact bundling and replay UI
-inspection are intentionally not wired yet.
+`tableId` as the temporary `matchId`.
 
 The web client exposes the same artifact at:
 
@@ -220,6 +228,7 @@ http://localhost:5173/matches/{matchId}
 - Public-safe match summary: `examples/local-simulation/output/matches/{matchId}/summary.json`
 - Public-safe match replay events: `examples/local-simulation/output/matches/{matchId}/replay.jsonl`
 - Public-safe match decision traces: `examples/local-simulation/output/matches/{matchId}/decision-trace.jsonl`
+- Public-safe match analysis summary: `examples/local-simulation/output/matches/{matchId}/analysis-summary.json`
 
 ## Architecture
 

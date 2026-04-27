@@ -95,8 +95,10 @@ describe('match artifact API', () => {
     expect(recordBody.data.summary.hands).toHaveLength(1);
     expect(recordBody.data.replayEvents).toBeUndefined();
     expect(recordBody.data.decisionTraces).toBeUndefined();
+    expect(recordBody.data.analysisSummary).toBeUndefined();
     expect(recordBody.data.manifest.files.summary.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(recordBody.data.manifest.files.decisionTrace.path).toBe('decision-trace.jsonl');
+    expect(recordBody.data.manifest.files.analysisSummary.path).toBe('analysis-summary.json');
 
     const replay = await app.inject({ method: 'GET', url: `/api/v1/matches/${matchId}/replay` });
     expect(replay.statusCode).toBe(200);
@@ -112,6 +114,16 @@ describe('match artifact API', () => {
     const decisionTraceBody = JSON.parse(decisionTrace.payload);
     expect(Array.isArray(decisionTraceBody.data)).toBe(true);
     expect(decisionTraceBody.data.length).toBeGreaterThan(0);
+
+    const analysis = await app.inject({
+      method: 'GET',
+      url: `/api/v1/matches/${matchId}/analysis`,
+    });
+    expect(analysis.statusCode).toBe(200);
+    const analysisBody = JSON.parse(analysis.payload);
+    expect(analysisBody.data.matchId).toBe(matchId);
+    expect(analysisBody.data.decisionCount).toBeGreaterThan(0);
+    expect(analysisBody.data.totals.actionCounts.call).toBeGreaterThan(0);
   });
 
   it('POST /simulate rejects requests above the serverless hand cap', async () => {
@@ -171,6 +183,24 @@ describe('match artifact API', () => {
     expect(body.data[0].privateStateHash).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it('public match analysis summarizes decisions without reasoning text', async () => {
+    const { matchId } = await createSimulatedMatch();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/matches/${matchId}/analysis`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.payload);
+    expect(body.data.agents.length).toBeGreaterThan(0);
+    expect(body.data.totals.missingReasoningCount).toBeGreaterThan(0);
+    expect(body.data.totals.averageLatencyMs).toBeGreaterThanOrEqual(0);
+    expect(JSON.stringify(body.data)).not.toContain('"holeCards"');
+    expect(JSON.stringify(body.data)).not.toContain('rawChainOfThought');
+    expect(JSON.stringify(body.data)).not.toContain('keyObservations');
+    expect(JSON.stringify(body.data)).not.toContain('consideredActions');
+  });
+
   it('GET /api/v1/matches/:matchId returns 404 for an unknown match', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/matches/no-such-match' });
     expect(res.statusCode).toBe(404);
@@ -189,6 +219,16 @@ describe('match artifact API', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/v1/matches/no-such-match/decision-trace',
+    });
+    expect(res.statusCode).toBe(404);
+    const body = JSON.parse(res.payload);
+    expect(body.error.code).toBe('MATCH_NOT_FOUND');
+  });
+
+  it('GET /api/v1/matches/:matchId/analysis returns 404 for an unknown match', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/matches/no-such-match/analysis',
     });
     expect(res.statusCode).toBe(404);
     const body = JSON.parse(res.payload);
