@@ -3,11 +3,13 @@ import { createHash, randomUUID } from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { HandSummary, ReplayEvent } from '@agent-poker/shared';
+import { ArtifactLimitExceededError, type HandSummary, type ReplayEvent } from '@agent-poker/shared';
 import {
   FileMatchArtifactStore,
   MemoryMatchArtifactStore,
+  ObjectMatchArtifactStore,
 } from '../match-artifact-store.js';
+import { MemoryObjectStore } from '../object-store.js';
 
 function makeTmpDir(): string {
   return path.join(os.tmpdir(), `poker-match-artifact-${randomUUID()}`);
@@ -341,5 +343,101 @@ describe('MatchArtifactStore', () => {
       `${secondHand.handId}:0`,
       `${secondHand.handId}:1`,
     ]);
+  });
+
+  it('ObjectMatchArtifactStore writes manifest, summary, replay JSONL, and index objects', async () => {
+    const objectStore = new MemoryObjectStore();
+    const store = new ObjectMatchArtifactStore(objectStore);
+    const hand = makeHand(1, 1050);
+
+    const record = await store.saveMatchArtifact({
+      matchId: 'tbl-12345678',
+      tableId: 'tbl-12345678',
+      name: 'Daily Showcase',
+      seed: 'seed-main',
+      hands: [hand],
+      replayEvents: [makeEvent(hand.handId, 0)],
+    });
+
+    expect(record.manifest.matchId).toBe('tbl-12345678');
+    expect(await objectStore.exists('matches/tbl-12345678/manifest.json')).toBe(true);
+    expect(await objectStore.exists('matches/tbl-12345678/summary.json')).toBe(true);
+    expect(await objectStore.exists('matches/tbl-12345678/replay.jsonl')).toBe(true);
+    expect(await objectStore.exists('matches/index.json')).toBe(true);
+  });
+
+  it('ObjectMatchArtifactStore loads metadata without reading replay JSONL', async () => {
+    const objectStore = new MemoryObjectStore();
+    const store = new ObjectMatchArtifactStore(objectStore);
+    const hand = makeHand(1, 1050);
+    await store.saveMatchArtifact({
+      matchId: 'tbl-12345678',
+      tableId: 'tbl-12345678',
+      name: 'Daily Showcase',
+      seed: 'seed-main',
+      hands: [hand],
+      replayEvents: [makeEvent(hand.handId, 0)],
+    });
+    await objectStore.delete?.('matches/tbl-12345678/replay.jsonl');
+
+    const loaded = await store.getMatchArtifact('tbl-12345678', { includeReplayEvents: false });
+    expect(loaded?.summary.matchId).toBe('tbl-12345678');
+    expect(loaded?.replayEvents).toEqual([]);
+  });
+
+  it('ObjectMatchArtifactStore rejects oversized replay artifacts', async () => {
+    const objectStore = new MemoryObjectStore();
+    const store = new ObjectMatchArtifactStore(objectStore, {
+      maxReplayBytes: 10,
+      maxSummaryBytes: 256 * 1024,
+      maxIndexEntries: 100,
+    });
+    const hand = makeHand(1, 1050);
+
+    await expect(store.saveMatchArtifact({
+      matchId: 'tbl-12345678',
+      tableId: 'tbl-12345678',
+      name: 'Daily Showcase',
+      seed: 'seed-main',
+      hands: [hand],
+      replayEvents: [makeEvent(hand.handId, 0)],
+    })).rejects.toBeInstanceOf(ArtifactLimitExceededError);
+  });
+
+  it('ObjectMatchArtifactStore truncates index entries to the configured cap', async () => {
+    const objectStore = new MemoryObjectStore();
+    const store = new ObjectMatchArtifactStore(objectStore, {
+      maxReplayBytes: 1024 * 1024,
+      maxSummaryBytes: 256 * 1024,
+      maxIndexEntries: 2,
+    });
+
+    await store.saveMatchArtifact({
+      matchId: 'match-a',
+      tableId: 'tbl-a',
+      name: 'A',
+      seed: 'a',
+      hands: [makeHand(1, 1000)],
+      replayEvents: [],
+    });
+    await store.saveMatchArtifact({
+      matchId: 'match-b',
+      tableId: 'tbl-b',
+      name: 'B',
+      seed: 'b',
+      hands: [makeHand(2, 1100)],
+      replayEvents: [],
+    });
+    await store.saveMatchArtifact({
+      matchId: 'match-c',
+      tableId: 'tbl-c',
+      name: 'C',
+      seed: 'c',
+      hands: [makeHand(3, 1200)],
+      replayEvents: [],
+    });
+
+    const entries = await store.listMatchArtifacts();
+    expect(entries.map(entry => entry.matchId)).toEqual(['match-c', 'match-b']);
   });
 });

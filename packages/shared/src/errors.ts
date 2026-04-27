@@ -39,6 +39,10 @@ export class InvalidConfigError extends AppError {
   constructor(reason: string) { super('INVALID_CONFIG', reason); }
 }
 
+export class ArtifactLimitExceededError extends AppError {
+  constructor(reason: string) { super('ARTIFACT_LIMIT_EXCEEDED', reason); }
+}
+
 export class SchemaValidationError extends AppError {
   constructor(details: string) { super('SCHEMA_VALIDATION_FAILED', `Schema validation failed: ${details}`); }
 }

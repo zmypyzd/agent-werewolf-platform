@@ -102,6 +102,7 @@ export function buildServer(opts: BuildServerOptions = {}) {
         INVALID_CONFIG: 400,
         SCHEMA_VALIDATION_FAILED: 400,
         INVALID_ACTION: 400,
+        ARTIFACT_LIMIT_EXCEEDED: 413,
         UNAUTHENTICATED: 401,
         CSRF_FAILED: 403,
         FORBIDDEN: 403,
