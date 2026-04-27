@@ -59,6 +59,7 @@ Demo output:
 - Match artifact manifest: `examples/local-simulation/output/matches/{matchId}/manifest.json`
 - Match summary: `examples/local-simulation/output/matches/{matchId}/summary.json`
 - Match replay events: `examples/local-simulation/output/matches/{matchId}/replay.jsonl`
+- Match decision traces: `examples/local-simulation/output/matches/{matchId}/decision-trace.jsonl`
 
 ## Starting the API
 
@@ -153,12 +154,17 @@ curl http://localhost:3000/api/v1/matches/{matchId}
 
 # Read replay events only
 curl http://localhost:3000/api/v1/matches/{matchId}/replay
+
+# Read decision traces only
+curl http://localhost:3000/api/v1/matches/{matchId}/decision-trace
 ```
 
 Match artifacts are public-safe by default: match summaries omit private hole
 cards and hand evaluations, and match replay JSONL omits private hole-card
-events. The detail endpoint intentionally does not inline replay events; clients
-load the replay stream through `/matches/{matchId}/replay`.
+events. Decision trace JSONL stores state hashes and bounded reasoning summaries,
+not full private state or raw chain-of-thought. The detail endpoint intentionally
+does not inline replay events or decision traces; clients load those streams
+through `/matches/{matchId}/replay` and `/matches/{matchId}/decision-trace`.
 
 ### Serverless Artifact Storage
 
@@ -213,6 +219,7 @@ http://localhost:5173/matches/{matchId}
 - Match artifact manifest: `examples/local-simulation/output/matches/{matchId}/manifest.json`
 - Public-safe match summary: `examples/local-simulation/output/matches/{matchId}/summary.json`
 - Public-safe match replay events: `examples/local-simulation/output/matches/{matchId}/replay.jsonl`
+- Public-safe match decision traces: `examples/local-simulation/output/matches/{matchId}/decision-trace.jsonl`
 
 ## Architecture
 

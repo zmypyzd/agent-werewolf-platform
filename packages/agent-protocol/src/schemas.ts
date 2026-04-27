@@ -256,6 +256,7 @@ export const MatchArtifactManifestSchema = z.object({
   files: z.object({
     summary: MatchArtifactFileRefSchema,
     replay: MatchArtifactFileRefSchema,
+    decisionTrace: MatchArtifactFileRefSchema,
   }),
 });
 
@@ -276,6 +277,7 @@ export const MatchArtifactRecordSchema = z.object({
   manifest: MatchArtifactManifestSchema,
   summary: MatchSummarySchema,
   replayEvents: z.array(ReplayEventSchema),
+  decisionTraces: z.array(DecisionTraceSchema),
 }).superRefine((record, ctx) => {
   if (record.manifest.matchId !== record.summary.matchId) {
     ctx.addIssue({
@@ -343,6 +345,24 @@ export const MatchArtifactRecordSchema = z.object({
         code: z.ZodIssueCode.custom,
         message: 'replay event handId must be included in summary.handIds',
         path: ['replayEvents', index, 'handId'],
+      });
+    }
+  });
+
+  record.decisionTraces.forEach((trace, index) => {
+    if (trace.matchId !== record.summary.matchId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'decision trace matchId must match summary.matchId',
+        path: ['decisionTraces', index, 'matchId'],
+      });
+    }
+
+    if (!summaryHandIdSet.has(trace.handId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'decision trace handId must be included in summary.handIds',
+        path: ['decisionTraces', index, 'handId'],
       });
     }
   });

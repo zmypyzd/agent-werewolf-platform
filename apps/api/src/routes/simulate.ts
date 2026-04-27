@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { ZodError } from 'zod';
 import type { TableOrchestrator } from '@agent-poker/table-orchestrator';
-import type { IHandStore, IMatchArtifactStore } from '@agent-poker/persistence';
+import type { IDecisionTraceStore, IHandStore, IMatchArtifactStore } from '@agent-poker/persistence';
 import { SchemaValidationError, AppError } from '@agent-poker/shared';
 import { SimulateRequestSchema } from '@agent-poker/agent-protocol';
 import { RandomMockAgent, AlwaysCallAgent, AlwaysFoldAgent, AggressiveAgent } from '@agent-poker/agent-runtime';
@@ -11,10 +11,11 @@ interface SimulatePluginOptions extends FastifyPluginOptions {
   orchestrator: TableOrchestrator;
   handStore: IHandStore;
   matchArtifactStore: IMatchArtifactStore;
+  decisionTraceStore: IDecisionTraceStore;
 }
 
 export async function simulateRoutes(app: FastifyInstance, opts: SimulatePluginOptions) {
-  const { orchestrator, handStore, matchArtifactStore } = opts;
+  const { orchestrator, handStore, matchArtifactStore, decisionTraceStore } = opts;
 
   app.post('/simulate', { preHandler: [app.requireAuth, app.requireCsrf] }, async (req, reply) => {
     let body: ReturnType<typeof SimulateRequestSchema.parse>;
@@ -69,6 +70,7 @@ export async function simulateRoutes(app: FastifyInstance, opts: SimulatePluginO
       const replayEvents = (
         await Promise.all(hands.map(hand => handStore.getReplayEvents(hand.handId)))
       ).flat();
+      const decisionTraces = await decisionTraceStore.listDecisionTraces(table.tableId);
 
       const matchArtifact = await matchArtifactStore.saveMatchArtifact({
         matchId: table.tableId,
@@ -77,6 +79,7 @@ export async function simulateRoutes(app: FastifyInstance, opts: SimulatePluginO
         seed: table.config.seed || body.seed || table.tableId,
         hands,
         replayEvents,
+        decisionTraces,
       });
 
       reply.send({

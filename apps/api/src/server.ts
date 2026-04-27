@@ -4,6 +4,7 @@ import { TableOrchestrator } from '@agent-poker/table-orchestrator';
 import {
   MemoryTableStore,
   MemoryHandStore,
+  MemoryDecisionTraceStore,
   openDatabase,
   SqliteUserStore,
   SqliteSessionStore,
@@ -14,6 +15,7 @@ import type {
   ISessionStore,
   IUserAgentConfigStore,
   IMatchArtifactStore,
+  IDecisionTraceStore,
   SqliteDb,
 } from '@agent-poker/persistence';
 import { AppError, RateLimitedError } from '@agent-poker/shared';
@@ -33,6 +35,7 @@ export interface BuildServerOptions {
   orchestrator?: TableOrchestrator;
   handStore?: InstanceType<typeof MemoryHandStore>;
   matchArtifactStore?: IMatchArtifactStore;
+  decisionTraceStore?: IDecisionTraceStore;
   userStore?: IUserStore;
   sessionStore?: ISessionStore;
   agentConfigStore?: IUserAgentConfigStore;
@@ -53,8 +56,9 @@ export function buildServer(opts: BuildServerOptions = {}) {
   const tableStore = new MemoryTableStore();
   const hs = opts.handStore ?? new MemoryHandStore();
   const matchArtifactStore = opts.matchArtifactStore || createMatchArtifactStore();
+  const decisionTraceStore = opts.decisionTraceStore ?? new MemoryDecisionTraceStore();
   const hub = opts.hub ?? new RealtimeHub();
-  const orch = opts.orchestrator ?? new TableOrchestrator(tableStore, hs, hub);
+  const orch = opts.orchestrator ?? new TableOrchestrator(tableStore, hs, hub, decisionTraceStore);
 
   const authDb =
     opts.userStore && opts.sessionStore && opts.agentConfigStore
@@ -153,6 +157,7 @@ export function buildServer(opts: BuildServerOptions = {}) {
       orchestrator: orch,
       handStore: hs,
       matchArtifactStore,
+      decisionTraceStore,
     });
     await scope.register(matchesRoutes, { prefix: '/api/v1', matchArtifactStore });
     await scope.register(meAgentsRoutes, { prefix: '/api/v1', agentConfigStore, orchestrator: orch });

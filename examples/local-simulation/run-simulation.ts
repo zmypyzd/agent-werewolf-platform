@@ -4,6 +4,7 @@ import { TableOrchestrator } from '@agent-poker/table-orchestrator';
 import {
   MemoryTableStore,
   MemoryHandStore,
+  MemoryDecisionTraceStore,
   FileHandStore,
   FileMatchArtifactStore,
 } from '@agent-poker/persistence';
@@ -36,6 +37,7 @@ async function main() {
 
   const tableStore = new MemoryTableStore();
   const memHandStore = new MemoryHandStore();
+  const decisionTraceStore = new MemoryDecisionTraceStore();
   const fileHandStore = new FileHandStore(OUTPUT_DIR);
   const matchArtifactStore = new FileMatchArtifactStore(OUTPUT_DIR);
 
@@ -54,7 +56,7 @@ async function main() {
     getReplayEvents: (id: string) => memHandStore.getReplayEvents(id),
   };
 
-  const orch = new TableOrchestrator(tableStore, handStore);
+  const orch = new TableOrchestrator(tableStore, handStore, null, decisionTraceStore);
 
   // Create table
   const table = await orch.createTable({
@@ -131,6 +133,7 @@ async function main() {
   const replayEvents = (
     await Promise.all(summaries.map(summary => memHandStore.getReplayEvents(summary.handId)))
   ).flat();
+  const decisionTraces = await decisionTraceStore.listDecisionTraces(table.tableId);
 
   const artifact = await matchArtifactStore.saveMatchArtifact({
     matchId: table.tableId,
@@ -139,6 +142,7 @@ async function main() {
     seed: table.config.seed || seed,
     hands: summaries,
     replayEvents,
+    decisionTraces,
   });
 
   const lastSummary = summaries[summaries.length - 1]!;
@@ -149,6 +153,7 @@ async function main() {
   console.log(`Match artifact: ${OUTPUT_DIR}/matches/${artifact.manifest.matchId}/manifest.json`);
   console.log(`Match summary: ${OUTPUT_DIR}/matches/${artifact.manifest.matchId}/summary.json`);
   console.log(`Match replay: ${OUTPUT_DIR}/matches/${artifact.manifest.matchId}/replay.jsonl`);
+  console.log(`Match decision traces: ${OUTPUT_DIR}/matches/${artifact.manifest.matchId}/decision-trace.jsonl`);
   console.log('');
   console.log('====================================');
   console.log('Simulation complete!');

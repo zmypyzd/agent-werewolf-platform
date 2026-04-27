@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import path from 'path';
 import type {
+  DecisionTrace,
   HandSummary,
   MatchArtifactFileRef,
   MatchArtifactIndexEntry,
@@ -10,12 +11,14 @@ import type {
   PublicHandSummary,
   ReplayEvent,
 } from '@agent-poker/shared';
+import { serializeDecisionTraces, toPublicDecisionTrace } from './decision-trace-serialization.js';
 import type { SaveMatchArtifactInput } from './match-artifact-store.js';
 
 export interface SerializedMatchArtifact {
   record: MatchArtifactRecord;
   summaryRaw: string;
   replayRaw: string;
+  decisionTraceRaw: string;
   manifestRaw: string;
 }
 
@@ -74,8 +77,10 @@ export function toIndexEntry(record: MatchArtifactRecord): MatchArtifactIndexEnt
 export function buildArtifact(input: SaveMatchArtifactInput, createdAt = Date.now()): SerializedMatchArtifact {
   const summary = buildSummary(input);
   const replayEvents = toPublicReplayEvents(sortReplayEvents(summary, input.replayEvents));
+  const decisionTraces = toPublicDecisionTraces(sortDecisionTraces(summary, input.decisionTraces ?? []));
   const summaryRaw = serializeJson(summary);
   const replayRaw = serializeReplayEvents(replayEvents);
+  const decisionTraceRaw = serializeDecisionTraces(decisionTraces);
 
   const manifest: MatchArtifactManifest = {
     artifactVersion: 1,
@@ -86,14 +91,16 @@ export function buildArtifact(input: SaveMatchArtifactInput, createdAt = Date.no
     files: {
       summary: fileRef('summary.json', summaryRaw, 'application/json'),
       replay: fileRef('replay.jsonl', replayRaw, 'application/x-ndjson'),
+      decisionTrace: fileRef('decision-trace.jsonl', decisionTraceRaw, 'application/x-ndjson'),
     },
   };
 
-  const record = { manifest, summary, replayEvents };
+  const record = { manifest, summary, replayEvents, decisionTraces };
   return {
     record,
     summaryRaw,
     replayRaw,
+    decisionTraceRaw,
     manifestRaw: serializeJson(manifest),
   };
 }
@@ -146,10 +153,26 @@ function sortReplayEvents(summary: MatchSummary, events: ReplayEvent[]): ReplayE
   });
 }
 
+function sortDecisionTraces(summary: MatchSummary, traces: DecisionTrace[]): DecisionTrace[] {
+  const handOrder = new Map(summary.handIds.map((handId, index) => [handId, index]));
+  return [...traces].sort((a, b) => {
+    const aOrder = handOrder.get(a.handId);
+    const bOrder = handOrder.get(b.handId);
+    const handDelta = (aOrder !== undefined ? aOrder : Number.MAX_SAFE_INTEGER) -
+      (bOrder !== undefined ? bOrder : Number.MAX_SAFE_INTEGER);
+    if (handDelta !== 0) return handDelta;
+    return a.createdAt - b.createdAt;
+  });
+}
+
 function toPublicReplayEvents(events: ReplayEvent[]): ReplayEvent[] {
   return events
     .map(event => replayEventToPublicArtifact(event))
     .filter((event): event is ReplayEvent => event !== null);
+}
+
+function toPublicDecisionTraces(traces: DecisionTrace[]): DecisionTrace[] {
+  return traces.map(toPublicDecisionTrace);
 }
 
 function replayEventToPublicArtifact(event: ReplayEvent): ReplayEvent | null {

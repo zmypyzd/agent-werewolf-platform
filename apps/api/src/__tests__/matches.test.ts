@@ -94,13 +94,24 @@ describe('match artifact API', () => {
     const recordBody = JSON.parse(record.payload);
     expect(recordBody.data.summary.hands).toHaveLength(1);
     expect(recordBody.data.replayEvents).toBeUndefined();
+    expect(recordBody.data.decisionTraces).toBeUndefined();
     expect(recordBody.data.manifest.files.summary.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(recordBody.data.manifest.files.decisionTrace.path).toBe('decision-trace.jsonl');
 
     const replay = await app.inject({ method: 'GET', url: `/api/v1/matches/${matchId}/replay` });
     expect(replay.statusCode).toBe(200);
     const replayBody = JSON.parse(replay.payload);
     expect(Array.isArray(replayBody.data)).toBe(true);
     expect(replayBody.data.length).toBeGreaterThan(0);
+
+    const decisionTrace = await app.inject({
+      method: 'GET',
+      url: `/api/v1/matches/${matchId}/decision-trace`,
+    });
+    expect(decisionTrace.statusCode).toBe(200);
+    const decisionTraceBody = JSON.parse(decisionTrace.payload);
+    expect(Array.isArray(decisionTraceBody.data)).toBe(true);
+    expect(decisionTraceBody.data.length).toBeGreaterThan(0);
   });
 
   it('POST /simulate rejects requests above the serverless hand cap', async () => {
@@ -144,6 +155,22 @@ describe('match artifact API', () => {
       .not.toContain('hole_cards.dealt');
   });
 
+  it('public match decision trace strips private cards and raw chain-of-thought', async () => {
+    const { matchId } = await createSimulatedMatch();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/matches/${matchId}/decision-trace`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.payload);
+    expect(body.data.length).toBeGreaterThan(0);
+    expect(JSON.stringify(body.data)).not.toContain('"holeCards"');
+    expect(JSON.stringify(body.data)).not.toContain('rawChainOfThought');
+    expect(body.data[0].publicStateHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(body.data[0].privateStateHash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
   it('GET /api/v1/matches/:matchId returns 404 for an unknown match', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/matches/no-such-match' });
     expect(res.statusCode).toBe(404);
@@ -153,6 +180,16 @@ describe('match artifact API', () => {
 
   it('GET /api/v1/matches/:matchId/replay returns 404 for an unknown match', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/matches/no-such-match/replay' });
+    expect(res.statusCode).toBe(404);
+    const body = JSON.parse(res.payload);
+    expect(body.error.code).toBe('MATCH_NOT_FOUND');
+  });
+
+  it('GET /api/v1/matches/:matchId/decision-trace returns 404 for an unknown match', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/matches/no-such-match/decision-trace',
+    });
     expect(res.statusCode).toBe(404);
     const body = JSON.parse(res.payload);
     expect(body.error.code).toBe('MATCH_NOT_FOUND');

@@ -74,4 +74,13 @@ export async function matchesRoutes(app: FastifyInstance, opts: MatchesPluginOpt
     const record = await getMatchArtifactOrThrow(matchArtifactStore, req.params.matchId);
     reply.send({ data: publicReplayEvents(record.replayEvents) });
   });
+
+  app.get<{ Params: { matchId: string } }>('/matches/:matchId/decision-trace', async (req, reply) => {
+    const record = await getMatchArtifactOrThrow(
+      matchArtifactStore,
+      req.params.matchId,
+      { includeReplayEvents: false },
+    );
+    reply.send({ data: record.decisionTraces });
+  });
 }

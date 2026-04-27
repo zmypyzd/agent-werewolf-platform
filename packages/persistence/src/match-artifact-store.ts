@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import type {
+  DecisionTrace,
   HandSummary,
   MatchArtifactIndexEntry,
   MatchArtifactManifest,
@@ -9,6 +10,7 @@ import type {
   ReplayEvent,
 } from '@agent-poker/shared';
 import { ArtifactLimitExceededError } from '@agent-poker/shared';
+import { parseDecisionTraces } from './decision-trace-serialization.js';
 import {
   buildArtifact,
   safePathSegment,
@@ -23,10 +25,12 @@ export interface SaveMatchArtifactInput {
   seed: string;
   hands: HandSummary[];
   replayEvents: ReplayEvent[];
+  decisionTraces?: DecisionTrace[];
 }
 
 export interface GetMatchArtifactOptions {
   includeReplayEvents?: boolean;
+  includeDecisionTraces?: boolean;
 }
 
 export interface IMatchArtifactStore {
@@ -43,12 +47,14 @@ interface SequencedMatchArtifactRecord {
 export interface MatchArtifactCostLimits {
   maxReplayBytes: number;
   maxSummaryBytes: number;
+  maxDecisionTraceBytes: number;
   maxIndexEntries: number;
 }
 
 const DEFAULT_MATCH_ARTIFACT_COST_LIMITS: MatchArtifactCostLimits = {
   maxReplayBytes: 1024 * 1024,
   maxSummaryBytes: 256 * 1024,
+  maxDecisionTraceBytes: 512 * 1024,
   maxIndexEntries: 100,
 };
 
@@ -72,10 +78,14 @@ export class MemoryMatchArtifactStore implements IMatchArtifactStore {
   ): Promise<MatchArtifactRecord | null> {
     const record = this.records.get(matchId)?.record;
     if (!record) return null;
+    let next = record;
     if (options.includeReplayEvents === false) {
-      return { ...record, replayEvents: [] };
+      next = { ...next, replayEvents: [] };
     }
-    return record;
+    if (options.includeDecisionTraces === false) {
+      next = { ...next, decisionTraces: [] };
+    }
+    return next;
   }
 
   async listMatchArtifacts(): Promise<MatchArtifactIndexEntry[]> {
@@ -110,12 +120,13 @@ export class FileMatchArtifactStore implements IMatchArtifactStore {
 
   async saveMatchArtifact(input: SaveMatchArtifactInput): Promise<MatchArtifactRecord> {
     safePathSegment(input.matchId);
-    const { record, summaryRaw, replayRaw, manifestRaw } = buildArtifact(input);
+    const { record, summaryRaw, replayRaw, decisionTraceRaw, manifestRaw } = buildArtifact(input);
     this.ensureMatchDir(record.manifest.matchId);
 
     const dir = this.matchDir(record.manifest.matchId);
     fs.writeFileSync(path.join(dir, 'summary.json'), summaryRaw, 'utf-8');
     fs.writeFileSync(path.join(dir, 'replay.jsonl'), replayRaw, 'utf-8');
+    fs.writeFileSync(path.join(dir, 'decision-trace.jsonl'), decisionTraceRaw, 'utf-8');
     fs.writeFileSync(path.join(dir, 'manifest.json'), manifestRaw, 'utf-8');
 
     await this.upsertIndex(toIndexEntry(record));
@@ -130,25 +141,30 @@ export class FileMatchArtifactStore implements IMatchArtifactStore {
     const manifestFile = path.join(dir, 'manifest.json');
     const summaryFile = path.join(dir, 'summary.json');
     const replayFile = path.join(dir, 'replay.jsonl');
+    const decisionTraceFile = path.join(dir, 'decision-trace.jsonl');
     if (!fs.existsSync(manifestFile) || !fs.existsSync(summaryFile)) {
       return null;
     }
 
     const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf-8')) as MatchArtifactManifest;
     const summary = JSON.parse(fs.readFileSync(summaryFile, 'utf-8')) as MatchSummary;
-    if (options.includeReplayEvents === false) {
-      return { manifest, summary, replayEvents: [] };
+    let replayEvents: ReplayEvent[] = [];
+    if (options.includeReplayEvents !== false) {
+      if (!fs.existsSync(replayFile)) return null;
+      const rawReplay = fs.readFileSync(replayFile, 'utf-8');
+      replayEvents = rawReplay
+        .split('\n')
+        .filter(line => line.trim().length > 0)
+        .map(line => JSON.parse(line) as ReplayEvent);
     }
-    if (!fs.existsSync(replayFile)) {
-      return null;
-    }
-    const rawReplay = fs.readFileSync(replayFile, 'utf-8');
-    const replayEvents = rawReplay
-      .split('\n')
-      .filter(line => line.trim().length > 0)
-      .map(line => JSON.parse(line) as ReplayEvent);
 
-    return { manifest, summary, replayEvents };
+    let decisionTraces: DecisionTrace[] = [];
+    if (options.includeDecisionTraces !== false) {
+      if (!fs.existsSync(decisionTraceFile)) return null;
+      decisionTraces = parseDecisionTraces(fs.readFileSync(decisionTraceFile, 'utf-8'));
+    }
+
+    return { manifest, summary, replayEvents, decisionTraces };
   }
 
   async listMatchArtifacts(): Promise<MatchArtifactIndexEntry[]> {
@@ -181,8 +197,8 @@ export class ObjectMatchArtifactStore implements IMatchArtifactStore {
 
   async saveMatchArtifact(input: SaveMatchArtifactInput): Promise<MatchArtifactRecord> {
     safePathSegment(input.matchId);
-    const { record, summaryRaw, replayRaw, manifestRaw } = buildArtifact(input);
-    this.assertWithinLimits(summaryRaw, replayRaw);
+    const { record, summaryRaw, replayRaw, decisionTraceRaw, manifestRaw } = buildArtifact(input);
+    this.assertWithinLimits(summaryRaw, replayRaw, decisionTraceRaw);
     const matchPrefix = `matches/${record.manifest.matchId}`;
 
     await this.objectStore.putText({
@@ -193,6 +209,11 @@ export class ObjectMatchArtifactStore implements IMatchArtifactStore {
     await this.objectStore.putText({
       key: `${matchPrefix}/replay.jsonl`,
       body: replayRaw,
+      contentType: 'application/x-ndjson',
+    });
+    await this.objectStore.putText({
+      key: `${matchPrefix}/decision-trace.jsonl`,
+      body: decisionTraceRaw,
       contentType: 'application/x-ndjson',
     });
     await this.objectStore.putText({
@@ -216,18 +237,24 @@ export class ObjectMatchArtifactStore implements IMatchArtifactStore {
 
     const manifest = JSON.parse(manifestRaw) as MatchArtifactManifest;
     const summary = JSON.parse(summaryRaw) as MatchSummary;
-    if (options.includeReplayEvents === false) {
-      return { manifest, summary, replayEvents: [] };
+    let replayEvents: ReplayEvent[] = [];
+    if (options.includeReplayEvents !== false) {
+      const replayRaw = await this.objectStore.getText(`${matchPrefix}/replay.jsonl`);
+      if (replayRaw === null) return null;
+      replayEvents = replayRaw
+        .split('\n')
+        .filter(line => line.trim().length > 0)
+        .map(line => JSON.parse(line) as ReplayEvent);
     }
 
-    const replayRaw = await this.objectStore.getText(`${matchPrefix}/replay.jsonl`);
-    if (!replayRaw) return null;
-    const replayEvents = replayRaw
-      .split('\n')
-      .filter(line => line.trim().length > 0)
-      .map(line => JSON.parse(line) as ReplayEvent);
+    let decisionTraces: DecisionTrace[] = [];
+    if (options.includeDecisionTraces !== false) {
+      const decisionTraceRaw = await this.objectStore.getText(`${matchPrefix}/decision-trace.jsonl`);
+      if (decisionTraceRaw === null) return null;
+      decisionTraces = parseDecisionTraces(decisionTraceRaw);
+    }
 
-    return { manifest, summary, replayEvents };
+    return { manifest, summary, replayEvents, decisionTraces };
   }
 
   async listMatchArtifacts(): Promise<MatchArtifactIndexEntry[]> {
@@ -237,9 +264,10 @@ export class ObjectMatchArtifactStore implements IMatchArtifactStore {
     return entries.sort((a, b) => b.createdAt - a.createdAt);
   }
 
-  private assertWithinLimits(summaryRaw: string, replayRaw: string): void {
+  private assertWithinLimits(summaryRaw: string, replayRaw: string, decisionTraceRaw: string): void {
     const summaryBytes = Buffer.byteLength(summaryRaw, 'utf-8');
     const replayBytes = Buffer.byteLength(replayRaw, 'utf-8');
+    const decisionTraceBytes = Buffer.byteLength(decisionTraceRaw, 'utf-8');
     if (summaryBytes > this.limits.maxSummaryBytes) {
       throw new ArtifactLimitExceededError(
         `Match summary is ${summaryBytes} bytes; limit is ${this.limits.maxSummaryBytes}`,
@@ -248,6 +276,11 @@ export class ObjectMatchArtifactStore implements IMatchArtifactStore {
     if (replayBytes > this.limits.maxReplayBytes) {
       throw new ArtifactLimitExceededError(
         `Match replay is ${replayBytes} bytes; limit is ${this.limits.maxReplayBytes}`,
+      );
+    }
+    if (decisionTraceBytes > this.limits.maxDecisionTraceBytes) {
+      throw new ArtifactLimitExceededError(
+        `Match decision trace is ${decisionTraceBytes} bytes; limit is ${this.limits.maxDecisionTraceBytes}`,
       );
     }
   }

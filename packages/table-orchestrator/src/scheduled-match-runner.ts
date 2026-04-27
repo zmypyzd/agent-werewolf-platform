@@ -78,6 +78,7 @@ export class ScheduledMatchRunner {
     const replayEvents = (
       await Promise.all(hands.map(hand => this.handStore.getReplayEvents(hand.handId)))
     ).flat();
+    const decisionTraces = await this.decisionTraceStore.listDecisionTraces(table.tableId);
 
     const artifact = await this.matchArtifactStore.saveMatchArtifact({
       matchId: table.tableId,
@@ -86,6 +87,7 @@ export class ScheduledMatchRunner {
       seed: definition.seed,
       hands,
       replayEvents,
+      decisionTraces,
     });
 
     return {

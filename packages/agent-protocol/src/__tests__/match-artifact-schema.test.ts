@@ -31,6 +31,12 @@ const fileRef = {
   contentType: 'application/json',
 };
 
+const artifactFiles = {
+  summary: fileRef,
+  replay: { ...fileRef, path: 'replay.jsonl', contentType: 'application/x-ndjson' },
+  decisionTrace: { ...fileRef, path: 'decision-trace.jsonl', contentType: 'application/x-ndjson' },
+};
+
 describe('match artifact schemas', () => {
   it('accepts a valid match summary', () => {
     const parsed = MatchSummarySchema.parse({
@@ -57,10 +63,7 @@ describe('match artifact schemas', () => {
       tableId: 'tbl-12345678',
       createdAt: now,
       handIds: ['hand-001-abc123'],
-      files: {
-        summary: fileRef,
-        replay: { ...fileRef, path: 'replay.jsonl', contentType: 'application/x-ndjson' },
-      },
+      files: artifactFiles,
     });
 
     const entry = MatchArtifactIndexEntrySchema.parse({
@@ -77,6 +80,7 @@ describe('match artifact schemas', () => {
     });
 
     expect(entry.artifactPath).toBe('matches/tbl-12345678/manifest.json');
+    expect(manifest.files.decisionTrace.path).toBe('decision-trace.jsonl');
   });
 
   it('accepts a complete artifact record', () => {
@@ -87,10 +91,7 @@ describe('match artifact schemas', () => {
         tableId: 'tbl-12345678',
         createdAt: now,
         handIds: ['hand-001-abc123'],
-        files: {
-          summary: fileRef,
-          replay: { ...fileRef, path: 'replay.jsonl', contentType: 'application/x-ndjson' },
-        },
+        files: artifactFiles,
       },
       summary: {
         matchId: 'tbl-12345678',
@@ -105,9 +106,11 @@ describe('match artifact schemas', () => {
         agentIds: ['bot-a'],
       },
       replayEvents: [],
+      decisionTraces: [],
     });
 
     expect(record.summary.hands).toHaveLength(1);
+    expect(record.decisionTraces).toEqual([]);
   });
 
   it('rejects an artifact record with inconsistent match ids', () => {
@@ -118,10 +121,7 @@ describe('match artifact schemas', () => {
         tableId: 'tbl-12345678',
         createdAt: now,
         handIds: ['hand-001-abc123'],
-        files: {
-          summary: fileRef,
-          replay: { ...fileRef, path: 'replay.jsonl', contentType: 'application/x-ndjson' },
-        },
+        files: artifactFiles,
       },
       summary: {
         matchId: 'tbl-different',
@@ -136,6 +136,7 @@ describe('match artifact schemas', () => {
         agentIds: ['bot-a'],
       },
       replayEvents: [],
+      decisionTraces: [],
     })).toThrow();
   });
 
@@ -147,10 +148,7 @@ describe('match artifact schemas', () => {
         tableId: 'tbl-12345678',
         createdAt: now,
         handIds: ['hand-001-abc123'],
-        files: {
-          summary: fileRef,
-          replay: { ...fileRef, path: 'replay.jsonl', contentType: 'application/x-ndjson' },
-        },
+        files: artifactFiles,
       },
       summary: {
         matchId: 'tbl-12345678',
@@ -173,6 +171,7 @@ describe('match artifact schemas', () => {
         timestamp: now,
         data: {},
       }],
+      decisionTraces: [],
     })).toThrow();
   });
 
@@ -184,10 +183,7 @@ describe('match artifact schemas', () => {
         tableId: 'tbl-12345678',
         createdAt: now,
         handIds: ['hand-999-missing'],
-        files: {
-          summary: fileRef,
-          replay: { ...fileRef, path: 'replay.jsonl', contentType: 'application/x-ndjson' },
-        },
+        files: artifactFiles,
       },
       summary: {
         matchId: 'tbl-12345678',
@@ -202,6 +198,7 @@ describe('match artifact schemas', () => {
         agentIds: ['bot-a'],
       },
       replayEvents: [],
+      decisionTraces: [],
     })).toThrow();
   });
 
@@ -213,10 +210,7 @@ describe('match artifact schemas', () => {
         tableId: 'tbl-12345678',
         createdAt: now,
         handIds: ['hand-001-abc123'],
-        files: {
-          summary: fileRef,
-          replay: { ...fileRef, path: 'replay.jsonl', contentType: 'application/x-ndjson' },
-        },
+        files: artifactFiles,
       },
       summary: {
         matchId: 'tbl-12345678',
@@ -231,6 +225,7 @@ describe('match artifact schemas', () => {
         agentIds: ['bot-a'],
       },
       replayEvents: [],
+      decisionTraces: [],
     })).toThrow();
   });
 
@@ -244,6 +239,7 @@ describe('match artifact schemas', () => {
       files: {
         summary: { ...fileRef, sha256: 'not-a-sha' },
         replay: { ...fileRef, path: 'replay.jsonl', contentType: 'application/x-ndjson' },
+        decisionTrace: { ...fileRef, path: 'decision-trace.jsonl', contentType: 'application/x-ndjson' },
       },
     })).toThrow();
   });

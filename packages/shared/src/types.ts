@@ -334,6 +334,7 @@ export interface MatchArtifactManifest {
   files: {
     summary: MatchArtifactFileRef;
     replay: MatchArtifactFileRef;
+    decisionTrace: MatchArtifactFileRef;
   };
 }
 
@@ -354,4 +355,5 @@ export interface MatchArtifactRecord {
   manifest: MatchArtifactManifest;
   summary: MatchSummary;
   replayEvents: ReplayEvent[];
+  decisionTraces: DecisionTrace[];
 }

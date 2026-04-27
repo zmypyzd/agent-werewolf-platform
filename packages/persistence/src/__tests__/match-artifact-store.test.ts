@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { ArtifactLimitExceededError, type HandSummary, type ReplayEvent } from '@agent-poker/shared';
+import { ArtifactLimitExceededError, type DecisionTrace, type HandSummary, type ReplayEvent } from '@agent-poker/shared';
 import {
   FileMatchArtifactStore,
   MemoryMatchArtifactStore,
@@ -93,8 +93,39 @@ function makePrivateEvent(handId: string, sequence: number): ReplayEvent {
   };
 }
 
+function makeDecisionTrace(handId: string, sequence = 0): DecisionTrace {
+  return {
+    traceId: `trace-${sequence}`,
+    matchId: 'tbl-12345678',
+    handId,
+    actionId: `action-${sequence}`,
+    requestId: `request-${sequence}`,
+    agentId: 'bot-a',
+    playerId: 'player-bot-a',
+    phase: 'preflop',
+    publicStateHash: 'a'.repeat(64),
+    privateStateHash: 'b'.repeat(64),
+    legalActions: [{ type: 'call', callAmount: 50 }, { type: 'fold' }],
+    responseAction: { actionType: 'call', amount: 50 },
+    appliedAction: { actionType: 'call', amount: 50 },
+    latencyMs: 12,
+    timedOut: false,
+    invalidReason: null,
+    reasoningSummary: {
+      intent: 'pot_control',
+      confidence: 0.6,
+      riskLevel: 'low',
+      keyObservations: ['Keeps range wide without exposing private cards'],
+      consideredActions: [
+        { actionType: 'call', amount: 50, reason: 'Continues at a bounded price' },
+      ],
+    },
+    createdAt: 1_777_280_003_000 + sequence,
+  };
+}
+
 describe('MatchArtifactStore', () => {
-  it('FileMatchArtifactStore writes manifest, summary, replay JSONL, and index', async () => {
+  it('FileMatchArtifactStore writes manifest, summary, replay JSONL, decision trace JSONL, and index', async () => {
     const dir = makeTmpDir();
     dirs.push(dir);
     const store = new FileMatchArtifactStore(dir);
@@ -106,13 +137,16 @@ describe('MatchArtifactStore', () => {
       seed: 'seed-main',
       hands: [hand],
       replayEvents: [makeEvent(hand.handId, 0)],
+      decisionTraces: [makeDecisionTrace(hand.handId)],
     });
 
     expect(record.manifest.files.summary.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(record.manifest.files.decisionTrace.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(record.summary.finalStacks).toEqual({ 'bot-a': 1050 });
     expect(fs.existsSync(path.join(dir, 'matches', 'tbl-12345678', 'manifest.json'))).toBe(true);
     expect(fs.existsSync(path.join(dir, 'matches', 'tbl-12345678', 'summary.json'))).toBe(true);
     expect(fs.existsSync(path.join(dir, 'matches', 'tbl-12345678', 'replay.jsonl'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'matches', 'tbl-12345678', 'decision-trace.jsonl'))).toBe(true);
     expect(fs.existsSync(path.join(dir, 'matches', 'index.json'))).toBe(true);
   });
 
@@ -147,6 +181,7 @@ describe('MatchArtifactStore', () => {
       seed: 'seed-main',
       hands: [hand],
       replayEvents: [makeEvent(hand.handId, 0), makeEvent(hand.handId, 1)],
+      decisionTraces: [makeDecisionTrace(hand.handId)],
     });
 
     const summaryRaw = fs.readFileSync(
@@ -157,11 +192,17 @@ describe('MatchArtifactStore', () => {
       path.join(dir, 'matches', 'tbl-12345678', 'replay.jsonl'),
       'utf-8',
     );
+    const decisionTraceRaw = fs.readFileSync(
+      path.join(dir, 'matches', 'tbl-12345678', 'decision-trace.jsonl'),
+      'utf-8',
+    );
 
     expect(record.manifest.files.summary.sha256).toBe(sha256(summaryRaw));
     expect(record.manifest.files.summary.bytes).toBe(Buffer.byteLength(summaryRaw, 'utf-8'));
     expect(record.manifest.files.replay.sha256).toBe(sha256(replayRaw));
     expect(record.manifest.files.replay.bytes).toBe(Buffer.byteLength(replayRaw, 'utf-8'));
+    expect(record.manifest.files.decisionTrace.sha256).toBe(sha256(decisionTraceRaw));
+    expect(record.manifest.files.decisionTrace.bytes).toBe(Buffer.byteLength(decisionTraceRaw, 'utf-8'));
   });
 
   it('FileMatchArtifactStore writes public-safe summary and replay artifacts', async () => {
@@ -176,6 +217,14 @@ describe('MatchArtifactStore', () => {
       seed: 'seed-main',
       hands: [hand],
       replayEvents: [makePrivateEvent(hand.handId, 0), makeEvent(hand.handId, 1)],
+      decisionTraces: [{
+        ...makeDecisionTrace(hand.handId),
+        rawChainOfThought: 'private hidden reasoning',
+        reasoningSummary: {
+          ...makeDecisionTrace(hand.handId).reasoningSummary!,
+          rawChainOfThought: 'private hidden reasoning',
+        },
+      } as DecisionTrace],
     });
 
     const summaryRaw = fs.readFileSync(
@@ -186,11 +235,18 @@ describe('MatchArtifactStore', () => {
       path.join(dir, 'matches', 'tbl-12345678', 'replay.jsonl'),
       'utf-8',
     );
+    const decisionTraceRaw = fs.readFileSync(
+      path.join(dir, 'matches', 'tbl-12345678', 'decision-trace.jsonl'),
+      'utf-8',
+    );
 
     expect(summaryRaw).not.toContain('"holeCards"');
     expect(summaryRaw).not.toContain('"handEvaluation"');
     expect(replayRaw).not.toContain('"holeCards"');
     expect(replayRaw).not.toContain('hole_cards.dealt');
+    expect(decisionTraceRaw).not.toContain('"holeCards"');
+    expect(decisionTraceRaw).not.toContain('rawChainOfThought');
+    expect(decisionTraceRaw).not.toContain('private hidden reasoning');
   });
 
   it('FileMatchArtifactStore loads a saved artifact', async () => {
@@ -205,11 +261,13 @@ describe('MatchArtifactStore', () => {
       seed: 'seed-main',
       hands: [hand],
       replayEvents: [makeEvent(hand.handId, 0), makeEvent(hand.handId, 1)],
+      decisionTraces: [makeDecisionTrace(hand.handId)],
     });
 
     const loaded = await store.getMatchArtifact('tbl-12345678');
     expect(loaded?.summary.matchId).toBe('tbl-12345678');
     expect(loaded?.replayEvents).toHaveLength(2);
+    expect(loaded?.decisionTraces).toHaveLength(1);
   });
 
   it('FileMatchArtifactStore can load metadata without reading the replay file', async () => {
@@ -285,11 +343,13 @@ describe('MatchArtifactStore', () => {
       seed: 'seed-main',
       hands: [hand],
       replayEvents: [makePrivateEvent(hand.handId, 0), makeEvent(hand.handId, 1)],
+      decisionTraces: [makeDecisionTrace(hand.handId)],
     });
 
     expect(JSON.stringify(record)).not.toContain('"holeCards"');
     expect(JSON.stringify(record)).not.toContain('"handEvaluation"');
     expect(record.replayEvents.map(event => event.eventType)).not.toContain('hole_cards.dealt');
+    expect(record.decisionTraces).toHaveLength(1);
   });
 
   it('MemoryMatchArtifactStore lists newest first when saves share the same millisecond', async () => {
@@ -333,6 +393,10 @@ describe('MatchArtifactStore', () => {
         makeEvent(secondHand.handId, 0),
         makeEvent(firstHand.handId, 1),
       ],
+      decisionTraces: [
+        makeDecisionTrace(secondHand.handId, 1),
+        makeDecisionTrace(firstHand.handId, 0),
+      ],
     });
 
     expect(record.summary.handIds).toEqual([firstHand.handId, secondHand.handId]);
@@ -343,9 +407,13 @@ describe('MatchArtifactStore', () => {
       `${secondHand.handId}:0`,
       `${secondHand.handId}:1`,
     ]);
+    expect(record.decisionTraces.map(trace => trace.handId)).toEqual([
+      firstHand.handId,
+      secondHand.handId,
+    ]);
   });
 
-  it('ObjectMatchArtifactStore writes manifest, summary, replay JSONL, and index objects', async () => {
+  it('ObjectMatchArtifactStore writes manifest, summary, replay JSONL, decision trace JSONL, and index objects', async () => {
     const objectStore = new MemoryObjectStore();
     const store = new ObjectMatchArtifactStore(objectStore);
     const hand = makeHand(1, 1050);
@@ -357,12 +425,14 @@ describe('MatchArtifactStore', () => {
       seed: 'seed-main',
       hands: [hand],
       replayEvents: [makeEvent(hand.handId, 0)],
+      decisionTraces: [makeDecisionTrace(hand.handId)],
     });
 
     expect(record.manifest.matchId).toBe('tbl-12345678');
     expect(await objectStore.exists('matches/tbl-12345678/manifest.json')).toBe(true);
     expect(await objectStore.exists('matches/tbl-12345678/summary.json')).toBe(true);
     expect(await objectStore.exists('matches/tbl-12345678/replay.jsonl')).toBe(true);
+    expect(await objectStore.exists('matches/tbl-12345678/decision-trace.jsonl')).toBe(true);
     expect(await objectStore.exists('matches/index.json')).toBe(true);
   });
 
@@ -402,6 +472,29 @@ describe('MatchArtifactStore', () => {
       hands: [hand],
       replayEvents: [makeEvent(hand.handId, 0)],
     })).rejects.toBeInstanceOf(ArtifactLimitExceededError);
+  });
+
+  it('ObjectMatchArtifactStore rejects oversized decision trace artifacts', async () => {
+    const objectStore = new MemoryObjectStore();
+    const store = new ObjectMatchArtifactStore(objectStore, {
+      maxReplayBytes: 1024 * 1024,
+      maxSummaryBytes: 256 * 1024,
+      maxDecisionTraceBytes: 10,
+      maxIndexEntries: 100,
+    });
+    const hand = makeHand(1, 1050);
+
+    await expect(store.saveMatchArtifact({
+      matchId: 'tbl-12345678',
+      tableId: 'tbl-12345678',
+      name: 'Daily Showcase',
+      seed: 'seed-main',
+      hands: [hand],
+      replayEvents: [],
+      decisionTraces: [makeDecisionTrace(hand.handId)],
+    })).rejects.toBeInstanceOf(ArtifactLimitExceededError);
+
+    expect(await objectStore.exists('matches/tbl-12345678/decision-trace.jsonl')).toBe(false);
   });
 
   it('ObjectMatchArtifactStore truncates index entries to the configured cap', async () => {
