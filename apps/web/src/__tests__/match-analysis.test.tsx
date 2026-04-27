@@ -62,6 +62,41 @@ describe('MatchAnalysisPanel', () => {
     expect(html).toContain('31 ms');
   });
 
+  it('renders required dashboard class names and visible positive distribution bars', () => {
+    const narrowDistributionAnalysis: MatchAnalysisSummary = {
+      ...analysis,
+      totals: {
+        ...analysis.totals,
+        actionCounts: { common: 999, rare: 1 },
+      },
+    };
+    const html = renderToStaticMarkup(
+      <MatchAnalysisPanel analysis={narrowDistributionAnalysis} loading={false} error={null} />,
+    );
+
+    [
+      'analysis-panel',
+      'section-heading',
+      'metric-grid',
+      'analysis-dashboard-grid',
+      'analysis-card',
+      'bar-row',
+      'bar-track',
+      'bar-fill',
+      'matrix-list',
+      'matrix-row',
+      'agent-comparison',
+      'agent-card-grid',
+      'agent-card',
+      'agent-card-header',
+      'agent-metrics',
+    ].forEach(className => {
+      expect(html).toContain(`class="${className}`);
+    });
+    expect(html).toContain('rare');
+    expect(html).toContain('style="width:4%"');
+  });
+
   it('renders loading, error, and empty states', () => {
     expect(renderToStaticMarkup(<MatchAnalysisPanel analysis={null} loading={true} error={null} />))
       .toContain('Loading analysis');

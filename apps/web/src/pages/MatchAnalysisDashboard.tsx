@@ -71,7 +71,7 @@ function DistributionCard({ title, counts }: { title: string; counts: Record<str
               <span>{row.count}</span>
             </div>
             <div className="bar-track">
-              <div className="bar-fill" style={{ width: `${Math.round(row.percent * 100)}%` }} />
+              <div className="bar-fill" style={{ width: `${Math.max(4, Math.round(row.percent * 100))}%` }} />
             </div>
           </div>
         ))
