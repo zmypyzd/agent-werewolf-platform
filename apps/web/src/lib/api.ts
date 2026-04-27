@@ -19,6 +19,38 @@ interface ApiOptions {
   signal?: AbortSignal;
 }
 
+export interface AnalysisMetricSummary {
+  decisionCount: number;
+  actionCounts: Record<string, number>;
+  streetCounts: Record<string, Record<string, number>>;
+  intentCounts: Record<string, number>;
+  riskCounts: Record<string, number>;
+  missingReasoningCount: number;
+  timeoutCount: number;
+  invalidActionCount: number;
+  fallbackCount: number;
+  averageConfidence: number | null;
+  averageLatencyMs: number | null;
+  maxLatencyMs: number | null;
+}
+
+export interface AgentAnalysisSummary extends AnalysisMetricSummary {
+  agentId: string;
+  playerIds: string[];
+  handIds: string[];
+}
+
+export interface MatchAnalysisSummary {
+  matchId: string;
+  tableId: string;
+  generatedAt: number;
+  handCount: number;
+  agentCount: number;
+  decisionCount: number;
+  totals: AnalysisMetricSummary;
+  agents: AgentAnalysisSummary[];
+}
+
 async function call<T>(method: string, path: string, opts: ApiOptions = {}): Promise<T> {
   const headers: Record<string, string> = { 'X-Requested-With': 'fetch' };
   let body: string | undefined;
@@ -58,4 +90,10 @@ export const api = {
   post: <T>(path: string, body?: unknown) => call<T>('POST', path, body !== undefined ? { body } : {}),
   patch: <T>(path: string, body?: unknown) => call<T>('PATCH', path, body !== undefined ? { body } : {}),
   del: <T>(path: string) => call<T>('DELETE', path),
+  getMatchAnalysis: (matchId: string, signal?: AbortSignal) =>
+    call<MatchAnalysisSummary>(
+      'GET',
+      `/matches/${encodeURIComponent(matchId)}/analysis`,
+      signal ? { signal } : {},
+    ),
 };

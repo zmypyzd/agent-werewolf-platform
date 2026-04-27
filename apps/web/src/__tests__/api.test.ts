@@ -72,4 +72,41 @@ describe('api wrapper', () => {
     vi.stubGlobal('fetch', fetchMock);
     await expect(api.get('/x')).rejects.toBeInstanceOf(ApiError);
   });
+
+  it('GET match analysis calls the analysis endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        data: {
+          matchId: 'match-1',
+          tableId: 'tbl-1',
+          generatedAt: 1_777_280_000_000,
+          handCount: 1,
+          agentCount: 1,
+          decisionCount: 2,
+          totals: {
+            decisionCount: 2,
+            actionCounts: { call: 2 },
+            streetCounts: { preflop: { call: 2 } },
+            intentCounts: {},
+            riskCounts: {},
+            missingReasoningCount: 2,
+            timeoutCount: 0,
+            invalidActionCount: 0,
+            fallbackCount: 0,
+            averageConfidence: null,
+            averageLatencyMs: 12,
+            maxLatencyMs: 18,
+          },
+          agents: [],
+        },
+      }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await api.getMatchAnalysis('match-1');
+
+    expect(result.decisionCount).toBe(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/v1/matches/match-1/analysis');
+  });
 });

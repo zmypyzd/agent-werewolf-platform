@@ -220,6 +220,10 @@ http://localhost:5173/matches
 http://localhost:5173/matches/{matchId}
 ```
 
+The match detail view includes replay and analysis tabs. The analysis tab reads
+the public `analysis-summary.json` artifact through
+`/api/v1/matches/{matchId}/analysis`.
+
 ## Output Locations
 
 - Local per-hand history: `examples/local-simulation/output/{tableId}/{handId}.summary.json`
