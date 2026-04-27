@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { MatchAnalysisPanel, type MatchAnalysisSummary } from '../pages/MatchReplayPage.js';
+import { MatchAnalysisPanel } from '../pages/MatchAnalysisDashboard.js';
+import type { MatchAnalysisSummary } from '../lib/api.js';
 
 const analysis: MatchAnalysisSummary = {
   matchId: 'match-1',
@@ -46,17 +47,28 @@ const analysis: MatchAnalysisSummary = {
 };
 
 describe('MatchAnalysisPanel', () => {
-  it('renders aggregate and agent decision metrics', () => {
+  it('renders aggregate dashboard metrics and agent comparison content', () => {
     const html = renderToStaticMarkup(<MatchAnalysisPanel analysis={analysis} loading={false} error={null} />);
 
-    expect(html).toContain('Decision Analysis');
+    expect(html).toContain('Analysis Dashboard');
     expect(html).toContain('5 decisions');
     expect(html).toContain('2 agents');
     expect(html).toContain('call');
     expect(html).toContain('fold');
     expect(html).toContain('pot control');
+    expect(html).toContain('Street / Action Matrix');
+    expect(html).toContain('Agent Comparison');
     expect(html).toContain('bot-a');
     expect(html).toContain('31 ms');
+  });
+
+  it('renders loading, error, and empty states', () => {
+    expect(renderToStaticMarkup(<MatchAnalysisPanel analysis={null} loading={true} error={null} />))
+      .toContain('Loading analysis');
+    expect(renderToStaticMarkup(<MatchAnalysisPanel analysis={null} loading={false} error="failed" />))
+      .toContain('failed');
+    expect(renderToStaticMarkup(<MatchAnalysisPanel analysis={null} loading={false} error={null} />))
+      .toContain('No analysis summary published.');
   });
 
   it('does not render private reasoning surfaces', () => {
