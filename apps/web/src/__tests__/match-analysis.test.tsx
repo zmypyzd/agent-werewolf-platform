@@ -3,6 +3,17 @@ import { describe, expect, it } from 'vitest';
 import { MatchAnalysisPanel } from '../pages/MatchAnalysisDashboard.js';
 import type { MatchAnalysisSummary } from '../lib/api.js';
 
+function hasClassToken(html: string, className: string): boolean {
+  return [...html.matchAll(/class="([^"]+)"/g)]
+    .some(match => match[1]!.split(/\s+/).includes(className));
+}
+
+function getStylesForClass(html: string, className: string): string[] {
+  return [...html.matchAll(/<[^>]*class="([^"]+)"[^>]*style="([^"]*)"[^>]*>/g)]
+    .filter(match => match[1]!.split(/\s+/).includes(className))
+    .map(match => match[2]!);
+}
+
 const analysis: MatchAnalysisSummary = {
   matchId: 'match-1',
   tableId: 'tbl-1',
@@ -62,12 +73,12 @@ describe('MatchAnalysisPanel', () => {
     expect(html).toContain('31 ms');
   });
 
-  it('renders required dashboard class names and visible positive distribution bars', () => {
+  it('renders required dashboard class names and distribution bar widths', () => {
     const narrowDistributionAnalysis: MatchAnalysisSummary = {
       ...analysis,
       totals: {
         ...analysis.totals,
-        actionCounts: { common: 999, rare: 1 },
+        actionCounts: { common: 999, rare: 1, none: 0 },
       },
     };
     const html = renderToStaticMarkup(
@@ -81,6 +92,7 @@ describe('MatchAnalysisPanel', () => {
       'analysis-dashboard-grid',
       'analysis-card',
       'bar-row',
+      'bar-row-label',
       'bar-track',
       'bar-fill',
       'matrix-list',
@@ -91,10 +103,13 @@ describe('MatchAnalysisPanel', () => {
       'agent-card-header',
       'agent-metrics',
     ].forEach(className => {
-      expect(html).toContain(`class="${className}`);
+      expect(hasClassToken(html, className)).toBe(true);
     });
     expect(html).toContain('rare');
-    expect(html).toContain('style="width:4%"');
+    expect(html).toContain('none');
+    expect(getStylesForClass(html, 'bar-fill')).toEqual(
+      expect.arrayContaining(['width:4%', 'width:0%']),
+    );
   });
 
   it('renders loading, error, and empty states', () => {

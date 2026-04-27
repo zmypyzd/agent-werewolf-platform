@@ -64,17 +64,21 @@ function DistributionCard({ title, counts }: { title: string; counts: Record<str
       {rows.length === 0 ? (
         <p className="muted">No entries.</p>
       ) : (
-        rows.map(row => (
-          <div className="bar-row" key={row.label}>
-            <div className="bar-row-label">
-              <span>{formatCountLabel(row.label)}</span>
-              <span>{row.count}</span>
+        rows.map(row => {
+          const width = row.count <= 0 ? 0 : Math.max(4, Math.round(row.percent * 100));
+
+          return (
+            <div className="bar-row" key={row.label}>
+              <div className="bar-row-label">
+                <span>{formatCountLabel(row.label)}</span>
+                <span>{row.count}</span>
+              </div>
+              <div className="bar-track">
+                <div className="bar-fill" style={{ width: `${width}%` }} />
+              </div>
             </div>
-            <div className="bar-track">
-              <div className="bar-fill" style={{ width: `${Math.max(4, Math.round(row.percent * 100))}%` }} />
-            </div>
-          </div>
-        ))
+          );
+        })
       )}
     </section>
   );
