@@ -634,7 +634,7 @@ git commit -m "Add simulation studio"
 - Modify: `apps/web/src/styles.css`
 - Test: `apps/web/src/__tests__/agents-page.test.tsx`
 
-- [ ] **Step 1: Write static-render tests**
+- [x] **Step 1: Write static-render tests**
 
 Assert:
 
@@ -643,7 +643,7 @@ Assert:
 - auth header value is password input and write-only
 - delete uses `ConfirmDialog` markup, not native `confirm`
 
-- [ ] **Step 2: Implement `ConfirmDialog`**
+- [x] **Step 2: Implement `ConfirmDialog`**
 
 Props:
 
@@ -657,15 +657,15 @@ onConfirm: () => void;
 onCancel: () => void;
 ```
 
-- [ ] **Step 3: Replace native `confirm`**
+- [x] **Step 3: Replace native `confirm`**
 
 Remove `confirm('Delete this agent config?')` from `AgentsPage`.
 
-- [ ] **Step 4: Add endpoint contract guidance**
+- [x] **Step 4: Add endpoint contract guidance**
 
 Show concise request/response contract and security note on `AgentEditPage`.
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 ```bash
 pnpm --filter web run test -- src/__tests__/agents-page.test.tsx
@@ -673,7 +673,7 @@ pnpm --filter web run test -- src/__tests__/agents-page.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/src/components/ConfirmDialog.tsx apps/web/src/pages/AgentsPage.tsx apps/web/src/pages/AgentEditPage.tsx apps/web/src/styles.css apps/web/src/__tests__/agents-page.test.tsx
