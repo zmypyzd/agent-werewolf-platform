@@ -4,7 +4,13 @@ import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WsClient } from '../lib/ws.js';
-import { PlayerActionPanel, validateSizedActionAmount } from '../live-table/PlayerActionPanel.js';
+import {
+  PlayerActionPanel,
+  buildPresetAmounts,
+  formatActionLabel,
+  formatDeadline,
+  validateSizedActionAmount,
+} from '../live-table/PlayerActionPanel.js';
 import { PokerTableSurface } from '../live-table/PokerTableSurface.js';
 import { SeatManagementPanel, normalizeSeatBuyIn } from '../live-table/SeatManagementPanel.js';
 import {
@@ -162,15 +168,47 @@ describe('PokerTableSurface', () => {
     );
 
     expect(html).toContain('Your Turn');
-    expect(html).toContain('fold');
-    expect(html).toContain('call 50');
-    expect(html).toContain('raise');
+    expect(html).toContain('Fold');
+    expect(html).toContain('Call 50');
+    expect(html).toContain('Raise');
+    expect(html).not.toContain('>fold<');
+    expect(html).not.toContain('>call 50<');
     expect(html).toContain('name="amount"');
     expect(html).toContain('required=""');
     expect(html).toContain('min="100"');
     expect(html).toContain('max="900"');
     expect(html).toContain('value="100"');
+    expect(html).toContain('Min 100');
+    expect(html).toContain('Mid 500');
+    expect(html).toContain('All-in 900');
+    expect(html).toContain('Turn timer');
+    expect(html).toContain('Expired');
     expect(html).toContain('Need a valid raise amount');
+
+    const buttonRow = html.match(/<div class="action-button-row">([\s\S]*?)<\/div>/)?.[1] ?? '';
+    expect(buttonRow).toContain('Fold');
+    expect(buttonRow).toContain('Call 50');
+    expect(buttonRow).not.toContain('Raise');
+  });
+
+  it('renders check and all-in direct action labels in title case', () => {
+    const html = renderToStaticMarkup(
+      <PlayerActionPanel
+        pendingAction={{
+          ...model.pendingAction!,
+          requestId: 'req-check-all-in',
+          legalActions: [{ type: 'fold' }, { type: 'check' }, { type: 'all-in', maxAmount: 900 }],
+        }}
+        error={null}
+        submitting={false}
+        now={0}
+        onSubmitAction={() => undefined}
+      />,
+    );
+
+    expect(html).toContain('Fold');
+    expect(html).toContain('Check');
+    expect(html).toContain('All-in 900');
   });
 
   it('uses a valid controlled fallback amount when a sized action omits minAmount', () => {
@@ -202,6 +240,27 @@ describe('PokerTableSurface', () => {
     expect(validateSizedActionAmount(raiseAction, '99')).toMatchObject({ valid: false });
     expect(validateSizedActionAmount(raiseAction, '901')).toMatchObject({ valid: false });
     expect(validateSizedActionAmount(raiseAction, '100')).toEqual({ valid: true, amount: 100 });
+  });
+
+  it('formats legal action labels for direct and sized actions', () => {
+    expect(formatActionLabel({ type: 'fold' })).toBe('Fold');
+    expect(formatActionLabel({ type: 'check' })).toBe('Check');
+    expect(formatActionLabel({ type: 'call', callAmount: 50 })).toBe('Call 50');
+    expect(formatActionLabel({ type: 'raise', minAmount: 100, maxAmount: 900 })).toBe('Raise');
+    expect(formatActionLabel({ type: 'all-in', maxAmount: 900 })).toBe('All-in 900');
+  });
+
+  it('builds valid distinct preset amounts for sized actions', () => {
+    expect(buildPresetAmounts({ type: 'raise', minAmount: 100, maxAmount: 900 })).toEqual([100, 500, 900]);
+    expect(buildPresetAmounts({ type: 'bet', minAmount: 100, maxAmount: 900 }, 225)).toEqual([100, 225, 500, 900]);
+    expect(buildPresetAmounts({ type: 'bet', minAmount: 100, maxAmount: 900 }, 500)).toEqual([100, 500, 900]);
+    expect(buildPresetAmounts({ type: 'bet', minAmount: 100, maxAmount: 900 }, 1200)).toEqual([100, 500, 900]);
+    expect(buildPresetAmounts({ type: 'call', callAmount: 50 }, 225)).toEqual([]);
+  });
+
+  it('formats expired and compact turn deadlines', () => {
+    expect(formatDeadline(1000, 1000)).toBe('Expired');
+    expect(formatDeadline(75_000, 10_000)).toBe('1:05');
   });
 
   it('renders open seat controls for human and configured agents', () => {

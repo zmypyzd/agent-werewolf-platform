@@ -8,6 +8,8 @@ export interface PlayerActionPanelProps {
   pendingAction: PendingAction | null;
   submitting: boolean;
   error: string | null;
+  now?: number;
+  potAmount?: number;
   onSubmitAction: (actionType: ActionType, amount?: number) => void;
 }
 
@@ -19,6 +21,8 @@ export function PlayerActionPanel({
   pendingAction,
   submitting,
   error,
+  now = Date.now(),
+  potAmount,
   onSubmitAction,
 }: PlayerActionPanelProps) {
   const sized = pendingAction?.legalActions.find(action => action.type === 'raise' || action.type === 'bet') ?? null;
@@ -52,8 +56,15 @@ export function PlayerActionPanel({
     setLocalError(null);
   }
 
+  function choosePresetAmount(amount: number) {
+    setAmountText(String(amount));
+    setLocalError(null);
+  }
+
   const sizedValidation = sized ? validateSizedActionAmount(sized, amountText) : null;
+  const presetAmounts = sized ? buildPresetAmounts(sized, potAmount) : [];
   const shownError = localError ?? error;
+  const deadlineLabel = formatDeadline(pendingAction.deadlineAt, now);
 
   return (
     <section className="player-action-panel" aria-label="Player action panel">
@@ -62,9 +73,15 @@ export function PlayerActionPanel({
           <h2>Your Turn</h2>
           <p className="muted">Choose an action for this hand.</p>
         </div>
-        <div className="mini-card-row" aria-label="Your hole cards">
-          <PanelCard card={pendingAction.privateState.holeCards[0]} />
-          <PanelCard card={pendingAction.privateState.holeCards[1]} />
+        <div className="player-action-status">
+          <div className={`turn-timer ${deadlineLabel === 'Expired' ? 'is-expired' : ''}`} aria-label="Turn timer">
+            <span>Turn</span>
+            <strong>{deadlineLabel}</strong>
+          </div>
+          <div className="mini-card-row" aria-label="Your hole cards">
+            <PanelCard card={pendingAction.privateState.holeCards[0]} />
+            <PanelCard card={pendingAction.privateState.holeCards[1]} />
+          </div>
         </div>
       </div>
 
@@ -82,7 +99,7 @@ export function PlayerActionPanel({
       {sized ? (
         <form className="sized-action-form" onSubmit={submitSizedAction}>
           <label>
-            {sized.type}
+            <span className="sized-action-label">{formatActionLabel(sized)} amount</span>
             <input
               name="amount"
               type="number"
@@ -95,17 +112,78 @@ export function PlayerActionPanel({
               onChange={updateAmount}
             />
           </label>
-          <span className="muted">
+          <span className="muted sized-action-range">
             {sized.minAmount ?? 1}
             {sized.maxAmount !== undefined ? `-${sized.maxAmount}` : '+'}
           </span>
-          <button disabled={submitting || sizedValidation?.valid === false} type="submit">{sized.type}</button>
+          {presetAmounts.length > 0 ? (
+            <div className="sized-action-presets" aria-label={`${formatActionLabel(sized)} presets`}>
+              {presetAmounts.map(amount => (
+                <button
+                  disabled={submitting}
+                  key={amount}
+                  onClick={() => choosePresetAmount(amount)}
+                  type="button"
+                >
+                  {formatPresetLabel(sized, amount, potAmount)}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <button disabled={submitting || sizedValidation?.valid === false} type="submit">
+            {formatActionLabel(sized)}
+          </button>
         </form>
       ) : null}
 
       {shownError ? <div className="error">{shownError}</div> : null}
     </section>
   );
+}
+
+export function formatActionLabel(action: LegalAction): string {
+  if (action.type === 'all-in') {
+    return action.maxAmount === undefined ? 'All-in' : `All-in ${action.maxAmount}`;
+  }
+
+  if (action.type === 'call') {
+    return action.callAmount === undefined ? 'Call' : `Call ${action.callAmount}`;
+  }
+
+  return ACTION_LABELS[action.type];
+}
+
+export function buildPresetAmounts(action: LegalAction, potAmount?: number): number[] {
+  if (!isSizedAction(action)) return [];
+
+  const minAmount = minimumSizedActionAmount(action);
+  const candidates = [minAmount];
+
+  if (potAmount !== undefined) {
+    candidates.push(Math.floor(potAmount));
+  }
+
+  if (action.maxAmount !== undefined) {
+    candidates.push(Math.floor((minAmount + action.maxAmount) / 2));
+    candidates.push(action.maxAmount);
+  }
+
+  return [...new Set(candidates)]
+    .filter(amount => Number.isFinite(amount))
+    .filter(amount => amount >= minAmount)
+    .filter(amount => action.maxAmount === undefined || amount <= action.maxAmount)
+    .sort((left, right) => left - right);
+}
+
+export function formatDeadline(deadlineAt: number, now: number): string {
+  if (deadlineAt <= now) return 'Expired';
+
+  const secondsRemaining = Math.ceil((deadlineAt - now) / 1000);
+  if (secondsRemaining < 60) return `${secondsRemaining}s`;
+
+  const minutes = Math.floor(secondsRemaining / 60);
+  const seconds = secondsRemaining % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 export function validateSizedActionAmount(
@@ -143,6 +221,30 @@ function defaultSizedActionAmount(action: LegalAction): number {
   return minimumSizedActionAmount(action);
 }
 
+function isSizedAction(action: LegalAction): boolean {
+  return action.type === 'raise' || action.type === 'bet';
+}
+
+const ACTION_LABELS: Record<ActionType, string> = {
+  fold: 'Fold',
+  check: 'Check',
+  call: 'Call',
+  bet: 'Bet',
+  raise: 'Raise',
+  'all-in': 'All-in',
+};
+
+function formatPresetLabel(action: LegalAction, amount: number, potAmount?: number): string {
+  if (amount === minimumSizedActionAmount(action)) return `Min ${amount}`;
+  if (action.maxAmount !== undefined && amount === action.maxAmount) return `All-in ${amount}`;
+  if (potAmount !== undefined && amount === Math.floor(potAmount)) return `Pot ${amount}`;
+  if (action.maxAmount !== undefined && amount === Math.floor((minimumSizedActionAmount(action) + action.maxAmount) / 2)) {
+    return `Mid ${amount}`;
+  }
+
+  return String(amount);
+}
+
 function ActionButton({
   action,
   disabled,
@@ -159,11 +261,10 @@ function ActionButton({
     : action.type === 'all-in'
       ? action.maxAmount
       : undefined;
-  const label = amount === undefined ? action.type : `${action.type} ${amount}`;
 
   return (
     <button disabled={disabled} onClick={() => onSubmitAction(action.type, amount)} type="button">
-      {label}
+      {formatActionLabel(action)}
     </button>
   );
 }

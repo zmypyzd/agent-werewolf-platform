@@ -1129,6 +1129,43 @@ button { padding: 8px 16px; cursor: pointer; }
   align-items: flex-start;
 }
 
+.player-action-status {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.turn-timer {
+  display: grid;
+  min-width: 70px;
+  gap: 2px;
+  justify-items: end;
+  border: 1px solid #d8dee6;
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: #fff;
+  color: #1f2933;
+}
+
+.turn-timer span {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.turn-timer strong {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.turn-timer.is-expired {
+  border-color: #d9a6a0;
+  background: #fff4f2;
+  color: #943233;
+}
+
 .action-button-row,
 .sized-action-form {
   display: flex;
@@ -1163,11 +1200,36 @@ button { padding: 8px 16px; cursor: pointer; }
 }
 
 .sized-action-form label {
+  display: grid;
+  gap: 4px;
   max-width: 150px;
+}
+
+.sized-action-label {
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .sized-action-form input {
   min-width: 0;
+  width: 100%;
+}
+
+.sized-action-range {
+  align-self: center;
+}
+
+.sized-action-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.sized-action-presets button {
+  padding: 6px 8px;
+  background: #fff;
+  font-size: 12px;
 }
 
 .seat-management-panel {
