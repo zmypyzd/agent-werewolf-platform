@@ -88,6 +88,21 @@ async function createCompletedHand() {
   return { sid, tableId: table.tableId, handId };
 }
 
+function expectPublicHandPlayers(players: Record<string, unknown>[]) {
+  expect(players.length).toBeGreaterThan(0);
+  for (const player of players) {
+    expect(player).not.toHaveProperty('holeCards');
+    expect(player).not.toHaveProperty('handEvaluation');
+    expect(player).toMatchObject({
+      playerId: expect.stringMatching(/^player-/),
+      agentId: expect.stringMatching(/^(agent|human|http)-/),
+      seatIndex: expect.any(Number),
+      stackBefore: expect.any(Number),
+      stackAfter: expect.any(Number),
+    });
+  }
+}
+
 describe('table hand-history privacy', () => {
   it('GET /api/v1/tables/:tableId/hands returns public-safe hand summaries', async () => {
     const { sid, tableId } = await createCompletedHand();
@@ -96,13 +111,12 @@ describe('table hand-history privacy', () => {
 
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
-    expect(JSON.stringify(body.data)).not.toContain('holeCards');
-    expect(JSON.stringify(body.data)).not.toContain('handEvaluation');
-    expect(body.data[0].players[0]).toMatchObject({
-      playerId: expect.stringMatching(/^player-/),
-      agentId: expect.stringMatching(/^(agent|human|http)-/),
-      seatIndex: expect.any(Number),
-    });
+    expect(JSON.stringify(body.data)).not.toContain('"holeCards"');
+    expect(JSON.stringify(body.data)).not.toContain('"handEvaluation"');
+    expect(body.data.length).toBeGreaterThan(0);
+    for (const hand of body.data as { players: Record<string, unknown>[] }[]) {
+      expectPublicHandPlayers(hand.players);
+    }
   });
 
   it('GET /api/v1/tables/:tableId/hands/:handId returns a public-safe hand summary', async () => {
@@ -112,13 +126,19 @@ describe('table hand-history privacy', () => {
 
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
-    expect(JSON.stringify(body.data)).not.toContain('holeCards');
-    expect(JSON.stringify(body.data)).not.toContain('handEvaluation');
-    expect(body.data.players[0]).toMatchObject({
-      playerId: expect.stringMatching(/^player-/),
-      agentId: expect.stringMatching(/^(agent|human|http)-/),
-      seatIndex: expect.any(Number),
-    });
+    expect(JSON.stringify(body.data)).not.toContain('"holeCards"');
+    expect(JSON.stringify(body.data)).not.toContain('"handEvaluation"');
+    expectPublicHandPlayers(body.data.players);
+  });
+
+  it('GET /api/v1/tables/:tableId/hands/:handId returns 404 when the hand belongs to another table', async () => {
+    const { sid, handId } = await createCompletedHand();
+    const otherTable = await createTable(sid);
+
+    const res = await injectGet(`/api/v1/tables/${otherTable.tableId}/hands/${handId}`, sid);
+
+    expect(res.statusCode).toBe(404);
+    expect(JSON.parse(res.body).error.code).toBe('HAND_NOT_FOUND');
   });
 });
 

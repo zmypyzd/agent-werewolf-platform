@@ -347,8 +347,14 @@ export async function tablesRoutes(app: FastifyInstance, opts: TablesPluginOptio
     '/tables/:tableId/hands/:handId',
     { preHandler: [app.requireAuth] },
     async (req, reply) => {
+      await orchestrator.getTable(req.params.tableId).catch(e => {
+        if (e instanceof NotFoundError) throw new AppError('TABLE_NOT_FOUND', e.message);
+        throw e;
+      });
       const hand = await handStore.getHandSummary(req.params.handId);
-      if (!hand) throw new AppError('HAND_NOT_FOUND', `Hand ${req.params.handId} not found`);
+      if (!hand || hand.tableId !== req.params.tableId) {
+        throw new AppError('HAND_NOT_FOUND', `Hand ${req.params.handId} not found`);
+      }
       reply.send({ data: publicHandSummary(hand) });
     },
   );
