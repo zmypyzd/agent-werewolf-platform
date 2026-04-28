@@ -83,7 +83,11 @@ async function createCompletedHand() {
 
   const hand = await injectPost(`/api/v1/tables/${table.tableId}/hands/start`, sid, {});
   expect(hand.statusCode).toBe(200);
-  const handId = JSON.parse(hand.body).data.handId as string;
+  const handBody = JSON.parse(hand.body) as { data: { handId: string; players: Record<string, unknown>[] } };
+  expect(JSON.stringify(handBody.data)).not.toContain('"holeCards"');
+  expect(JSON.stringify(handBody.data)).not.toContain('"handEvaluation"');
+  expectPublicHandPlayers(handBody.data.players);
+  const handId = handBody.data.handId;
 
   return { sid, tableId: table.tableId, handId };
 }
@@ -155,5 +159,18 @@ describe('table management permission', () => {
     expect(bobResponse.statusCode).toBe(200);
     expect(JSON.parse(aliceResponse.body).data.canManage).toBe(true);
     expect(JSON.parse(bobResponse.body).data.canManage).toBe(false);
+  });
+
+  it('POST /api/v1/tables/:tableId/hands/start is owner-only', async () => {
+    const aliceSid = await registerAs('alice');
+    const bobSid = await registerAs('bob');
+    const table = await createTable(aliceSid);
+    await addAgent(table.tableId, aliceSid, 'Caller 1');
+    await addAgent(table.tableId, aliceSid, 'Caller 2');
+
+    const bobResponse = await injectPost(`/api/v1/tables/${table.tableId}/hands/start`, bobSid, {});
+
+    expect(bobResponse.statusCode).toBe(403);
+    expect(JSON.parse(bobResponse.body).error.code).toBe('FORBIDDEN');
   });
 });

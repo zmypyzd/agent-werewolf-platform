@@ -478,13 +478,6 @@ export class TableOrchestrator {
           const seat = tableState.seats.find(s => s?.playerId === playerId);
           const holeCards = event.data['holeCards'];
           if (seat && Array.isArray(holeCards) && holeCards.length === 2) {
-            hub.publishTable(tableId, 'table.hole_cards_revealed', {
-              handId: event.handId,
-              playerId: seat.playerId,
-              seatIndex: seat.seatIndex,
-              agentId: seat.agentId,
-              holeCards,
-            });
             hub.publishSeat(seat.ownerUserId, tableId, 'seat.hole_cards', {
               handId: event.handId,
               playerId: seat.playerId,

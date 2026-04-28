@@ -2,9 +2,14 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Rebuild `/tables/:tableId` into a realtime Texas Hold'em table with visible spectator hole cards, player controls, and a reusable live table presentation layer.
+**Goal:** Rebuild `/tables/:tableId` into a realtime Texas Hold'em table with player controls and a reusable live table presentation layer.
 
-**Architecture:** Add an explicit realtime table event for spectator-visible hole cards while preserving public-safe artifact filtering. Refactor the web table page into a controller that feeds a reducer, derives a poker table view model, and renders table, side rail, and action components.
+**Privacy update, 2026-04-28:** this historical plan's spectator-visible
+hole-card event is superseded. Public `table:*` websocket topics must not carry
+`holeCards`; only private `seat:*` topics may deliver the owning user's current
+hand cards.
+
+**Architecture:** Keep hole cards on private seat topics while preserving public-safe artifact filtering. Refactor the web table page into a controller that feeds a reducer, derives a poker table view model, and renders table, side rail, and action components.
 
 **Tech Stack:** TypeScript, Fastify websocket routes, Vitest, React 18, Vite, CSS modules via existing global `styles.css`.
 

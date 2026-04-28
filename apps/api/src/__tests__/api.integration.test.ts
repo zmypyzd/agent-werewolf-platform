@@ -172,6 +172,8 @@ describe('API Integration Tests', () => {
     const body = JSON.parse(res.payload);
     expect(body.data.handId).toBeTruthy();
     expect(body.data.communityCards).toBeDefined();
+    expect(JSON.stringify(body.data)).not.toContain('"holeCards"');
+    expect(JSON.stringify(body.data)).not.toContain('"handEvaluation"');
   });
 
   it('api-012: GET /tables/:id/hands → 200 array', async () => {

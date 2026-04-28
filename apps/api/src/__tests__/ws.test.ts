@@ -121,7 +121,7 @@ describe('WS /ws', () => {
     b.ws.close();
   });
 
-  it('a spectator receives revealed hole cards for each player on the table topic', async () => {
+  it('a spectator never receives hole cards on the table topic', async () => {
     const aliceSid = await registerAs('alice@x.test');
     const spectatorSid = await registerAs('spec@x.test');
     const tableId = await createTable(aliceSid);
@@ -152,33 +152,17 @@ describe('WS /ws', () => {
     await awaitMessage(spec.messages, m => m['type'] === 'hand.completed', 4000);
 
     const revealFrames = spec.messages.filter(m => m['type'] === 'table.hole_cards_revealed');
-    expect(revealFrames).toHaveLength(2);
+    expect(revealFrames).toHaveLength(0);
 
     const tableFrames = spec.messages.filter(m => m['topic'] === tableTopic);
-    expect(tableFrames.some(m => m['type'] === 'table.hole_cards_revealed')).toBe(true);
+    expect(tableFrames.some(m => m['type'] === 'table.hole_cards_revealed')).toBe(false);
     expect(tableFrames.some(m => m['type'] === 'hole_cards.dealt')).toBe(false);
     expect(tableFrames.some(m => m['type'] === 'seat.hole_cards')).toBe(false);
     expect(spec.messages.some(m => m['type'] === 'seat.hole_cards')).toBe(false);
 
     for (const frame of tableFrames) {
-      if (JSON.stringify(frame).includes('"holeCards"')) {
-        expect(frame['type']).toBe('table.hole_cards_revealed');
-      }
+      expect(JSON.stringify(frame)).not.toContain('"holeCards"');
     }
-
-    const seenPlayers = new Set<string>();
-    for (const frame of revealFrames) {
-      expect(frame['topic']).toBe(tableTopic);
-      const payload = frame['payload'] as Record<string, unknown>;
-      expect(payload['handId']).toEqual(expect.stringMatching(/^hand-/));
-      expect(payload['playerId']).toEqual(expect.stringMatching(/^player-/));
-      expect(payload['agentId']).toEqual(expect.stringMatching(/^agent-/));
-      expect(typeof payload['seatIndex']).toBe('number');
-      expect(payload['holeCards']).toHaveLength(2);
-      seenPlayers.add(String(payload['playerId']));
-    }
-
-    expect(seenPlayers.size).toBe(2);
 
     spec.ws.close();
   }, 10_000);

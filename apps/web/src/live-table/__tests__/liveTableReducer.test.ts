@@ -104,7 +104,7 @@ describe('liveTableReducer', () => {
     const state = reduce([
       { type: 'snapshot.loaded', table: snapshot, meUserId: 'usr-a' },
       {
-        type: 'table.hole_cards_revealed',
+        type: 'seat.hole_cards',
         handId: 'hand-old',
         playerId: 'player-a',
         seatIndex: 0,
@@ -124,12 +124,12 @@ describe('liveTableReducer', () => {
     expect(state.seats[0]!.holeCards).toBeNull();
   });
 
-  it('stores spectator-visible hole cards on the matching seat', () => {
+  it('stores private hole cards on the matching seat', () => {
     const state = reduce([
       { type: 'snapshot.loaded', table: snapshot, meUserId: 'usr-a' },
       { type: 'hand.started', handId: 'hand-1', handNumber: 1 },
       {
-        type: 'table.hole_cards_revealed',
+        type: 'seat.hole_cards',
         handId: 'hand-1',
         playerId: 'player-b',
         seatIndex: 1,
@@ -161,7 +161,7 @@ describe('liveTableReducer', () => {
       { type: 'snapshot.loaded', table: snapshot, meUserId: 'usr-a' },
       { type: 'hand.started', handId: 'hand-1', handNumber: 1 },
       {
-        type: 'table.hole_cards_revealed',
+        type: 'seat.hole_cards',
         handId: 'hand-1',
         playerId: 'player-a',
         seatIndex: 0,
@@ -169,7 +169,7 @@ describe('liveTableReducer', () => {
         holeCards: cards,
       },
       {
-        type: 'table.hole_cards_revealed',
+        type: 'seat.hole_cards',
         handId: 'hand-1',
         playerId: 'player-b',
         seatIndex: 1,
@@ -260,11 +260,11 @@ describe('liveTableReducer', () => {
     expect(state.handId).toBe('hand-from-snapshot');
   });
 
-  it('uses a reveal hand id when no current hand id exists', () => {
+  it('uses a private hole-card hand id when no current hand id exists', () => {
     const state = reduce([
       { type: 'snapshot.loaded', table: snapshot, meUserId: 'usr-a' },
       {
-        type: 'table.hole_cards_revealed',
+        type: 'seat.hole_cards',
         handId: 'hand-from-reveal',
         playerId: 'player-b',
         seatIndex: 1,
@@ -277,12 +277,12 @@ describe('liveTableReducer', () => {
     expect(state.seats[1]!.holeCards).toEqual(cards);
   });
 
-  it('ignores stale or mismatched public hole-card reveals', () => {
+  it('ignores stale or mismatched private hole-card frames', () => {
     const state = reduce([
       { type: 'snapshot.loaded', table: snapshot, meUserId: 'usr-a' },
       { type: 'hand.started', handId: 'hand-1', handNumber: 1 },
       {
-        type: 'table.hole_cards_revealed',
+        type: 'seat.hole_cards',
         handId: 'hand-old',
         playerId: 'player-b',
         seatIndex: 1,
@@ -290,7 +290,7 @@ describe('liveTableReducer', () => {
         holeCards: cards,
       },
       {
-        type: 'table.hole_cards_revealed',
+        type: 'seat.hole_cards',
         handId: 'hand-1',
         playerId: 'player-b',
         seatIndex: 0,
@@ -301,6 +301,18 @@ describe('liveTableReducer', () => {
 
     expect(state.seats[0]!.holeCards).toBeNull();
     expect(state.seats[1]!.holeCards).toBeNull();
+  });
+
+  it('ignores public table-topic hole-card payloads from the normalizer', () => {
+    const publicReveal = normalizeLiveTableEvent(message('table.hole_cards_revealed', {
+      handId: 'hand-1',
+      playerId: 'player-b',
+      seatIndex: 1,
+      agentId: 'agent-b',
+      holeCards: cards,
+    }));
+
+    expect(publicReveal).toBeNull();
   });
 
   it('clears a pending action when that player action is applied', () => {

@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import type { GetMatchArtifactOptions, IMatchArtifactStore } from '@agent-poker/persistence';
 import { replayEventToPublic } from '@agent-poker/realtime';
 import { AppError } from '@agent-poker/shared';
-import type { MatchSummary, ReplayEvent } from '@agent-poker/shared';
+import type { DecisionTrace, MatchSummary, ReplayEvent } from '@agent-poker/shared';
 import { publicHandSummary } from './public-hand-summary.js';
 
 interface MatchesPluginOptions extends FastifyPluginOptions {
@@ -20,6 +20,13 @@ function publicMatchSummary(summary: MatchSummary): MatchSummary {
     ...summary,
     hands: summary.hands.map(publicHandSummary),
   };
+}
+
+function publicDecisionTraces(traces: DecisionTrace[]): DecisionTrace[] {
+  return traces.map(trace => ({
+    ...trace,
+    reasoningSummary: null,
+  }));
 }
 
 async function getMatchArtifactOrThrow(
@@ -72,7 +79,7 @@ export async function matchesRoutes(app: FastifyInstance, opts: MatchesPluginOpt
       req.params.matchId,
       { includeReplayEvents: false },
     );
-    reply.send({ data: record.decisionTraces });
+    reply.send({ data: publicDecisionTraces(record.decisionTraces) });
   });
 
   app.get<{ Params: { matchId: string } }>('/matches/:matchId/analysis', async (req, reply) => {

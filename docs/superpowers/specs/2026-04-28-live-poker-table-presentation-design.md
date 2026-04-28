@@ -1,5 +1,10 @@
 # Live Poker Table Presentation Design
 
+> Privacy update, 2026-04-28: references in this historical spec to
+> `table.hole_cards_revealed` are superseded by the frontend product iteration
+> privacy policy. Public `table:*` websocket topics must not carry `holeCards`;
+> only private `seat:*` topics may deliver the owning user's current hand cards.
+
 ## 1. Goal
 
 Upgrade the realtime table route, `/tables/:tableId`, from a utilitarian
@@ -16,8 +21,9 @@ delivery optimizes for the current six-seat product surface.
 - Chosen approach: rebuild the live game presentation layer, not just restyle
   the existing page.
 - Chosen layout: Live Table + Side Rail.
-- Spectator behavior: realtime spectators see every occupied player's hole
-  cards by default.
+- Spectator behavior: realtime spectators see public table progression only.
+  Private hole cards are delivered only on private `seat:*` topics to the
+  owning user.
 - Player behavior: human action controls are redesigned as part of the table
   experience.
 - Seat scope: first version supports 2-6 seats well and keeps extension points
@@ -63,30 +69,10 @@ continues to suppress or strip `holeCards` for public replay artifacts, match
 API responses, decision traces, and analysis. This avoids broadening private
 data exposure across durable public artifacts.
 
-Realtime table visibility changes through an explicit new table-topic event:
-
-```ts
-interface TableHoleCardsRevealedPayload {
-  handId: string;
-  playerId: string;
-  seatIndex: number;
-  agentId: string;
-  holeCards: [Card, Card];
-}
-```
-
-When the orchestrator receives the internal `hole_cards.dealt` replay event, it
-will publish:
-
-```text
-topic: table:<tableId>
-type: table.hole_cards_revealed
-payload: TableHoleCardsRevealedPayload
-```
-
-It will also keep the existing private `seat.hole_cards` event for seated
-players. The private event remains useful for backwards compatibility and for
-the current human-player action flow.
+Realtime table visibility keeps private cards on private seat topics only. When
+the orchestrator receives the internal `hole_cards.dealt` replay event, it must
+publish `seat.hole_cards` only to the owning user's private seat channel. Public
+`table:*` topics must not include `holeCards`, including explicit reveal frames.
 
 `seat.action_requested` remains private to the human player's seat owner and is
 the only source that enables action submission. Seeing another player's cards
@@ -94,10 +80,10 @@ does not create permission to act for that player.
 
 ### Tests To Change
 
-- Replace the websocket test that asserts spectators never receive
-  `holeCards` on table topics.
-- Add a websocket test that a spectator receives
-  `table.hole_cards_revealed` for each dealt player in a live hand.
+- Keep the websocket test that asserts spectators never receive `holeCards` on
+  table topics.
+- Add or keep a websocket test that seated owners receive `seat.hole_cards`
+  frames on private topics.
 - Preserve match artifact, match replay, decision trace, and analysis tests
   that assert durable public surfaces do not contain `holeCards`.
 
@@ -158,10 +144,9 @@ Reducer behavior:
   snapshot.
 - `hand.started`: resets board, pots, current actor, pending action, hole
   cards, and action log for the new hand.
-- `table.hole_cards_revealed`: writes visible hole cards into the matching
-  seat by `playerId` or `seatIndex`.
-- `seat.hole_cards`: writes the current user's hole cards as a compatibility
-  path.
+- `seat.hole_cards`: writes the current user's hole cards into the matching
+  seat by `playerId`, `seatIndex`, and `agentId`.
+- Public table-topic hole-card payloads are ignored by the normalizer.
 - `community_cards.dealt`: appends board cards and updates phase.
 - `action.requested`: sets current actor.
 - `seat.action_requested`: sets `pendingAction` for the logged-in user.
@@ -326,8 +311,8 @@ read as a flat single-hue theme.
 - Initial table load failure: page-level error with a link back to lobby.
 - Websocket reconnecting: keep the last table state and show a side-rail
   reconnect banner.
-- Missing hole-card reveal event: show two card backs or a "cards pending"
-  state for that seat.
+- Missing private hole-card event for the current user: show two card backs or a
+  "cards pending" state for that seat.
 - Action submit failure: show error only in `PlayerActionPanel`.
 - Unknown or malformed websocket payload: ignore the event and append a safe
   diagnostic row only if it helps the user. Do not crash the table.
@@ -338,8 +323,10 @@ read as a flat single-hue theme.
 Backend:
 
 - `apps/api/src/__tests__/ws.test.ts`
-  - spectator receives `table.hole_cards_revealed` for live hands
-  - payload includes `playerId`, `seatIndex`, `agentId`, and two cards
+  - spectator never receives `holeCards` or `table.hole_cards_revealed` on
+    table topics
+  - seated owner receives `seat.hole_cards` on private topics with `playerId`,
+    `seatIndex`, `agentId`, and two cards
   - ordinary table events still arrive
 - Existing artifact privacy tests stay in place for match record, replay,
   decision trace, and analysis endpoints.
@@ -349,7 +336,8 @@ Frontend:
 - `apps/web/src/live-table/__tests__/liveTableReducer.test.ts`
   - snapshot initializes seats
   - hand start resets board, pots, cards, actor, and pending action
-  - `table.hole_cards_revealed` fills the matching seat
+  - `seat.hole_cards` fills the matching seat
+  - public table-topic hole-card reveal payloads normalize to `null`
   - `seat.action_requested` sets pending action only for the local user
   - action and pot events append live log rows
 - `apps/web/src/live-table/__tests__/buildPokerTableViewModel.test.ts`
@@ -376,8 +364,8 @@ pnpm test
 ## 12. Implementation Sequence
 
 1. Backend event semantics:
-   - emit `table.hole_cards_revealed`
-   - replace websocket spectator privacy test with reveal-event coverage
+   - emit private `seat.hole_cards` only
+   - preserve websocket spectator privacy test coverage
    - preserve durable artifact privacy tests
 
 2. Frontend state layer:
@@ -398,9 +386,9 @@ pnpm test
 
 ## 13. Risks And Mitigations
 
-- Risk: card reveal changes a major privacy invariant.
-  - Mitigation: represent it as an explicit realtime product event and keep
-    durable artifact surfaces public-safe.
+- Risk: accidental table-topic card reveal changes a major privacy invariant.
+  - Mitigation: keep hole cards on private `seat:*` topics only and test table
+    topics for absence of `holeCards`.
 
 - Risk: front-end reducer drifts from server truth.
   - Mitigation: use the reducer for presentation only and refresh snapshots on

@@ -6,6 +6,7 @@ import type { MemoryHandStore } from '@agent-poker/persistence';
 import {
   NotFoundError, SchemaValidationError, AppError,
   NotImplementedError,
+  ForbiddenError,
 } from '@agent-poker/shared';
 import {
   CreateTableRequestSchema,
@@ -165,11 +166,22 @@ export async function tablesRoutes(app: FastifyInstance, opts: TablesPluginOptio
     '/tables/:tableId/hands/start',
     { preHandler: [app.requireAuth, app.requireCsrf] },
     async (req, reply) => {
+      let ownerUserId: string | null;
+      try {
+        ownerUserId = orchestrator.getTableOwnerUserId(req.params.tableId);
+      } catch (e) {
+        if (e instanceof NotFoundError) throw new AppError('TABLE_NOT_FOUND', e.message);
+        throw e;
+      }
+      if (ownerUserId !== req.user!.userId) {
+        throw new ForbiddenError(`Table ${req.params.tableId} is not owned by ${req.user!.userId}`);
+      }
+
       const summary = await orchestrator.startHand(req.params.tableId).catch(e => {
         if (e instanceof NotFoundError) throw new AppError('TABLE_NOT_FOUND', e.message);
         throw e;
       });
-      reply.send({ data: summary });
+      reply.send({ data: publicHandSummary(summary) });
     },
   );
 

@@ -1,7 +1,7 @@
 # Frontend Product Iterations Design
 
 Date: 2026-04-28
-Status: Approved direction, pending implementation plan
+Status: Implemented with post-review privacy hardening
 
 ## 1. Goal
 
@@ -38,13 +38,13 @@ The frontend does not yet cover or weakly covers these backend capabilities:
 - `GET /tables/:tableId/state`: backend currently returns `null` by design, so
   current-state inspection is backend-dependent and deferred.
 - `GET /tables/:tableId/hands`, `GET /tables/:tableId/hands/:handId`, and
-  `GET /tables/:tableId/hands/:handId/replay`: no table-local hand history or
-  single-hand replay entry point. These routes currently expose full hand
-  summaries to authenticated callers, including private `holeCards`, so frontend
-  hand-history work must first use a public-safe DTO or strictly sanitize the
-  response before rendering.
+  `GET /tables/:tableId/hands/:handId/replay`: no table-local single-hand
+  replay entry point. Table hand-history responses must use public-safe DTOs
+  that strip `players[].holeCards` and `players[].handEvaluation` before the
+  browser receives data.
 - `GET /matches/:matchId/decision-trace`: no UI entry point. This should stay
-  public-safe and avoid raw chain-of-thought or private state display.
+  public-safe and avoid raw chain-of-thought, private cards, and detailed
+  reasoning fields such as key observations or considered actions.
 - `GET /health`: no service status indicator.
 - Create table form omits `ante`, `seed`, `defaultTimeoutMs`, and
   `maxSpectators`.
@@ -175,8 +175,8 @@ Acceptance:
   grouped in a clear control area.
 - Table hand history section lists completed hands only after the response is
   public-safe. It must not render `players[].holeCards` or hand evaluations from
-  raw table hand summaries unless the backend intentionally exposes a safe
-  authenticated player-specific view.
+  raw table hand summaries. Any future authenticated player-specific private
+  hand view requires an explicit separate contract.
 
 ### Iteration 5: Seat Identity And Table Readability
 
@@ -292,13 +292,23 @@ Acceptance:
 - Do not display raw chain-of-thought.
 - Do not display private state hashes as if they are user-facing explanations.
 - Durable public match artifacts should stay public-safe.
+- Public table websocket topics must never carry `holeCards`. Only private
+  `seat:*` topics may carry the owning user's current hand cards.
+- The web websocket normalizer must ignore any public table-topic hole-card
+  reveal frame if one appears from an older server or stale test fixture.
+- `/tables/:tableId/hands/start` must be owner-only and return the same
+  public-safe hand summary shape as table hand-history routes.
+- `/matches/:matchId/decision-trace` must redact detailed reasoning summaries
+  from public responses while retaining non-secret metrics and hashes needed for
+  review tooling.
+- Agent endpoint documentation must state that responses echo `requestId` and
+  `agentId`, because the adapter enforces that contract.
 - Table-local hand-history UI must be public-safe by default. If a future
   authenticated personal-hand view is added, it must clearly scope private cards
   to the owning player.
 - `authHeaderValue` remains write-only.
-- Spectator behavior must align with final backend privacy policy. If table-topic
-  hole-card reveal is kept for entertainment demos, it must be explicit and not
-  leak into public replay artifacts.
+- Spectator behavior must align with final backend privacy policy: spectators
+  see public table progression only, never private hole cards.
 - No real-money, payments, deposits, withdrawals, betting odds, prizes, or
   financial language.
 
@@ -310,6 +320,9 @@ Use focused tests during iterations and full verification before completion:
   replay player state, and analysis sorting.
 - API helper tests for any new typed helper.
 - Existing live-table and replay tests must remain green.
+- API privacy tests cover table hand-history, `/hands/start`, public match
+  decision traces, websocket table-topic frames, and owner-only start-hand
+  permission.
 - Browser QA or Playwright where available for desktop/mobile layout checks.
 
 Final verification target:
@@ -322,10 +335,10 @@ Final verification target:
 
 ## 9. Implementation Decisions
 
-- This frontend iteration will not change backend hole-card privacy semantics.
-  The UI may display hole cards that the live websocket stream explicitly sends,
-  but it must not fetch, infer, or persist hidden cards. Durable public match
-  artifact pages remain public-safe.
+- This iteration hardens backend hole-card privacy semantics. The UI may display
+  private hole cards only from `seat:*` frames delivered to the owning user; it
+  must not fetch, infer, persist, or render hidden cards from public table
+  channels. Durable public match artifact pages remain public-safe.
 - Table hand history requires a safe display boundary before implementation.
   Preferred implementation: add backend public-safe table hand-history responses
   that strip `players[].holeCards` and `players[].handEvaluation` before the

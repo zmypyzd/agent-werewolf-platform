@@ -103,28 +103,32 @@ test('§12 demo — two users sit, hand runs to completion through the UI', asyn
     autoPlayUntilHandComplete(bob),
   ]);
 
-  // Step 7: visibility invariant — table-topic hole cards are only allowed on
-  // explicit reveal frames. Each user's private seat.hole_cards frame is fine
-  // and expected.
-  function countTableHoleCardRevealFrames(frames: string[]): number {
-    let revealCount = 0;
+  // Step 7: visibility invariant — table-topic frames never carry private hole
+  // cards. Each user's private seat.hole_cards frame is fine and expected.
+  function countPrivateHoleCardFrames(frames: string[]): number {
+    let privateCount = 0;
     for (const raw of frames) {
       try {
         const m = JSON.parse(raw) as { topic?: string; type?: string };
         if (typeof m.topic === 'string' && m.topic.startsWith('table:')) {
-          if (m.type === 'table.hole_cards_revealed') revealCount += 1;
-          if (raw.includes('"holeCards"') && m.type !== 'table.hole_cards_revealed') {
+          if (m.type === 'table.hole_cards_revealed') {
+            throw new Error(`unexpected table reveal frame: ${raw}`);
+          }
+          if (raw.includes('"holeCards"')) {
             throw new Error(`unexpected holeCards in table frame: ${raw}`);
           }
+        }
+        if (typeof m.topic === 'string' && m.topic.startsWith('seat:') && m.type === 'seat.hole_cards') {
+          privateCount += 1;
         }
       } catch (e) {
         if (e instanceof Error && e.message.startsWith('unexpected')) throw e;
       }
     }
-    return revealCount;
+    return privateCount;
   }
-  expect(countTableHoleCardRevealFrames(aliceFrames)).toBeGreaterThan(0);
-  expect(countTableHoleCardRevealFrames(bobFrames)).toBeGreaterThan(0);
+  expect(countPrivateHoleCardFrames(aliceFrames)).toBeGreaterThan(0);
+  expect(countPrivateHoleCardFrames(bobFrames)).toBeGreaterThan(0);
 
   await aliceCtx.close();
   await bobCtx.close();

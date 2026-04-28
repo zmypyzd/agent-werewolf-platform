@@ -179,8 +179,11 @@ describe('match artifact API', () => {
     expect(body.data.length).toBeGreaterThan(0);
     expect(JSON.stringify(body.data)).not.toContain('"holeCards"');
     expect(JSON.stringify(body.data)).not.toContain('rawChainOfThought');
+    expect(JSON.stringify(body.data)).not.toContain('keyObservations');
+    expect(JSON.stringify(body.data)).not.toContain('consideredActions');
     expect(body.data[0].publicStateHash).toMatch(/^[a-f0-9]{64}$/);
     expect(body.data[0].privateStateHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(body.data[0].reasoningSummary).toBeNull();
   });
 
   it('public match analysis summarizes decisions without reasoning text', async () => {

@@ -108,14 +108,6 @@ export type LiveTableEvent =
   | { type: 'connection.changed'; status: LiveTableViewState['connectionStatus'] }
   | { type: 'hand.started'; handId?: string; handNumber: number }
   | {
-      type: 'table.hole_cards_revealed';
-      handId: string;
-      playerId: string;
-      seatIndex: number;
-      agentId: string;
-      holeCards: [Card, Card];
-    }
-  | {
       type: 'seat.hole_cards';
       handId: string;
       playerId: string;

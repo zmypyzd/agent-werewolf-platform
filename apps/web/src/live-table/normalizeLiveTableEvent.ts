@@ -20,24 +20,6 @@ export function normalizeLiveTableEvent(message: WsMessage): LiveTableEvent | nu
         ? { type: 'hand.started', handNumber }
         : { type: 'hand.started', handId, handNumber };
     }
-    case 'table.hole_cards_revealed': {
-      const holeCards = data['holeCards'];
-      if (!isTwoCards(holeCards)) return null;
-      const handId = requiredStringValue(data['handId']);
-      const playerId = requiredStringValue(data['playerId']);
-      const seatIndex = requiredNumberValue(data['seatIndex']);
-      const agentId = requiredStringValue(data['agentId']);
-      if (handId === null || playerId === null || seatIndex === null || agentId === null) return null;
-
-      return {
-        type: 'table.hole_cards_revealed',
-        handId,
-        playerId,
-        seatIndex,
-        agentId,
-        holeCards,
-      };
-    }
     case 'seat.hole_cards': {
       const holeCards = data['holeCards'];
       if (!isTwoCards(holeCards)) return null;

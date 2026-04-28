@@ -94,6 +94,7 @@ describe('AgentEditForm', () => {
     expect(html).toContain('table, hand, and action context');
     expect(html).toContain('legal actions from the request');
     expect(html).toContain('fold, check, call, bet, raise, or all-in');
+    expect(html).toContain('Echo the requestId and agentId from the request in the response');
     expect(html).toContain('Include an amount when the chosen legal action supplies minAmount or maxAmount bounds');
     expect(html).toContain('respond before the configured timeout');
     expect(html).toContain('configured auth header is sent on each request');

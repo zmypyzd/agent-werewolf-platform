@@ -230,17 +230,15 @@ describe('Backend e2e — full demo flow (M11)', () => {
     const total = summary.players.reduce((s, p) => s + p.stackAfter, 0);
     expect(total).toBe(2000);
 
-    // Visibility invariant: table:* may only carry holeCards on explicit reveal frames.
+    // Visibility invariant: table:* never carries private holeCards.
     const tableFrames = alice.messages.filter(
       m => typeof m['topic'] === 'string' && (m['topic'] as string) === `table:${tableId}`,
     );
-    expect(tableFrames.some(m => m['type'] === 'table.hole_cards_revealed')).toBe(true);
+    expect(tableFrames.some(m => m['type'] === 'table.hole_cards_revealed')).toBe(false);
     expect(tableFrames.some(m => m['type'] === 'hole_cards.dealt')).toBe(false);
     expect(tableFrames.some(m => m['type'] === 'seat.hole_cards')).toBe(false);
     for (const frame of tableFrames) {
-      if (JSON.stringify(frame).includes('"holeCards"')) {
-        expect(frame['type']).toBe('table.hole_cards_revealed');
-      }
+      expect(JSON.stringify(frame)).not.toContain('"holeCards"');
     }
 
     // Alice did receive her own hole cards on the seat:* private topic.

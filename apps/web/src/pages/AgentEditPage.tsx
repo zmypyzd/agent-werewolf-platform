@@ -274,6 +274,7 @@ export function AgentEndpointContract() {
       </p>
       <ul>
         <li>Return one of the legal actions from the request: fold, check, call, bet, raise, or all-in.</li>
+        <li>Echo the requestId and agentId from the request in the response.</li>
         <li>Include an amount when the chosen legal action supplies minAmount or maxAmount bounds.</li>
         <li>Include an optional reasoning summary for replay review.</li>
       </ul>

@@ -66,19 +66,6 @@ export function liveTableReducer(
         actionLog: [],
         seats: state.seats.map(seat => ({ ...seat, isCurrentActor: false, holeCards: null })),
       };
-    case 'table.hole_cards_revealed': {
-      if (state.handId && state.handId !== event.handId) return state;
-
-      return {
-        ...state,
-        handId: state.handId ?? event.handId,
-        seats: state.seats.map(seat =>
-          seatMatchesIdentity(seat, event)
-            ? { ...seat, holeCards: event.holeCards }
-            : seat,
-        ),
-      };
-    }
     case 'seat.hole_cards': {
       if (state.handId && state.handId !== event.handId) return state;
 
