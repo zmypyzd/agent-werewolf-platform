@@ -72,6 +72,20 @@ describe('AppShell', () => {
     ]);
   });
 
+  it('marks simulate active when the route is enabled', () => {
+    const links = navLinks(renderShell('/simulate', true));
+    const simulateLink = links.find(link => link.label === 'Simulate');
+    const replaysLink = links.find(link => link.label === 'Replays');
+
+    expect(simulateLink).toMatchObject({
+      href: '/simulate',
+      ariaCurrent: 'page',
+    });
+    expect(simulateLink?.className.split(/\s+/)).toContain('app-nav-link-active');
+    expect(replaysLink?.ariaCurrent).toBeNull();
+    expect(replaysLink?.className.split(/\s+/)).not.toContain('app-nav-link-active');
+  });
+
   it('offsets sticky replay side panels below the app topbar', () => {
     const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
     const appTopbarRule = cssRules(css, '.app-topbar')[0] ?? '';

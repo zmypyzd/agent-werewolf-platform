@@ -51,6 +51,39 @@ export interface MatchAnalysisSummary {
   agents: AgentAnalysisSummary[];
 }
 
+export type SimulationStrategy = 'random' | 'always-call' | 'always-fold' | 'aggressive';
+
+export interface SimulateAgentRequest {
+  name: string;
+  strategy: SimulationStrategy;
+  buyIn: number;
+}
+
+export interface SimulateRequest {
+  name: string;
+  maxSeats: number;
+  blindConfig: {
+    smallBlind: number;
+    bigBlind: number;
+    ante: number;
+  };
+  seed?: string;
+  defaultTimeoutMs?: number;
+  agents: SimulateAgentRequest[];
+  numHands: number;
+}
+
+export interface SimulateResponse {
+  tableId: string;
+  hands: unknown[];
+  finalStacks: Record<string, number>;
+  totalHands: number;
+  matchArtifact: {
+    matchId: string;
+    manifest: unknown;
+  };
+}
+
 async function call<T>(method: string, path: string, opts: ApiOptions = {}): Promise<T> {
   const headers: Record<string, string> = { 'X-Requested-With': 'fetch' };
   let body: string | undefined;
@@ -96,4 +129,6 @@ export const api = {
       `/matches/${encodeURIComponent(matchId)}/analysis`,
       signal ? { signal } : {},
     ),
+  simulate: (request: SimulateRequest) =>
+    call<SimulateResponse>('POST', '/simulate', { body: request }),
 };

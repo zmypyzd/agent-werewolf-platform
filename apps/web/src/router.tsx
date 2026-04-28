@@ -11,6 +11,7 @@ import { AgentsPage } from './pages/AgentsPage.js';
 import { AgentEditPage } from './pages/AgentEditPage.js';
 import { MatchesPage } from './pages/MatchesPage.js';
 import { MatchReplayPage } from './pages/MatchReplayPage.js';
+import { SimulatePage } from './pages/SimulatePage.js';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -25,7 +26,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 
 function AppShellRoute({ children }: { children: ReactNode }) {
   const location = useLocation();
-  return <AppShell currentPath={location.pathname}>{children}</AppShell>;
+  return <AppShell currentPath={location.pathname} showSimulate>{children}</AppShell>;
 }
 
 const routes: RouteObject[] = [
@@ -38,6 +39,7 @@ const routes: RouteObject[] = [
   { path: '/agents', element: <ProtectedRoute><AppShellRoute><AgentsPage /></AppShellRoute></ProtectedRoute> },
   { path: '/agents/new', element: <ProtectedRoute><AppShellRoute><AgentEditPage mode="new" /></AppShellRoute></ProtectedRoute> },
   { path: '/agents/:agentId/edit', element: <ProtectedRoute><AppShellRoute><AgentEditPage mode="edit" /></AppShellRoute></ProtectedRoute> },
+  { path: '/simulate', element: <ProtectedRoute><AppShellRoute><SimulatePage /></AppShellRoute></ProtectedRoute> },
   { path: '/', element: <Navigate to="/lobby" replace /> },
   { path: '*', element: <Navigate to="/lobby" replace /> },
 ];
