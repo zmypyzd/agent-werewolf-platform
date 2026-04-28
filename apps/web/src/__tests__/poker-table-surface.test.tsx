@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { PlayerActionPanel, validateSizedActionAmount } from '../live-table/PlayerActionPanel.js';
 import { PokerTableSurface } from '../live-table/PokerTableSurface.js';
 import { SeatManagementPanel } from '../live-table/SeatManagementPanel.js';
 import type { PokerTableViewModel, SeatPosition } from '../live-table/buildPokerTableViewModel.js';
@@ -147,10 +148,42 @@ describe('PokerTableSurface', () => {
     expect(html).toContain('call 50');
     expect(html).toContain('raise');
     expect(html).toContain('name="amount"');
+    expect(html).toContain('required=""');
     expect(html).toContain('min="100"');
     expect(html).toContain('max="900"');
     expect(html).toContain('value="100"');
     expect(html).toContain('Need a valid raise amount');
+  });
+
+  it('uses a valid controlled fallback amount when a sized action omits minAmount', () => {
+    const html = renderToStaticMarkup(
+      <PlayerActionPanel
+        pendingAction={{
+          ...model.pendingAction!,
+          requestId: 'req-bet-without-min',
+          legalActions: [{ type: 'bet', maxAmount: 900 }],
+        }}
+        error={null}
+        submitting={false}
+        onSubmitAction={() => undefined}
+      />,
+    );
+
+    expect(html).toContain('name="amount"');
+    expect(html).toContain('required=""');
+    expect(html).toContain('min="1"');
+    expect(html).toContain('max="900"');
+    expect(html).toContain('value="1"');
+  });
+
+  it('validates sized action amount text before submission', () => {
+    const raiseAction = { type: 'raise', minAmount: 100, maxAmount: 900 } as const;
+
+    expect(validateSizedActionAmount(raiseAction, '')).toMatchObject({ valid: false });
+    expect(validateSizedActionAmount(raiseAction, 'not-a-number')).toMatchObject({ valid: false });
+    expect(validateSizedActionAmount(raiseAction, '99')).toMatchObject({ valid: false });
+    expect(validateSizedActionAmount(raiseAction, '901')).toMatchObject({ valid: false });
+    expect(validateSizedActionAmount(raiseAction, '100')).toEqual({ valid: true, amount: 100 });
   });
 
   it('renders open seat controls for human and configured agents', () => {
@@ -167,9 +200,53 @@ describe('PokerTableSurface', () => {
     expect(html).toContain('Open Seats');
     expect(html).toContain('Seat 4');
     expect(html).toContain('Sit here');
-    expect(html).toContain('Sit agent at seat 3');
+    expect(html).toContain('Sit agent at seat 4');
     expect(html).toContain('Range Bot');
     expect(html).toContain('disabled=""');
+  });
+
+  it('stacks seats before the desktop top row can overlap', () => {
+    const mobileStack = mobileSeatStackMedia();
+    const firstDesktopWidth = mobileStack.breakpoint + 1;
+    const seatWidth = parseLengthPx(declarationFor('.player-seat', 'width'));
+    const topSeatSelectors = ['.seat-top-left', '.seat-top', '.seat-top-right'] as const;
+    const horizontalRanges = topSeatSelectors.map(selector =>
+      horizontalRangeFor(selector, firstDesktopWidth, seatWidth),
+    );
+
+    for (let index = 1; index < horizontalRanges.length; index += 1) {
+      const previous = horizontalRanges[index - 1]!;
+      const current = horizontalRanges[index]!;
+      expect(current.left - previous.right, `${previous.selector} overlaps ${current.selector}`).toBeGreaterThanOrEqual(12);
+    }
+  });
+
+  it('keeps the mobile community board out of the stacked seat path', () => {
+    const mobileStack = mobileSeatStackMedia();
+    const feltHeight = parseLengthPx(declarationFor('.poker-felt', 'min-height', mobileStack.body));
+    const seatHeight = parseLengthPx(declarationFor('.player-seat', 'min-height', mobileStack.body));
+    const boardCenter = parseLengthPx(declarationFor('.community-board', 'top', mobileStack.body), feltHeight);
+    const boardRange = { top: boardCenter - 58, bottom: boardCenter + 58 };
+    const stackedSeatSelectors = [
+      '.seat-top-left',
+      '.seat-top',
+      '.seat-top-right',
+      '.seat-right',
+      '.seat-bottom-right',
+      '.seat-bottom',
+      '.seat-bottom-left',
+      '.seat-left',
+      '.seat-center-left',
+    ] as const;
+
+    expect(boardRange.top).toBeGreaterThanOrEqual(0);
+    expect(boardRange.bottom).toBeLessThanOrEqual(feltHeight - 12);
+
+    for (const selector of stackedSeatSelectors) {
+      const seatTop = topOffsetFor(selector, feltHeight, seatHeight, mobileStack.body);
+      const seatRange = { top: seatTop, bottom: seatTop + seatHeight };
+      expect(rangesOverlap(boardRange, seatRange), `community board overlaps ${selector}`).toBe(false);
+    }
   });
 
   it('keeps the desktop left rail seats separated in the nine-seat layout', () => {
@@ -192,9 +269,17 @@ describe('PokerTableSurface', () => {
   });
 });
 
-function declarationFor(selector: string, property: string): string {
-  const block = styles.match(new RegExp(`${escapeRegExp(selector)}\\s*\\{(?<body>[^}]*)\\}`))?.groups?.['body'];
+function cssBlockFor(selector: string, source = styles): string {
+  const matches = [...source.matchAll(new RegExp(`${escapeRegExp(selector)}\\s*\\{(?<body>[^}]*)\\}`, 'g'))];
+  const match = source === styles ? matches[0] : matches.at(-1);
+  const block = match?.groups?.['body'];
   if (!block) throw new Error(`Missing CSS block for ${selector}`);
+
+  return block;
+}
+
+function declarationFor(selector: string, property: string, source = styles): string {
+  const block = cssBlockFor(selector, source);
 
   const declaration = block.match(new RegExp(`${property}\\s*:\\s*(?<value>[^;]+);?`))?.groups?.['value'];
   if (!declaration) throw new Error(`Missing ${property} declaration for ${selector}`);
@@ -202,9 +287,8 @@ function declarationFor(selector: string, property: string): string {
   return declaration.trim();
 }
 
-function topOffsetFor(selector: string, containerHeight: number, elementHeight: number): number {
-  const block = styles.match(new RegExp(`${escapeRegExp(selector)}\\s*\\{(?<body>[^}]*)\\}`))?.groups?.['body'];
-  if (!block) throw new Error(`Missing CSS block for ${selector}`);
+function topOffsetFor(selector: string, containerHeight: number, elementHeight: number, source = styles): number {
+  const block = cssBlockFor(selector, source);
 
   const top = block.match(/top\s*:\s*(?<value>[^;]+);?/)?.groups?.['value'];
   if (top) return parseLengthPx(top, containerHeight);
@@ -215,11 +299,51 @@ function topOffsetFor(selector: string, containerHeight: number, elementHeight: 
   throw new Error(`Missing vertical positioning for ${selector}`);
 }
 
+function horizontalRangeFor(selector: string, containerWidth: number, elementWidth: number) {
+  const block = cssBlockFor(selector);
+  const left = block.match(/left\s*:\s*(?<value>[^;]+);?/)?.groups?.['value'];
+  const right = block.match(/right\s*:\s*(?<value>[^;]+);?/)?.groups?.['value'];
+  const transform = block.match(/transform\s*:\s*(?<value>[^;]+);?/)?.groups?.['value'];
+
+  if (left) {
+    const offset = parseLengthPx(left, containerWidth) - (transform?.includes('translateX(-50%)') ? elementWidth / 2 : 0);
+    return { selector, left: offset, right: offset + elementWidth };
+  }
+
+  if (right) {
+    const offset = containerWidth - parseLengthPx(right, containerWidth) - elementWidth;
+    return { selector, left: offset, right: offset + elementWidth };
+  }
+
+  throw new Error(`Missing horizontal positioning for ${selector}`);
+}
+
+function mobileSeatStackMedia(): { breakpoint: number; body: string } {
+  const mediaBlocks = [...styles.matchAll(/@media \(max-width: (?<breakpoint>\d+)px\) \{(?<body>[\s\S]*?)(?=\n@media \(max-width:|\s*$)/g)];
+  const media = mediaBlocks.find(match =>
+    match.groups?.['body']?.includes('.seat-top-left,') &&
+    match.groups['body'].includes('.seat-center-left {')
+  );
+
+  const breakpoint = media?.groups?.['breakpoint'];
+  const body = media?.groups?.['body'];
+  if (!breakpoint || !body) throw new Error('Missing mobile seat stack media query');
+
+  return {
+    breakpoint: Number(breakpoint),
+    body,
+  };
+}
+
 function parseLengthPx(value: string, percentBase = 0): number {
   const trimmed = value.trim();
   if (trimmed.endsWith('px')) return Number(trimmed.slice(0, -2));
   if (trimmed.endsWith('%')) return Number(trimmed.slice(0, -1)) / 100 * percentBase;
   throw new Error(`Unsupported CSS length: ${value}`);
+}
+
+function rangesOverlap(first: { top: number; bottom: number }, second: { top: number; bottom: number }): boolean {
+  return first.top < second.bottom && second.top < first.bottom;
 }
 
 function escapeRegExp(value: string): string {

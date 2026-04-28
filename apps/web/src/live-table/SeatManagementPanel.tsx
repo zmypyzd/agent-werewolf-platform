@@ -45,7 +45,7 @@ export function SeatManagementPanel({
             </button>
             {myAgents.length > 0 ? (
               <select
-                aria-label={`Sit agent at seat ${seat.seatIndex}`}
+                aria-label={`Sit agent at seat ${seat.seatIndex + 1}`}
                 disabled={busySeatIndex === seat.seatIndex}
                 onChange={event => {
                   if (event.target.value) onSitAgent(seat.seatIndex, event.target.value);

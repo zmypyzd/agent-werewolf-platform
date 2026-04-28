@@ -811,14 +811,14 @@ button { padding: 8px 16px; cursor: pointer; }
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 860px) {
   .poker-table-header,
   .player-action-summary {
     flex-direction: column;
   }
 
   .poker-felt {
-    min-height: 1180px;
+    min-height: 1320px;
   }
 
   .player-seat {
@@ -855,7 +855,7 @@ button { padding: 8px 16px; cursor: pointer; }
   .seat-center-left { top: 990px; }
 
   .community-board {
-    top: 48%;
+    top: 1212px;
     min-width: 0;
     width: calc(100% - 28px);
   }
