@@ -499,7 +499,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .poker-felt {
   position: relative;
-  min-height: 560px;
+  min-height: 700px;
   overflow: hidden;
   border: 1px solid #2d3535;
   border-radius: 18px;
@@ -630,9 +630,9 @@ button { padding: 8px 16px; cursor: pointer; }
 .seat-right { right: 18px; top: 37%; }
 .seat-bottom-right { right: 18%; bottom: 18px; }
 .seat-bottom { left: 50%; bottom: 18px; transform: translateX(-50%); }
-.seat-bottom-left { left: 18%; bottom: 18px; }
-.seat-left { left: 18px; top: 37%; }
-.seat-center-left { left: 18px; top: 61%; }
+.seat-bottom-left { left: 18px; bottom: 18px; }
+.seat-left { left: 18px; top: 204px; }
+.seat-center-left { left: 18px; top: 372px; }
 
 .playing-card,
 .card-back {

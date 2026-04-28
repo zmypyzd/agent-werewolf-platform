@@ -1,8 +1,13 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { PokerTableSurface } from '../live-table/PokerTableSurface.js';
 import { SeatManagementPanel } from '../live-table/SeatManagementPanel.js';
 import type { PokerTableViewModel, SeatPosition } from '../live-table/buildPokerTableViewModel.js';
+
+const styles = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../styles.css'), 'utf8');
 
 const seatPositions: SeatPosition[] = [
   'top-left',
@@ -166,4 +171,57 @@ describe('PokerTableSurface', () => {
     expect(html).toContain('Range Bot');
     expect(html).toContain('disabled=""');
   });
+
+  it('keeps the desktop left rail seats separated in the nine-seat layout', () => {
+    const feltMinHeight = parseLengthPx(declarationFor('.poker-felt', 'min-height'));
+    const seatMinHeight = parseLengthPx(declarationFor('.player-seat', 'min-height'));
+    const leftRailSelectors = ['.seat-left', '.seat-center-left', '.seat-bottom-left'] as const;
+
+    expect(leftRailSelectors.map(selector => declarationFor(selector, 'left'))).toEqual(['18px', '18px', '18px']);
+
+    const verticalRanges = leftRailSelectors.map(selector => {
+      const top = topOffsetFor(selector, feltMinHeight, seatMinHeight);
+      return { selector, top, bottom: top + seatMinHeight };
+    });
+
+    for (let index = 1; index < verticalRanges.length; index += 1) {
+      const previous = verticalRanges[index - 1]!;
+      const current = verticalRanges[index]!;
+      expect(current.top - previous.bottom, `${previous.selector} overlaps ${current.selector}`).toBeGreaterThanOrEqual(12);
+    }
+  });
 });
+
+function declarationFor(selector: string, property: string): string {
+  const block = styles.match(new RegExp(`${escapeRegExp(selector)}\\s*\\{(?<body>[^}]*)\\}`))?.groups?.['body'];
+  if (!block) throw new Error(`Missing CSS block for ${selector}`);
+
+  const declaration = block.match(new RegExp(`${property}\\s*:\\s*(?<value>[^;]+);?`))?.groups?.['value'];
+  if (!declaration) throw new Error(`Missing ${property} declaration for ${selector}`);
+
+  return declaration.trim();
+}
+
+function topOffsetFor(selector: string, containerHeight: number, elementHeight: number): number {
+  const block = styles.match(new RegExp(`${escapeRegExp(selector)}\\s*\\{(?<body>[^}]*)\\}`))?.groups?.['body'];
+  if (!block) throw new Error(`Missing CSS block for ${selector}`);
+
+  const top = block.match(/top\s*:\s*(?<value>[^;]+);?/)?.groups?.['value'];
+  if (top) return parseLengthPx(top, containerHeight);
+
+  const bottom = block.match(/bottom\s*:\s*(?<value>[^;]+);?/)?.groups?.['value'];
+  if (bottom) return containerHeight - parseLengthPx(bottom, containerHeight) - elementHeight;
+
+  throw new Error(`Missing vertical positioning for ${selector}`);
+}
+
+function parseLengthPx(value: string, percentBase = 0): number {
+  const trimmed = value.trim();
+  if (trimmed.endsWith('px')) return Number(trimmed.slice(0, -2));
+  if (trimmed.endsWith('%')) return Number(trimmed.slice(0, -1)) / 100 * percentBase;
+  throw new Error(`Unsupported CSS length: ${value}`);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
