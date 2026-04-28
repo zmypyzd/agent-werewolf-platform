@@ -43,28 +43,61 @@ function renderLobbyContent(props: Partial<ComponentProps<typeof LobbyPageConten
   );
 }
 
+function tableRow(html: string, tableName: string): string {
+  const row = [...html.matchAll(/<article\b[^>]*class="[^"]*\blobby-table-row\b[^"]*"[^>]*>[\s\S]*?<\/article>/g)]
+    .map(match => match[0])
+    .find(rowHtml => rowHtml?.includes(tableName));
+
+  expect(row, `Expected row for ${tableName}`).toBeDefined();
+  return row!;
+}
+
+function expectTableRow(
+  row: string,
+  expected: {
+    status: string;
+    players: string;
+    spectators: string;
+    blinds: string;
+    hand: string;
+    href: string;
+    action: string;
+  },
+) {
+  expect(row).toContain('class="status-chip');
+  expect(row).toContain(expected.status);
+  expect(row).toContain(expected.players);
+  expect(row).toContain(expected.spectators);
+  expect(row).toContain(expected.blinds);
+  expect(row).toContain(expected.hand);
+  expect(row).toContain(`href="${expected.href}"`);
+  expect(row).toContain(`>${expected.action}</a>`);
+}
+
 describe('LobbyPageContent', () => {
   it('renders table operation rows with status, counts, blinds, hand, and actions', () => {
     const html = renderLobbyContent();
+    const alphaRow = tableRow(html, 'Alpha Table');
+    const betaRow = tableRow(html, 'Beta Table');
 
-    expect(html).toContain('Alpha Table');
-    expect(html).toContain('class="status-chip');
-    expect(html).toContain('In hand');
-    expect(html).toContain('4 / 6');
-    expect(html).toContain('12 spectators');
-    expect(html).toContain('25 / 50 ante 5');
-    expect(html).toContain('hand-42');
-    expect(html).toContain('href="/tables/table-alpha"');
-    expect(html).toContain('Join');
-
-    expect(html).toContain('Beta Table');
-    expect(html).toContain('Preparing');
-    expect(html).toContain('6 / 6');
-    expect(html).toContain('3 spectators');
-    expect(html).toContain('50 / 100 ante 0');
-    expect(html).toContain('No hand');
-    expect(html).toContain('href="/tables/table-beta"');
-    expect(html).toContain('Watch');
+    expectTableRow(alphaRow, {
+      status: 'In hand',
+      players: '4 / 6',
+      spectators: '12 spectators',
+      blinds: '25 / 50 ante 5',
+      hand: 'hand-42',
+      href: '/tables/table-alpha',
+      action: 'Join',
+    });
+    expectTableRow(betaRow, {
+      status: 'Preparing',
+      players: '6 / 6',
+      spectators: '3 spectators',
+      blinds: '50 / 100 ante 0',
+      hand: 'No hand',
+      href: '/tables/table-beta',
+      action: 'Watch',
+    });
   });
 
   it('renders loading, empty, and error states', () => {

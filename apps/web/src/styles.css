@@ -58,6 +58,7 @@ body {
 .app-content { width: 100%; }
 .page-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
@@ -65,7 +66,11 @@ body {
 }
 .page-header h1,
 .page-header h2 { margin: 0; }
-.page-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.page-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
+.page-actions .muted {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .panel {
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
