@@ -8,6 +8,7 @@ import { createInitialLiveTableState, liveTableReducer } from '../live-table/liv
 import { normalizeLiveTableEvent } from '../live-table/normalizeLiveTableEvent.js';
 import { PokerTableSurface } from '../live-table/PokerTableSurface.js';
 import { SeatManagementPanel } from '../live-table/SeatManagementPanel.js';
+import type { WsMessage } from '../lib/ws.js';
 import type { ActionType, Card, HandPhase, LiveTableEvent, TableSnapshot } from '../live-table/liveTableTypes.js';
 
 // ─── types (kept local to avoid wiring workspace TS paths into Vite) ─────────
@@ -101,6 +102,219 @@ export function formatTableNetResult(results: TableHandResult[]): string {
 function formatSignedAmount(amount: number): string {
   if (amount > 0) return `+${amount}`;
   return String(amount);
+}
+
+export interface TablePageApiClient {
+  get: (path: string) => Promise<unknown>;
+  post: (path: string, body?: unknown) => Promise<unknown>;
+  del: (path: string) => Promise<unknown>;
+}
+
+export async function loadTableSnapshotForPage({
+  tableId,
+  apiClient,
+  meUserId,
+  setTable,
+  dispatch,
+  setError,
+}: {
+  tableId: string;
+  apiClient: TablePageApiClient;
+  meUserId: string | null;
+  setTable: (table: TableSnapshot) => void;
+  dispatch: (event: LiveTableEvent) => void;
+  setError: (error: string | null) => void;
+}): Promise<void> {
+  try {
+    const data = await apiClient.get(`/tables/${tableId}`) as TableSnapshot;
+    setTable(data);
+    dispatch({
+      type: 'snapshot.loaded',
+      table: data,
+      meUserId,
+    });
+    setError(null);
+  } catch (e) {
+    setError(e instanceof ApiError ? e.message : 'Failed to load table');
+  }
+}
+
+export async function loadTableHandHistoryForPage({
+  tableId,
+  apiClient,
+  setHandHistory,
+  setLoading,
+  setError,
+}: {
+  tableId: string;
+  apiClient: TablePageApiClient;
+  setHandHistory: (hands: TablePublicHandSummary[]) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
+}): Promise<void> {
+  setLoading(true);
+  try {
+    const data = await apiClient.get(`/tables/${tableId}/hands`) as TablePublicHandSummary[];
+    setHandHistory(data);
+    setError(null);
+  } catch (e) {
+    setError(e instanceof ApiError ? e.message : 'Failed to load hand history');
+  } finally {
+    setLoading(false);
+  }
+}
+
+export async function watchTableForPage({
+  tableId,
+  apiClient,
+  setBusy,
+  setError,
+  setIsWatching,
+  refreshTable,
+}: {
+  tableId: string;
+  apiClient: TablePageApiClient;
+  setBusy: (busy: boolean) => void;
+  setError: (error: string | null) => void;
+  setIsWatching: (isWatching: boolean) => void;
+  refreshTable: () => Promise<void>;
+}): Promise<void> {
+  setBusy(true);
+  setError(null);
+  try {
+    await apiClient.post(`/tables/${tableId}/watch`);
+    setIsWatching(true);
+    await refreshTable();
+  } catch (e) {
+    setError(e instanceof ApiError ? e.message : 'Failed to watch table');
+  } finally {
+    setBusy(false);
+  }
+}
+
+export async function unwatchTableForPage({
+  tableId,
+  apiClient,
+  setBusy,
+  setError,
+  setIsWatching,
+  refreshTable,
+}: {
+  tableId: string;
+  apiClient: TablePageApiClient;
+  setBusy: (busy: boolean) => void;
+  setError: (error: string | null) => void;
+  setIsWatching: (isWatching: boolean) => void;
+  refreshTable: () => Promise<void>;
+}): Promise<void> {
+  setBusy(true);
+  setError(null);
+  try {
+    await apiClient.del(`/tables/${tableId}/watch`);
+    setIsWatching(false);
+    await refreshTable();
+  } catch (e) {
+    setError(e instanceof ApiError ? e.message : 'Failed to unwatch table');
+  } finally {
+    setBusy(false);
+  }
+}
+
+export async function deleteTableForPage({
+  tableId,
+  apiClient,
+  setBusy,
+  setError,
+  navigate,
+}: {
+  tableId: string;
+  apiClient: TablePageApiClient;
+  setBusy: (busy: boolean) => void;
+  setError: (error: string | null) => void;
+  navigate: (path: string) => void;
+}): Promise<void> {
+  setBusy(true);
+  setError(null);
+  try {
+    await apiClient.del(`/tables/${tableId}`);
+    navigate('/lobby');
+  } catch (e) {
+    setError(e instanceof ApiError ? e.message : 'Failed to delete table');
+    setBusy(false);
+  }
+}
+
+export interface TablePageWsClient {
+  on: (listener: (message: WsMessage) => void) => () => void;
+  onStatus: (listener: (status: 'connecting' | 'connected' | 'reconnecting' | 'closed') => void) => () => void;
+  subscribe: (topic: string) => void;
+  connect: () => void;
+  close: () => void;
+}
+
+export function connectTablePageWebSocket({
+  tableId,
+  wsClient,
+  meUserId,
+  dispatch,
+  refreshTable,
+  refreshHandHistory,
+  setIsWatching,
+}: {
+  tableId: string;
+  wsClient: TablePageWsClient;
+  meUserId: string | null;
+  dispatch: (event: LiveTableEvent) => void;
+  refreshTable: () => void | Promise<void>;
+  refreshHandHistory: () => void | Promise<void>;
+  setIsWatching: (isWatching: boolean) => void;
+}): () => void {
+  const refreshTimers = new Set<ReturnType<typeof setTimeout>>();
+  const scheduleRefresh = (delayMs: number, refresh: () => void | Promise<void>) => {
+    const timer = setTimeout(() => {
+      refreshTimers.delete(timer);
+      void refresh();
+    }, delayMs);
+    refreshTimers.add(timer);
+  };
+
+  const off = wsClient.on(m => {
+    if (!m.topic.endsWith(tableId)) return;
+
+    switch (m.type) {
+      case 'table.player_seated':
+      case 'table.player_left':
+      case 'table.viewer_joined':
+      case 'table.viewer_left':
+        if (m.payload['userId'] === meUserId) {
+          setIsWatching(m.type === 'table.viewer_joined');
+        }
+        void refreshTable();
+        return;
+      default:
+        break;
+    }
+
+    const normalized = normalizeLiveTableEvent(m);
+    if (normalized) {
+      dispatch(normalized);
+      const refreshDelay = refreshDelayForLiveEvent(normalized);
+      if (refreshDelay === 0) void refreshTable();
+      else if (refreshDelay !== null) scheduleRefresh(refreshDelay, refreshTable);
+      if (normalized.type === 'hand.completed') scheduleRefresh(50, refreshHandHistory);
+    }
+  });
+  const offStatus = wsClient.onStatus(status => dispatch({ type: 'connection.changed', status }));
+  wsClient.subscribe(`table:${tableId}`);
+  wsClient.connect();
+
+  return () => {
+    off();
+    offStatus();
+    wsClient.close();
+    for (const timer of refreshTimers) clearTimeout(timer);
+    refreshTimers.clear();
+  };
 }
 
 export interface TableLifecycleControlsProps {
@@ -282,18 +496,14 @@ export function TablePage() {
 
   const refreshTable = useCallback(async () => {
     if (!tableId) return;
-    try {
-      const data = await api.get<TableSnapshot>(`/tables/${tableId}`);
-      setTable(data);
-      dispatch({
-        type: 'snapshot.loaded',
-        table: data,
-        meUserId: user?.userId ?? null,
-      });
-      setError(null);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Failed to load table');
-    }
+    await loadTableSnapshotForPage({
+      tableId,
+      apiClient: api,
+      meUserId: user?.userId ?? null,
+      setTable,
+      dispatch,
+      setError,
+    });
   }, [dispatch, tableId, user?.userId]);
 
   const refreshAgents = useCallback(async () => {
@@ -305,16 +515,13 @@ export function TablePage() {
 
   const refreshHandHistory = useCallback(async () => {
     if (!tableId) return;
-    setHandHistoryLoading(true);
-    try {
-      const data = await api.get<TablePublicHandSummary[]>(`/tables/${tableId}/hands`);
-      setHandHistory(data);
-      setHandHistoryError(null);
-    } catch (e) {
-      setHandHistoryError(e instanceof ApiError ? e.message : 'Failed to load hand history');
-    } finally {
-      setHandHistoryLoading(false);
-    }
+    await loadTableHandHistoryForPage({
+      tableId,
+      apiClient: api,
+      setHandHistory,
+      setLoading: setHandHistoryLoading,
+      setError: setHandHistoryError,
+    });
   }, [tableId]);
 
   useEffect(() => { void refreshTable(); }, [refreshTable]);
@@ -340,52 +547,15 @@ export function TablePage() {
   useEffect(() => {
     if (!tableId) return;
     const ws = new WsClient();
-    const refreshTimers = new Set<ReturnType<typeof setTimeout>>();
-    const scheduleRefresh = (delayMs: number, refresh: () => void | Promise<void>) => {
-      const timer = setTimeout(() => {
-        refreshTimers.delete(timer);
-        void refresh();
-      }, delayMs);
-      refreshTimers.add(timer);
-    };
-
-    const off = ws.on(m => {
-      if (!m.topic.endsWith(tableId)) return;
-
-      switch (m.type) {
-        case 'table.player_seated':
-        case 'table.player_left':
-        case 'table.viewer_joined':
-        case 'table.viewer_left':
-          if (m.payload['userId'] === user?.userId) {
-            setIsWatching(m.type === 'table.viewer_joined');
-          }
-          void refreshTable();
-          return;
-        default:
-          break;
-      }
-
-      const normalized = normalizeLiveTableEvent(m);
-      if (normalized) {
-        dispatch(normalized);
-        const refreshDelay = refreshDelayForLiveEvent(normalized);
-        if (refreshDelay === 0) void refreshTable();
-        else if (refreshDelay !== null) scheduleRefresh(refreshDelay, refreshTable);
-        if (normalized.type === 'hand.completed') scheduleRefresh(50, refreshHandHistory);
-      }
+    return connectTablePageWebSocket({
+      tableId,
+      wsClient: ws,
+      meUserId: user?.userId ?? null,
+      dispatch,
+      refreshTable,
+      refreshHandHistory,
+      setIsWatching,
     });
-    const offStatus = ws.onStatus(status => dispatch({ type: 'connection.changed', status }));
-    ws.subscribe(`table:${tableId}`);
-    ws.connect();
-
-    return () => {
-      off();
-      offStatus();
-      ws.close();
-      for (const timer of refreshTimers) clearTimeout(timer);
-      refreshTimers.clear();
-    };
   }, [dispatch, refreshHandHistory, refreshTable, tableId, user?.userId]);
 
   const submitAction = useCallback(async (actionType: ActionType, amount?: number) => {
@@ -408,45 +578,37 @@ export function TablePage() {
 
   const watchTable = useCallback(async () => {
     if (!tableId || watchBusy) return;
-    setWatchBusy(true);
-    setWatchError(null);
-    try {
-      await api.post(`/tables/${tableId}/watch`);
-      setIsWatching(true);
-      await refreshTable();
-    } catch (e) {
-      setWatchError(e instanceof ApiError ? e.message : 'Failed to watch table');
-    } finally {
-      setWatchBusy(false);
-    }
+    await watchTableForPage({
+      tableId,
+      apiClient: api,
+      setBusy: setWatchBusy,
+      setError: setWatchError,
+      setIsWatching,
+      refreshTable,
+    });
   }, [refreshTable, tableId, watchBusy]);
 
   const unwatchTable = useCallback(async () => {
     if (!tableId || watchBusy) return;
-    setWatchBusy(true);
-    setWatchError(null);
-    try {
-      await api.del(`/tables/${tableId}/watch`);
-      setIsWatching(false);
-      await refreshTable();
-    } catch (e) {
-      setWatchError(e instanceof ApiError ? e.message : 'Failed to unwatch table');
-    } finally {
-      setWatchBusy(false);
-    }
+    await unwatchTableForPage({
+      tableId,
+      apiClient: api,
+      setBusy: setWatchBusy,
+      setError: setWatchError,
+      setIsWatching,
+      refreshTable,
+    });
   }, [refreshTable, tableId, watchBusy]);
 
   const deleteTable = useCallback(async () => {
     if (!tableId || deleteBusy) return;
-    setDeleteBusy(true);
-    setDeleteError(null);
-    try {
-      await api.del(`/tables/${tableId}`);
-      navigate('/lobby');
-    } catch (e) {
-      setDeleteError(e instanceof ApiError ? e.message : 'Failed to delete table');
-      setDeleteBusy(false);
-    }
+    await deleteTableForPage({
+      tableId,
+      apiClient: api,
+      setBusy: setDeleteBusy,
+      setError: setDeleteError,
+      navigate,
+    });
   }, [deleteBusy, navigate, tableId]);
 
   const sitHuman = useCallback(async (seatIndex: number) => {
