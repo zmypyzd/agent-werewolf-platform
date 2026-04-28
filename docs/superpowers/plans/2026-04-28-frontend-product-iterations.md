@@ -203,7 +203,7 @@ git commit -m "Add public-safe table hand history"
 - Modify: `apps/web/src/styles.css`
 - Test: `apps/web/src/__tests__/app-shell.test.tsx`
 
-- [ ] **Step 1: Write AppShell static-render tests**
+- [x] **Step 1: Write AppShell static-render tests**
 
 Create `apps/web/src/__tests__/app-shell.test.tsx` using `renderToStaticMarkup`.
 
@@ -218,7 +218,7 @@ expect(html).not.toContain('href="/simulate"');
 expect(html).toContain('class="app-shell"');
 ```
 
-- [ ] **Step 2: Run test and confirm failure**
+- [x] **Step 2: Run test and confirm failure**
 
 ```bash
 pnpm --filter web run test -- src/__tests__/app-shell.test.tsx
@@ -226,7 +226,7 @@ pnpm --filter web run test -- src/__tests__/app-shell.test.tsx
 
 Expected: FAIL because `AppShell` does not exist.
 
-- [ ] **Step 3: Implement `AppShell`**
+- [x] **Step 3: Implement `AppShell`**
 
 Create a component with:
 
@@ -245,7 +245,7 @@ Navigation links:
 - Replays: `/matches`
 - Simulate: `/simulate` only when `showSimulate` is true
 
-- [ ] **Step 4: Add reusable styles**
+- [x] **Step 4: Add reusable styles**
 
 Add global classes:
 
@@ -265,11 +265,11 @@ Add global classes:
 - `.data-table`
 - `.responsive-grid`
 
-- [ ] **Step 5: Wrap routed pages without linking to missing `/simulate`**
+- [x] **Step 5: Wrap routed pages without linking to missing `/simulate`**
 
 Update `router.tsx` so protected product pages and public match pages render inside `AppShell`.
 
-- [ ] **Step 6: Run tests and build**
+- [x] **Step 6: Run tests and build**
 
 ```bash
 pnpm --filter web run test -- src/__tests__/app-shell.test.tsx
@@ -278,7 +278,7 @@ pnpm --filter web run build
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/web/src/components/AppShell.tsx apps/web/src/router.tsx apps/web/src/styles.css apps/web/src/__tests__/app-shell.test.tsx
