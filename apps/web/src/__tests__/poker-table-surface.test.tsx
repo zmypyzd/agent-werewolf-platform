@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { WsClient } from '../lib/ws.js';
 import { PlayerActionPanel, validateSizedActionAmount } from '../live-table/PlayerActionPanel.js';
 import { PokerTableSurface } from '../live-table/PokerTableSurface.js';
 import { SeatManagementPanel } from '../live-table/SeatManagementPanel.js';
@@ -268,6 +269,70 @@ describe('PokerTableSurface', () => {
     }
   });
 });
+
+describe('WsClient status callbacks', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.useFakeTimers();
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('notifies listeners when connecting, connected, reconnecting, and closed', () => {
+    const statuses: string[] = [];
+    const client = new WsClient('ws://unit.test/ws');
+    client.onStatus(status => statuses.push(status));
+
+    client.connect();
+    expect(statuses).toEqual(['connecting']);
+
+    FakeWebSocket.instances[0]!.open();
+    expect(statuses).toEqual(['connecting', 'connected']);
+
+    FakeWebSocket.instances[0]!.serverClose();
+    expect(statuses).toEqual(['connecting', 'connected', 'reconnecting']);
+
+    client.close();
+    expect(statuses).toEqual(['connecting', 'connected', 'reconnecting', 'closed']);
+  });
+});
+
+class FakeWebSocket {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+  static instances: FakeWebSocket[] = [];
+
+  readyState = FakeWebSocket.CONNECTING;
+  onopen: (() => void) | null = null;
+  onmessage: ((event: { data: string }) => void) | null = null;
+  onclose: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  send = vi.fn();
+
+  constructor(readonly url: string) {
+    FakeWebSocket.instances.push(this);
+  }
+
+  open(): void {
+    this.readyState = FakeWebSocket.OPEN;
+    this.onopen?.();
+  }
+
+  serverClose(): void {
+    this.readyState = FakeWebSocket.CLOSED;
+    this.onclose?.();
+  }
+
+  close(): void {
+    this.serverClose();
+  }
+}
 
 function cssBlockFor(selector: string, source = styles): string {
   const matches = [...source.matchAll(new RegExp(`${escapeRegExp(selector)}\\s*\\{(?<body>[^}]*)\\}`, 'g'))];
