@@ -18,6 +18,7 @@ import {
   RandomMockAgent, AlwaysCallAgent, AlwaysFoldAgent, AggressiveAgent,
   HumanAgent, HttpAgentAdapter,
 } from '@agent-poker/agent-runtime';
+import { replayEventToPublic } from '@agent-poker/realtime';
 import type { IUserAgentConfigStore } from '@agent-poker/persistence';
 import { randomUUID } from 'crypto';
 
@@ -352,7 +353,10 @@ export async function tablesRoutes(app: FastifyInstance, opts: TablesPluginOptio
     { preHandler: [app.requireAuth] },
     async (req, reply) => {
       const events = await handStore.getReplayEvents(req.params.handId);
-      reply.send({ data: events });
+      const publicEvents = events
+        .map(event => replayEventToPublic(event))
+        .filter(event => event !== null);
+      reply.send({ data: publicEvents });
     },
   );
 }

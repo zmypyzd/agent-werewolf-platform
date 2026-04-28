@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
 import { WebSocket } from 'ws';
 import { buildServer } from '../server.js';
+
+vi.mock('@agent-poker/table-orchestrator', async () => import('../../../../packages/table-orchestrator/src/index.js'));
 
 const CSRF = { 'content-type': 'application/json', 'x-requested-with': 'fetch' };
 
@@ -228,12 +230,17 @@ describe('Backend e2e — full demo flow (M11)', () => {
     const total = summary.players.reduce((s, p) => s + p.stackAfter, 0);
     expect(total).toBe(2000);
 
-    // Visibility invariant: no holeCards should appear on the public table:* topic.
+    // Visibility invariant: table:* may only carry holeCards on explicit reveal frames.
     const tableFrames = alice.messages.filter(
       m => typeof m['topic'] === 'string' && (m['topic'] as string) === `table:${tableId}`,
     );
+    expect(tableFrames.some(m => m['type'] === 'table.hole_cards_revealed')).toBe(true);
+    expect(tableFrames.some(m => m['type'] === 'hole_cards.dealt')).toBe(false);
+    expect(tableFrames.some(m => m['type'] === 'seat.hole_cards')).toBe(false);
     for (const frame of tableFrames) {
-      expect(JSON.stringify(frame)).not.toContain('"holeCards"');
+      if (JSON.stringify(frame).includes('"holeCards"')) {
+        expect(frame['type']).toBe('table.hole_cards_revealed');
+      }
     }
 
     // Alice did receive her own hole cards on the seat:* private topic.

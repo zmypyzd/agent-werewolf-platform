@@ -81,6 +81,15 @@ function awaitMessage(messages: Array<Record<string, unknown>>, predicate: (m: R
   });
 }
 
+async function subscribeAndWaitForPong(
+  client: { ws: WebSocket; messages: Array<Record<string, unknown>> },
+  topic: string,
+): Promise<void> {
+  client.ws.send(JSON.stringify({ topic, type: 'subscribe', payload: {} }));
+  client.ws.send(JSON.stringify({ topic, type: 'ping', payload: {} }));
+  await awaitMessage(client.messages, m => m['topic'] === topic && m['type'] === 'pong');
+}
+
 describe('WS /ws', () => {
   it('rejects unauthenticated upgrade', async () => {
     const { ws } = await connectWs(null);
@@ -116,10 +125,10 @@ describe('WS /ws', () => {
     const aliceSid = await registerAs('alice@x.test');
     const spectatorSid = await registerAs('spec@x.test');
     const tableId = await createTable(aliceSid);
+    const tableTopic = `table:${tableId}`;
 
     const spec = await connectWs(spectatorSid);
-    spec.ws.send(JSON.stringify({ topic: `table:${tableId}`, type: 'subscribe', payload: {} }));
-    await new Promise(r => setTimeout(r, 50));
+    await subscribeAndWaitForPong(spec, tableTopic);
 
     for (let i = 0; i < 2; i++) {
       await fetch(`${baseUrl}/api/v1/tables/${tableId}/agents`, {
@@ -145,9 +154,21 @@ describe('WS /ws', () => {
     const revealFrames = spec.messages.filter(m => m['type'] === 'table.hole_cards_revealed');
     expect(revealFrames).toHaveLength(2);
 
+    const tableFrames = spec.messages.filter(m => m['topic'] === tableTopic);
+    expect(tableFrames.some(m => m['type'] === 'table.hole_cards_revealed')).toBe(true);
+    expect(tableFrames.some(m => m['type'] === 'hole_cards.dealt')).toBe(false);
+    expect(tableFrames.some(m => m['type'] === 'seat.hole_cards')).toBe(false);
+    expect(spec.messages.some(m => m['type'] === 'seat.hole_cards')).toBe(false);
+
+    for (const frame of tableFrames) {
+      if (JSON.stringify(frame).includes('"holeCards"')) {
+        expect(frame['type']).toBe('table.hole_cards_revealed');
+      }
+    }
+
     const seenPlayers = new Set<string>();
     for (const frame of revealFrames) {
-      expect(frame['topic']).toBe(`table:${tableId}`);
+      expect(frame['topic']).toBe(tableTopic);
       const payload = frame['payload'] as Record<string, unknown>;
       expect(payload['handId']).toEqual(expect.stringMatching(/^hand-/));
       expect(payload['playerId']).toEqual(expect.stringMatching(/^player-/));

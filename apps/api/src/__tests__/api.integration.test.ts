@@ -208,6 +208,9 @@ describe('API Integration Tests', () => {
     const body = JSON.parse(res.payload);
     expect(Array.isArray(body.data)).toBe(true);
     expect(body.data.length).toBeGreaterThan(0);
+    expect(body.data.some((event: Record<string, unknown>) => event['eventType'] === 'hole_cards.dealt')).toBe(false);
+    expect(JSON.stringify(body.data)).not.toContain('"holeCards"');
+    expect(body.data.some((event: Record<string, unknown>) => event['eventType'] !== 'hole_cards.dealt')).toBe(true);
   });
 
   it('api-015: GET /tables/:id/hands/nonexistent → 404', async () => {

@@ -103,25 +103,28 @@ test('§12 demo — two users sit, hand runs to completion through the UI', asyn
     autoPlayUntilHandComplete(bob),
   ]);
 
-  // Step 7: visibility invariant — neither user should have seen the OTHER user's
-  // hole cards in any received WS frame. Each user's *own* seat.hole_cards frame
-  // is fine and expected.
-  // We assert at the table-topic level: any frame whose topic starts with
-  // `table:` must not contain `"holeCards"`.
-  function assertNoTableHoleCards(frames: string[]) {
+  // Step 7: visibility invariant — table-topic hole cards are only allowed on
+  // explicit reveal frames. Each user's private seat.hole_cards frame is fine
+  // and expected.
+  function countTableHoleCardRevealFrames(frames: string[]): number {
+    let revealCount = 0;
     for (const raw of frames) {
       try {
-        const m = JSON.parse(raw) as { topic?: string };
-        if (typeof m.topic === 'string' && m.topic.startsWith('table:') && raw.includes('"holeCards"')) {
-          throw new Error(`leaked holeCards in table frame: ${raw}`);
+        const m = JSON.parse(raw) as { topic?: string; type?: string };
+        if (typeof m.topic === 'string' && m.topic.startsWith('table:')) {
+          if (m.type === 'table.hole_cards_revealed') revealCount += 1;
+          if (raw.includes('"holeCards"') && m.type !== 'table.hole_cards_revealed') {
+            throw new Error(`unexpected holeCards in table frame: ${raw}`);
+          }
         }
       } catch (e) {
-        if (e instanceof Error && e.message.startsWith('leaked')) throw e;
+        if (e instanceof Error && e.message.startsWith('unexpected')) throw e;
       }
     }
+    return revealCount;
   }
-  assertNoTableHoleCards(aliceFrames);
-  assertNoTableHoleCards(bobFrames);
+  expect(countTableHoleCardRevealFrames(aliceFrames)).toBeGreaterThan(0);
+  expect(countTableHoleCardRevealFrames(bobFrames)).toBeGreaterThan(0);
 
   await aliceCtx.close();
   await bobCtx.close();
