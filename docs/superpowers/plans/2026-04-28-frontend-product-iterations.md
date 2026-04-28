@@ -294,7 +294,7 @@ git commit -m "Add web app shell"
 - Modify: `apps/web/src/styles.css`
 - Test: `apps/web/src/__tests__/lobby-page.test.tsx`
 
-- [ ] **Step 1: Extract pure lobby view component**
+- [x] **Step 1: Extract pure lobby view component**
 
 Create an exported `LobbyTableList` or `LobbyPageContent` that accepts:
 
@@ -305,11 +305,11 @@ error: string | null;
 onCreate: (tableId: string) => void;
 ```
 
-- [ ] **Step 2: Write static-render tests**
+- [x] **Step 2: Write static-render tests**
 
 Assert status chip, players, spectators, blinds, current hand, Join/Watch labels, loading, empty, and error states.
 
-- [ ] **Step 3: Replace raw table with styled table-op rows**
+- [x] **Step 3: Replace raw table with styled table-op rows**
 
 Each table row/card must show:
 
@@ -321,7 +321,7 @@ Each table row/card must show:
 - current hand or `No hand`
 - primary action: Join when `canSit`, Watch otherwise
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 ```bash
 pnpm --filter web run test -- src/__tests__/lobby-page.test.tsx
@@ -329,7 +329,7 @@ pnpm --filter web run test -- src/__tests__/lobby-page.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/pages/LobbyPage.tsx apps/web/src/styles.css apps/web/src/__tests__/lobby-page.test.tsx
