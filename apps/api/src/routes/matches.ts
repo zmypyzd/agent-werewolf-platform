@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import type { GetMatchArtifactOptions, IMatchArtifactStore } from '@agent-poker/persistence';
 import { replayEventToPublic } from '@agent-poker/realtime';
 import { AppError } from '@agent-poker/shared';
-import type { MatchSummary, PublicHandPlayerSummary, ReplayEvent } from '@agent-poker/shared';
+import type { MatchSummary, ReplayEvent } from '@agent-poker/shared';
+import { publicHandSummary } from './public-hand-summary.js';
 
 interface MatchesPluginOptions extends FastifyPluginOptions {
   matchArtifactStore: IMatchArtifactStore;
@@ -17,17 +18,7 @@ function publicReplayEvents(events: ReplayEvent[]) {
 function publicMatchSummary(summary: MatchSummary): MatchSummary {
   return {
     ...summary,
-    hands: summary.hands.map(hand => ({
-      ...hand,
-      players: hand.players.map(player => {
-        const {
-          holeCards: _holeCards,
-          handEvaluation: _handEvaluation,
-          ...publicPlayer
-        } = player as PublicHandPlayerSummary & Record<string, unknown>;
-        return publicPlayer as PublicHandPlayerSummary;
-      }),
-    })),
+    hands: summary.hands.map(publicHandSummary),
   };
 }
 

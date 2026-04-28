@@ -21,6 +21,7 @@ import {
 import { replayEventToPublic } from '@agent-poker/realtime';
 import type { IUserAgentConfigStore } from '@agent-poker/persistence';
 import { randomUUID } from 'crypto';
+import { publicHandSummaries, publicHandSummary } from './public-hand-summary.js';
 
 interface TablesPluginOptions extends FastifyPluginOptions {
   orchestrator: TableOrchestrator;
@@ -80,7 +81,12 @@ export async function tablesRoutes(app: FastifyInstance, opts: TablesPluginOptio
         }
         throw e;
       });
-      reply.send({ data: table });
+      reply.send({
+        data: {
+          ...table,
+          canManage: orchestrator.getTableOwnerUserId(req.params.tableId) === req.user!.userId,
+        },
+      });
     },
   );
 
@@ -332,7 +338,7 @@ export async function tablesRoutes(app: FastifyInstance, opts: TablesPluginOptio
         throw e;
       });
       const hands = await handStore.listHandSummaries(table.tableId);
-      reply.send({ data: hands });
+      reply.send({ data: publicHandSummaries(hands) });
     },
   );
 
@@ -343,7 +349,7 @@ export async function tablesRoutes(app: FastifyInstance, opts: TablesPluginOptio
     async (req, reply) => {
       const hand = await handStore.getHandSummary(req.params.handId);
       if (!hand) throw new AppError('HAND_NOT_FOUND', `Hand ${req.params.handId} not found`);
-      reply.send({ data: hand });
+      reply.send({ data: publicHandSummary(hand) });
     },
   );
 
