@@ -321,10 +321,118 @@ body {
 .row { display: flex; gap: 12px; align-items: center; }
 form { display: flex; flex-direction: column; gap: 12px; max-width: 360px; }
 label { display: flex; flex-direction: column; font-size: 14px; gap: 4px; }
-input, select { padding: 8px; font-size: 14px; }
+input, select, textarea { padding: 8px; font-size: 14px; }
 button { padding: 8px 16px; cursor: pointer; }
 .error { color: #b00020; font-size: 13px; }
 .muted { color: #666; font-size: 13px; }
+.agent-lab-panel {
+  display: grid;
+  gap: 14px;
+}
+.agent-config-list {
+  display: grid;
+  gap: 12px;
+}
+.agent-config-card h3,
+.agent-config-card p {
+  margin: 0;
+}
+.agent-config-metrics {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.5fr) minmax(110px, .6fr) minmax(150px, .9fr);
+  gap: 10px;
+  margin: 0;
+}
+.agent-config-metrics div {
+  min-width: 0;
+  border-top: 1px solid #eef1f4;
+  padding-top: 8px;
+}
+.agent-config-metrics dt {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.agent-config-metrics dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+.agent-config-metrics code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+.agent-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.agent-edit-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 500px) minmax(260px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.agent-edit-form {
+  max-width: none;
+}
+.agent-checkbox-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.agent-checkbox-row input {
+  width: auto;
+}
+.agent-endpoint-contract {
+  display: grid;
+  gap: 10px;
+}
+.agent-endpoint-contract h2,
+.agent-endpoint-contract p,
+.agent-endpoint-contract ul {
+  margin: 0;
+}
+.agent-endpoint-contract ul {
+  display: grid;
+  gap: 8px;
+  padding-left: 20px;
+}
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(21, 27, 35, .48);
+  padding: 20px;
+}
+.confirm-dialog {
+  display: grid;
+  gap: 18px;
+  width: min(100%, 420px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-panel);
+  padding: 18px;
+  box-shadow: 0 18px 42px rgba(21, 27, 35, .22);
+}
+.confirm-dialog-body {
+  display: grid;
+  gap: 8px;
+}
+.confirm-dialog h2,
+.confirm-dialog p {
+  margin: 0;
+}
+.confirm-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
 .tabs { display: flex; gap: 6px; margin-top: 20px; border-bottom: 1px solid #d5d5d5; }
 .tabs button { border: 0; border-bottom: 3px solid transparent; background: transparent; padding: 10px 12px; }
 .tabs button[aria-selected="true"] { border-bottom-color: #222; font-weight: 700; }
@@ -797,6 +905,8 @@ button { padding: 8px 16px; cursor: pointer; }
 @media (max-width: 820px) {
   .create-table-form,
   .lobby-table-row,
+  .agent-edit-layout,
+  .agent-config-metrics,
   .simulate-field-grid,
   .simulate-agent-row,
   .simulation-success {
@@ -805,6 +915,8 @@ button { padding: 8px 16px; cursor: pointer; }
 
   .lobby-table-row .button-primary,
   .lobby-table-row .button-secondary,
+  .agent-card-actions .button-secondary,
+  .agent-card-actions .button-danger,
   .simulate-agent-row .button-secondary,
   .simulate-submit-row .button-primary,
   .simulation-success .button-primary,

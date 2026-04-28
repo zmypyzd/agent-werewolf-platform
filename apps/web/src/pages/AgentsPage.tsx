@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { ApiError, api } from '../lib/api.js';
 
-interface UserAgentConfigPublic {
+export interface UserAgentConfigPublic {
   agentConfigId: string;
   agentName: string;
   endpointUrl: string;
@@ -14,11 +15,23 @@ interface UserAgentConfigPublic {
   updatedAt: number;
 }
 
+export interface AgentsPageContentProps {
+  agents: UserAgentConfigPublic[];
+  loading: boolean;
+  error: string | null;
+  busyId: string | null;
+  deleteAgent: UserAgentConfigPublic | null;
+  onRequestDelete: (agent: UserAgentConfigPublic) => void;
+  onCancelDelete: () => void;
+  onConfirmDelete: () => void;
+}
+
 export function AgentsPage() {
   const [agents, setAgents] = useState<UserAgentConfigPublic[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [deleteAgent, setDeleteAgent] = useState<UserAgentConfigPublic | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -35,7 +48,6 @@ export function AgentsPage() {
   useEffect(() => { void refresh(); }, [refresh]);
 
   async function remove(id: string) {
-    if (!confirm('Delete this agent config?')) return;
     setBusyId(id); setError(null);
     try {
       await api.del(`/me/agents/${id}`);
@@ -51,61 +63,141 @@ export function AgentsPage() {
     }
   }
 
+  function confirmDelete() {
+    if (!deleteAgent) return;
+    const id = deleteAgent.agentConfigId;
+    setDeleteAgent(null);
+    void remove(id);
+  }
+
   return (
     <div className="page">
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <h1>My agents</h1>
-        <div className="row">
-          <Link to="/lobby">← Lobby</Link>
-          <Link to="/agents/new"><button>+ New agent</button></Link>
+      <AgentsPageContent
+        agents={agents}
+        loading={loading}
+        error={error}
+        busyId={busyId}
+        deleteAgent={deleteAgent}
+        onRequestDelete={setDeleteAgent}
+        onCancelDelete={() => setDeleteAgent(null)}
+        onConfirmDelete={confirmDelete}
+      />
+    </div>
+  );
+}
+
+export function AgentsPageContent({
+  agents,
+  loading,
+  error,
+  busyId,
+  deleteAgent,
+  onRequestDelete,
+  onCancelDelete,
+  onConfirmDelete,
+}: AgentsPageContentProps) {
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1>Agent Lab</h1>
+          <p className="muted">Manage HTTP decision endpoints that can sit at your tables.</p>
+        </div>
+        <div className="page-actions">
+          <Link className="button-secondary" to="/lobby">Lobby</Link>
+          <Link className="button-primary" to="/agents/new">New agent</Link>
         </div>
       </div>
 
-      {error && <div className="error" style={{ marginTop: 8 }}>{error}</div>}
+      {error && <div className="error alert-error" role="alert">{error}</div>}
 
-      {loading && <p className="muted">Loading…</p>}
-      {!loading && agents.length === 0 && (
-        <p className="muted">No agents yet — create one to sit it at a table.</p>
-      )}
+      <section className="panel agent-lab-panel" aria-label="Configured agents">
+        <div className="section-heading">
+          <div>
+            <h2>Configured agents</h2>
+            <p className="muted">Each saved agent points to one endpoint and optional auth header.</p>
+          </div>
+          <span className="status-chip">{agents.length} saved</span>
+        </div>
 
-      {agents.length > 0 && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 16 }}>
-          <thead>
-            <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
-              <th style={{ padding: 8 }}>Name</th>
-              <th style={{ padding: 8 }}>Endpoint</th>
-              <th style={{ padding: 8 }}>Auth header</th>
-              <th style={{ padding: 8 }}>Timeout</th>
-              <th style={{ padding: 8 }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {agents.map(a => (
-              <tr key={a.agentConfigId} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: 8 }}>{a.agentName}</td>
-                <td style={{ padding: 8, fontFamily: 'monospace', fontSize: 13 }}>{a.endpointUrl}</td>
-                <td style={{ padding: 8 }}>
-                  {a.authHeaderName
-                    ? `${a.authHeaderName} ${a.hasAuthHeader ? '••••' : '(empty)'}`
-                    : <span className="muted">none</span>}
-                </td>
-                <td style={{ padding: 8 }}>{a.timeoutMs} ms</td>
-                <td style={{ padding: 8 }}>
-                  <div className="row">
-                    <Link to={`/agents/${a.agentConfigId}/edit`}>Edit</Link>
-                    <button
-                      onClick={() => void remove(a.agentConfigId)}
-                      disabled={busyId === a.agentConfigId}
-                    >
-                      Delete
-                    </button>
+        {loading && (
+          <div className="empty-state" role="status">
+            Loading agents
+          </div>
+        )}
+
+        {!loading && agents.length === 0 && (
+          <div className="empty-state">
+            No agents yet. Create one to seat it at a table.
+          </div>
+        )}
+
+        {!loading && agents.length > 0 && (
+          <div className="agent-config-list">
+            {agents.map(agent => (
+              <article className="agent-card agent-config-card" key={agent.agentConfigId}>
+                <div className="agent-card-header">
+                  <div>
+                    <h3>{agent.agentName}</h3>
+                    <p className="muted">{agent.description ?? 'No description'}</p>
                   </div>
-                </td>
-              </tr>
+                  <span className="status-chip">{formatAuthStatus(agent)}</span>
+                </div>
+
+                <dl className="agent-config-metrics">
+                  <div>
+                    <dt>Endpoint</dt>
+                    <dd><code>{agent.endpointUrl}</code></dd>
+                  </div>
+                  <div>
+                    <dt>Timeout</dt>
+                    <dd>{agent.timeoutMs} ms</dd>
+                  </div>
+                  <div>
+                    <dt>Auth header</dt>
+                    <dd>{formatAuthDetails(agent)}</dd>
+                  </div>
+                </dl>
+
+                <div className="agent-card-actions">
+                  <Link className="button-secondary" to={`/agents/${agent.agentConfigId}/edit`}>
+                    Edit
+                  </Link>
+                  <button
+                    type="button"
+                    className="button-danger"
+                    onClick={() => onRequestDelete(agent)}
+                    disabled={busyId === agent.agentConfigId}
+                  >
+                    {busyId === agent.agentConfigId ? 'Deleting' : 'Delete'}
+                  </button>
+                </div>
+              </article>
             ))}
-          </tbody>
-        </table>
-      )}
-    </div>
+          </div>
+        )}
+      </section>
+
+      <ConfirmDialog
+        open={deleteAgent !== null}
+        title={deleteAgent ? `Delete ${deleteAgent.agentName}?` : 'Delete agent?'}
+        message="This removes the saved endpoint and auth header configuration. Agents already seated at a table must leave before deletion."
+        confirmLabel="Delete agent"
+        onConfirm={onConfirmDelete}
+        onCancel={onCancelDelete}
+      />
+    </>
   );
+}
+
+function formatAuthStatus(agent: UserAgentConfigPublic): string {
+  if (agent.authHeaderName && agent.hasAuthHeader) return 'Auth configured';
+  if (agent.authHeaderName) return 'Auth name only';
+  return 'No auth header';
+}
+
+function formatAuthDetails(agent: UserAgentConfigPublic): string {
+  if (!agent.authHeaderName) return 'No auth header';
+  if (agent.hasAuthHeader) return `${agent.authHeaderName} header set`;
+  return `${agent.authHeaderName} has no stored value`;
 }
