@@ -10,6 +10,8 @@ export interface SeatManagementPanelProps {
   model: PokerTableViewModel;
   myAgents: UserAgentConfigPublic[];
   busySeatIndex: number | null;
+  error?: string | null;
+  canSitHuman?: boolean;
   onSitHuman: (seatIndex: number) => void;
   onSitAgent: (seatIndex: number, agentConfigId: string) => void;
 }
@@ -18,6 +20,8 @@ export function SeatManagementPanel({
   model,
   myAgents,
   busySeatIndex,
+  error = null,
+  canSitHuman = true,
   onSitHuman,
   onSitAgent,
 }: SeatManagementPanelProps) {
@@ -32,17 +36,20 @@ export function SeatManagementPanel({
         <h2>Open Seats</h2>
         <span className="muted">{openSeats.length} available</span>
       </div>
+      {error ? <div className="error">{error}</div> : null}
       <div className="seat-management-grid">
         {openSeats.map(seat => (
           <div className="seat-management-item" key={seat.seatIndex}>
             <strong>Seat {seat.seatIndex + 1}</strong>
-            <button
-              disabled={busySeatIndex === seat.seatIndex}
-              onClick={() => onSitHuman(seat.seatIndex)}
-              type="button"
-            >
-              Sit here
-            </button>
+            {canSitHuman ? (
+              <button
+                disabled={busySeatIndex === seat.seatIndex}
+                onClick={() => onSitHuman(seat.seatIndex)}
+                type="button"
+              >
+                Sit here
+              </button>
+            ) : null}
             {myAgents.length > 0 ? (
               <select
                 aria-label={`Sit agent at seat ${seat.seatIndex + 1}`}

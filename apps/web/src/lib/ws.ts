@@ -7,7 +7,8 @@ export interface WsMessage {
 }
 
 type Listener = (m: WsMessage) => void;
-type StatusListener = (status: 'connecting' | 'connected' | 'reconnecting' | 'closed') => void;
+type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'closed';
+type StatusListener = (status: ConnectionStatus) => void;
 
 export class WsClient {
   private ws: WebSocket | null = null;
@@ -15,15 +16,16 @@ export class WsClient {
   private readonly statusListeners = new Set<StatusListener>();
   private readonly subscriptions = new Set<string>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private status: ConnectionStatus | null = null;
   private closed = false;
 
   constructor(private readonly url: string = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`) {}
 
-  connect(): void {
+  connect(isReconnect = false): void {
     if (this.closed) return;
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
 
-    this.emitStatus(this.ws ? 'reconnecting' : 'connecting');
+    this.emitStatus(isReconnect || this.ws ? 'reconnecting' : 'connecting');
     const ws = new WebSocket(this.url);
     this.ws = ws;
     ws.onopen = () => {
@@ -53,7 +55,7 @@ export class WsClient {
     this.emitStatus('reconnecting');
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      this.connect();
+      this.connect(true);
     }, 1000);
   }
 
@@ -92,7 +94,9 @@ export class WsClient {
     this.ws = null;
   }
 
-  private emitStatus(status: 'connecting' | 'connected' | 'reconnecting' | 'closed'): void {
+  private emitStatus(status: ConnectionStatus): void {
+    if (this.status === status) return;
+    this.status = status;
     for (const listener of this.statusListeners) listener(status);
   }
 }

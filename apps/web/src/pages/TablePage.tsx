@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, api } from '../lib/api.js';
 import { WsClient } from '../lib/ws.js';
@@ -18,6 +18,20 @@ interface UserAgentConfigPublic {
   endpointUrl: string;
 }
 
+export function refreshDelayForLiveEvent(event: LiveTableEvent): 0 | 50 | null {
+  if (event.type === 'hand.started') return 0;
+  if (event.type === 'hand.completed') return 50;
+  return null;
+}
+
+export function isActionRequestLocked(
+  pendingRequestId: string | null,
+  submittedRequestId: string | null,
+  submittingAction: boolean,
+): boolean {
+  return submittingAction || (!!pendingRequestId && pendingRequestId === submittedRequestId);
+}
+
 // ─── component ───────────────────────────────────────────────────────────────
 
 export function TablePage() {
@@ -29,8 +43,11 @@ export function TablePage() {
   const [liveState, dispatchLive] = useState(createInitialLiveTableState);
   const [actionError, setActionError] = useState<string | null>(null);
   const [submittingAction, setSubmittingAction] = useState(false);
+  const [submittedRequestId, setSubmittedRequestId] = useState<string | null>(null);
   const [busySeatIndex, setBusySeatIndex] = useState<number | null>(null);
+  const [seatError, setSeatError] = useState<string | null>(null);
   const [myAgents, setMyAgents] = useState<UserAgentConfigPublic[]>([]);
+  const lastPendingRequestIdRef = useRef<string | null>(null);
 
   const dispatch = useCallback((event: LiveTableEvent) => {
     dispatchLive(current => liveTableReducer(current, event));
@@ -62,9 +79,27 @@ export function TablePage() {
   useEffect(() => { void refreshTable(); }, [refreshTable]);
   useEffect(() => { void refreshAgents(); }, [refreshAgents]);
 
+  const pendingRequestId = liveState.pendingAction?.requestId ?? null;
+  useEffect(() => {
+    if (lastPendingRequestIdRef.current === pendingRequestId) return;
+    lastPendingRequestIdRef.current = pendingRequestId;
+    setSubmittedRequestId(null);
+    setSubmittingAction(false);
+    setActionError(null);
+  }, [pendingRequestId]);
+
   useEffect(() => {
     if (!tableId) return;
     const ws = new WsClient();
+    const refreshTimers = new Set<ReturnType<typeof setTimeout>>();
+    const scheduleRefreshTable = (delayMs: number) => {
+      const timer = setTimeout(() => {
+        refreshTimers.delete(timer);
+        void refreshTable();
+      }, delayMs);
+      refreshTimers.add(timer);
+    };
+
     const off = ws.on(m => {
       if (!m.topic.endsWith(tableId)) return;
 
@@ -82,18 +117,27 @@ export function TablePage() {
       const normalized = normalizeLiveTableEvent(m);
       if (normalized) {
         dispatch(normalized);
-        if (normalized.type === 'hand.completed') void refreshTable();
+        const refreshDelay = refreshDelayForLiveEvent(normalized);
+        if (refreshDelay === 0) void refreshTable();
+        else if (refreshDelay !== null) scheduleRefreshTable(refreshDelay);
       }
     });
     const offStatus = ws.onStatus(status => dispatch({ type: 'connection.changed', status }));
     ws.subscribe(`table:${tableId}`);
     ws.connect();
 
-    return () => { off(); offStatus(); ws.close(); };
+    return () => {
+      off();
+      offStatus();
+      ws.close();
+      for (const timer of refreshTimers) clearTimeout(timer);
+      refreshTimers.clear();
+    };
   }, [dispatch, refreshTable, tableId]);
 
   const submitAction = useCallback(async (actionType: ActionType, amount?: number) => {
     if (!tableId || !liveState.pendingAction) return;
+    if (isActionRequestLocked(liveState.pendingAction.requestId, submittedRequestId, submittingAction)) return;
     setSubmittingAction(true);
     setActionError(null);
     try {
@@ -102,21 +146,22 @@ export function TablePage() {
         actionType,
         ...(amount !== undefined ? { amount } : {}),
       });
+      setSubmittedRequestId(liveState.pendingAction.requestId);
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : 'Failed to submit action');
-    } finally {
       setSubmittingAction(false);
     }
-  }, [liveState.pendingAction, tableId]);
+  }, [liveState.pendingAction, submittedRequestId, submittingAction, tableId]);
 
   const sitHuman = useCallback(async (seatIndex: number) => {
     if (!tableId) return;
     setBusySeatIndex(seatIndex);
+    setSeatError(null);
     try {
       await api.post(`/tables/${tableId}/seats`, { seatIndex, buyIn: 1000 });
       await refreshTable();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Failed to sit');
+      setSeatError(e instanceof ApiError ? e.message : 'Failed to sit');
     } finally {
       setBusySeatIndex(null);
     }
@@ -125,11 +170,12 @@ export function TablePage() {
   const sitAgent = useCallback(async (seatIndex: number, agentConfigId: string) => {
     if (!tableId) return;
     setBusySeatIndex(seatIndex);
+    setSeatError(null);
     try {
       await api.post(`/tables/${tableId}/seats/agent`, { seatIndex, buyIn: 1000, agentConfigId });
       await refreshTable();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Failed to seat agent');
+      setSeatError(e instanceof ApiError ? e.message : 'Failed to seat agent');
     } finally {
       setBusySeatIndex(null);
     }
@@ -139,6 +185,10 @@ export function TablePage() {
     () => table?.seats.find(s => s?.ownerUserId === user?.userId) ?? null,
     [table, user?.userId],
   );
+  const hasHumanSeat = useMemo(
+    () => table?.seats.some(s => !!s && s.ownerUserId === user?.userId && s.adapterType === 'human') ?? false,
+    [table, user?.userId],
+  );
 
   if (!tableId) return <div className="page">Missing tableId.</div>;
   if (error) return <div className="page"><div className="error">{error}</div><Link to="/lobby">← Lobby</Link></div>;
@@ -146,6 +196,7 @@ export function TablePage() {
 
   const seatable = table.status === 'preparing' || table.status === 'paused';
   const tableModel = buildPokerTableViewModel(liveState, { seatable });
+  const actionSubmitting = isActionRequestLocked(pendingRequestId, submittedRequestId, submittingAction);
 
   return (
     <div className="page" style={{ maxWidth: 1100 }}>
@@ -168,7 +219,7 @@ export function TablePage() {
       <PokerTableSurface
         model={tableModel}
         actionError={actionError}
-        submittingAction={submittingAction}
+        submittingAction={actionSubmitting}
         onSubmitAction={submitAction}
       />
 
@@ -176,6 +227,8 @@ export function TablePage() {
         model={tableModel}
         myAgents={myAgents}
         busySeatIndex={busySeatIndex}
+        error={seatError}
+        canSitHuman={!hasHumanSeat}
         onSitHuman={sitHuman}
         onSitAgent={sitAgent}
       />
