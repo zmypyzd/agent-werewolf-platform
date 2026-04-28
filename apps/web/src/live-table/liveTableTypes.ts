@@ -50,6 +50,7 @@ export interface TableSnapshot {
   currentHandId: string | null;
   handNumber: number;
   button: number;
+  canManage?: boolean;
 }
 
 export interface LiveSeatView {

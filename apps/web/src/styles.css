@@ -654,6 +654,70 @@ button { padding: 8px 16px; cursor: pointer; }
   margin-top: 18px;
 }
 
+.table-page {
+  display: grid;
+  gap: 16px;
+}
+
+.table-page > .muted {
+  margin: -8px 0 0;
+}
+
+.table-control-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.table-lifecycle-controls,
+.table-seat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.table-lifecycle-actions,
+.table-delete-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.table-danger-title {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.table-delete-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #f1b8b2;
+  border-radius: 8px;
+  background: #fff5f3;
+  padding: 8px 10px;
+}
+
+.table-delete-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.table-hand-history {
+  display: grid;
+  gap: 12px;
+}
+
+.table-hand-history-table td {
+  font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 1000px) {
   .workbench-grid,
   .analysis-dashboard-grid {
@@ -701,6 +765,11 @@ button { padding: 8px 16px; cursor: pointer; }
   .agent-card-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .table-lifecycle-controls,
+  .table-seat-actions {
+    flex-direction: column;
   }
 
   .match-summary-strip,

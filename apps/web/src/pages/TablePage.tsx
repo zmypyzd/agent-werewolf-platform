@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, api } from '../lib/api.js';
 import { WsClient } from '../lib/ws.js';
 import { useAuth } from '../auth/AuthContext.js';
@@ -8,7 +8,7 @@ import { createInitialLiveTableState, liveTableReducer } from '../live-table/liv
 import { normalizeLiveTableEvent } from '../live-table/normalizeLiveTableEvent.js';
 import { PokerTableSurface } from '../live-table/PokerTableSurface.js';
 import { SeatManagementPanel } from '../live-table/SeatManagementPanel.js';
-import type { ActionType, LiveTableEvent, TableSnapshot } from '../live-table/liveTableTypes.js';
+import type { ActionType, Card, HandPhase, LiveTableEvent, TableSnapshot } from '../live-table/liveTableTypes.js';
 
 // ─── types (kept local to avoid wiring workspace TS paths into Vite) ─────────
 
@@ -16,6 +16,54 @@ interface UserAgentConfigPublic {
   agentConfigId: string;
   agentName: string;
   endpointUrl: string;
+}
+
+export interface TablePublicHandPlayerSummary {
+  playerId: string;
+  agentId: string;
+  seatIndex: number;
+  stackBefore: number;
+  stackAfter: number;
+}
+
+export interface TablePublicHandAction {
+  actionId: string;
+  handId: string;
+  playerId: string;
+  phase: HandPhase;
+  actionType: ActionType;
+  amount: number;
+  stackAfter: number;
+  sequence: number;
+  timestamp: number;
+}
+
+export interface TableHandResult {
+  playerId: string;
+  seatIndex: number;
+  potIndex: number;
+  winAmount: number;
+  netChange: number;
+}
+
+export interface TablePublicPot {
+  amount: number;
+  eligiblePlayerIds: string[];
+}
+
+export interface TablePublicHandSummary {
+  handId: string;
+  tableId: string;
+  handNumber: number;
+  seed: string;
+  startedAt: number;
+  completedAt: number;
+  players: TablePublicHandPlayerSummary[];
+  blindConfig: TableSnapshot['config']['blindConfig'];
+  communityCards: Card[];
+  allActions: TablePublicHandAction[];
+  results: TableHandResult[];
+  finalPots: TablePublicPot[];
 }
 
 export function refreshDelayForLiveEvent(event: LiveTableEvent): 0 | 50 | null {
@@ -36,14 +84,189 @@ export function seatDisplayNumber(seatIndex: number): number {
   return seatIndex + 1;
 }
 
+export function formatTableNetResult(results: TableHandResult[]): string {
+  if (results.length === 0) return 'No net result';
+
+  const largestSwing = results.reduce((current, result) => {
+    const resultMagnitude = Math.abs(result.netChange);
+    const currentMagnitude = Math.abs(current.netChange);
+    if (resultMagnitude > currentMagnitude) return result;
+    if (resultMagnitude === currentMagnitude && result.netChange > current.netChange) return result;
+    return current;
+  });
+
+  return `Net ${formatSignedAmount(largestSwing.netChange)}`;
+}
+
+function formatSignedAmount(amount: number): string {
+  if (amount > 0) return `+${amount}`;
+  return String(amount);
+}
+
+export interface TableLifecycleControlsProps {
+  canManage: boolean;
+  isWatching: boolean;
+  busy: boolean;
+  error: string | null;
+  deleteConfirmOpen: boolean;
+  deleteBusy: boolean;
+  deleteError: string | null;
+  onWatch: () => void;
+  onUnwatch: () => void;
+  onRequestDelete: () => void;
+  onCancelDelete: () => void;
+  onConfirmDelete: () => void;
+}
+
+export function TableLifecycleControls({
+  canManage,
+  isWatching,
+  busy,
+  error,
+  deleteConfirmOpen,
+  deleteBusy,
+  deleteError,
+  onWatch,
+  onUnwatch,
+  onRequestDelete,
+  onCancelDelete,
+  onConfirmDelete,
+}: TableLifecycleControlsProps) {
+  return (
+    <div className="table-lifecycle-controls">
+      <div className="table-lifecycle-actions">
+        {isWatching ? (
+          <button className="button-secondary" type="button" onClick={onUnwatch} disabled={busy}>
+            Unwatch table
+          </button>
+        ) : (
+          <button className="button-primary" type="button" onClick={onWatch} disabled={busy}>
+            Watch table
+          </button>
+        )}
+        {error && <span className="error" role="alert">{error}</span>}
+      </div>
+
+      {canManage === true && (
+        <div className="table-delete-controls">
+          <span className="table-danger-title">Close table</span>
+          {!deleteConfirmOpen ? (
+            <button
+              className="button-danger"
+              type="button"
+              onClick={onRequestDelete}
+              disabled={deleteBusy}
+            >
+              Close table
+            </button>
+          ) : (
+            <div className="table-delete-confirm" role="alert">
+              <strong>Close this table?</strong>
+              <div className="table-delete-actions">
+                <button
+                  className="button-secondary"
+                  type="button"
+                  onClick={onCancelDelete}
+                  disabled={deleteBusy}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="button-danger"
+                  type="button"
+                  onClick={onConfirmDelete}
+                  disabled={deleteBusy}
+                >
+                  Delete table
+                </button>
+              </div>
+            </div>
+          )}
+          {deleteError && <span className="error" role="alert">{deleteError}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export interface TableHandHistoryPanelProps {
+  hands: TablePublicHandSummary[];
+  loading: boolean;
+  error: string | null;
+}
+
+export function TableHandHistoryPanel({ hands, loading, error }: TableHandHistoryPanelProps) {
+  return (
+    <section className="panel table-hand-history" aria-label="Hand history">
+      <div className="section-heading">
+        <div>
+          <h2>Hand History</h2>
+        </div>
+        <span className="status-chip">{hands.length} hands</span>
+      </div>
+
+      {loading && (
+        <div className="empty-state" role="status">
+          Loading hand history
+        </div>
+      )}
+
+      {!loading && error && (
+        <div className="error alert-error" role="alert">
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && hands.length === 0 && (
+        <div className="empty-state">
+          No completed hands yet.
+        </div>
+      )}
+
+      {!loading && !error && hands.length > 0 && (
+        <table className="data-table table-hand-history-table">
+          <thead>
+            <tr>
+              <th>Hand</th>
+              <th>Actions</th>
+              <th>Board</th>
+              <th>Net result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {hands.map(hand => (
+              <tr key={hand.handId}>
+                <td>Hand {hand.handNumber}</td>
+                <td>{hand.allActions.length} actions</td>
+                <td>{hand.communityCards.length} board cards</td>
+                <td>{formatTableNetResult(hand.results)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
 // ─── component ───────────────────────────────────────────────────────────────
 
 export function TablePage() {
   const { tableId } = useParams<{ tableId: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   const [table, setTable] = useState<TableSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [handHistory, setHandHistory] = useState<TablePublicHandSummary[]>([]);
+  const [handHistoryLoading, setHandHistoryLoading] = useState(true);
+  const [handHistoryError, setHandHistoryError] = useState<string | null>(null);
+  const [isWatching, setIsWatching] = useState(false);
+  const [watchBusy, setWatchBusy] = useState(false);
+  const [watchError, setWatchError] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [liveState, dispatchLive] = useState(createInitialLiveTableState);
   const [actionError, setActionError] = useState<string | null>(null);
   const [submittingAction, setSubmittingAction] = useState(false);
@@ -80,8 +303,30 @@ export function TablePage() {
     } catch { /* non-fatal */ }
   }, []);
 
+  const refreshHandHistory = useCallback(async () => {
+    if (!tableId) return;
+    setHandHistoryLoading(true);
+    try {
+      const data = await api.get<TablePublicHandSummary[]>(`/tables/${tableId}/hands`);
+      setHandHistory(data);
+      setHandHistoryError(null);
+    } catch (e) {
+      setHandHistoryError(e instanceof ApiError ? e.message : 'Failed to load hand history');
+    } finally {
+      setHandHistoryLoading(false);
+    }
+  }, [tableId]);
+
   useEffect(() => { void refreshTable(); }, [refreshTable]);
   useEffect(() => { void refreshAgents(); }, [refreshAgents]);
+  useEffect(() => { void refreshHandHistory(); }, [refreshHandHistory]);
+
+  useEffect(() => {
+    setIsWatching(false);
+    setWatchError(null);
+    setDeleteConfirmOpen(false);
+    setDeleteError(null);
+  }, [tableId]);
 
   const pendingRequestId = liveState.pendingAction?.requestId ?? null;
   useEffect(() => {
@@ -96,10 +341,10 @@ export function TablePage() {
     if (!tableId) return;
     const ws = new WsClient();
     const refreshTimers = new Set<ReturnType<typeof setTimeout>>();
-    const scheduleRefreshTable = (delayMs: number) => {
+    const scheduleRefresh = (delayMs: number, refresh: () => void | Promise<void>) => {
       const timer = setTimeout(() => {
         refreshTimers.delete(timer);
-        void refreshTable();
+        void refresh();
       }, delayMs);
       refreshTimers.add(timer);
     };
@@ -112,6 +357,9 @@ export function TablePage() {
         case 'table.player_left':
         case 'table.viewer_joined':
         case 'table.viewer_left':
+          if (m.payload['userId'] === user?.userId) {
+            setIsWatching(m.type === 'table.viewer_joined');
+          }
           void refreshTable();
           return;
         default:
@@ -123,7 +371,8 @@ export function TablePage() {
         dispatch(normalized);
         const refreshDelay = refreshDelayForLiveEvent(normalized);
         if (refreshDelay === 0) void refreshTable();
-        else if (refreshDelay !== null) scheduleRefreshTable(refreshDelay);
+        else if (refreshDelay !== null) scheduleRefresh(refreshDelay, refreshTable);
+        if (normalized.type === 'hand.completed') scheduleRefresh(50, refreshHandHistory);
       }
     });
     const offStatus = ws.onStatus(status => dispatch({ type: 'connection.changed', status }));
@@ -137,7 +386,7 @@ export function TablePage() {
       for (const timer of refreshTimers) clearTimeout(timer);
       refreshTimers.clear();
     };
-  }, [dispatch, refreshTable, tableId]);
+  }, [dispatch, refreshHandHistory, refreshTable, tableId, user?.userId]);
 
   const submitAction = useCallback(async (actionType: ActionType, amount?: number) => {
     if (!tableId || !liveState.pendingAction) return;
@@ -156,6 +405,49 @@ export function TablePage() {
       setSubmittingAction(false);
     }
   }, [liveState.pendingAction, submittedRequestId, submittingAction, tableId]);
+
+  const watchTable = useCallback(async () => {
+    if (!tableId || watchBusy) return;
+    setWatchBusy(true);
+    setWatchError(null);
+    try {
+      await api.post(`/tables/${tableId}/watch`);
+      setIsWatching(true);
+      await refreshTable();
+    } catch (e) {
+      setWatchError(e instanceof ApiError ? e.message : 'Failed to watch table');
+    } finally {
+      setWatchBusy(false);
+    }
+  }, [refreshTable, tableId, watchBusy]);
+
+  const unwatchTable = useCallback(async () => {
+    if (!tableId || watchBusy) return;
+    setWatchBusy(true);
+    setWatchError(null);
+    try {
+      await api.del(`/tables/${tableId}/watch`);
+      setIsWatching(false);
+      await refreshTable();
+    } catch (e) {
+      setWatchError(e instanceof ApiError ? e.message : 'Failed to unwatch table');
+    } finally {
+      setWatchBusy(false);
+    }
+  }, [refreshTable, tableId, watchBusy]);
+
+  const deleteTable = useCallback(async () => {
+    if (!tableId || deleteBusy) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await api.del(`/tables/${tableId}`);
+      navigate('/lobby');
+    } catch (e) {
+      setDeleteError(e instanceof ApiError ? e.message : 'Failed to delete table');
+      setDeleteBusy(false);
+    }
+  }, [deleteBusy, navigate, tableId]);
 
   const sitHuman = useCallback(async (seatIndex: number) => {
     if (!tableId) return;
@@ -203,10 +495,10 @@ export function TablePage() {
   const actionSubmitting = isActionRequestLocked(pendingRequestId, submittedRequestId, submittingAction);
 
   return (
-    <div className="page" style={{ maxWidth: 1100 }}>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
+    <div className="page table-page" style={{ maxWidth: 1100 }}>
+      <div className="page-header">
         <h1>{table.config.name}</h1>
-        <div className="row">
+        <div className="page-actions">
           <Link to="/lobby">← Lobby</Link>
         </div>
       </div>
@@ -219,6 +511,50 @@ export function TablePage() {
           <> {' · '}you are seat {seatDisplayNumber(mySeat.seatIndex)} ({mySeat.adapterType})</>
         )}
       </p>
+
+      <section className="panel table-control-panel" aria-label="Table controls">
+        <div className="section-heading">
+          <div>
+            <h2>Controls</h2>
+          </div>
+          <span className="status-chip">{isWatching ? 'Watching' : 'Not watching'}</span>
+        </div>
+
+        <TableLifecycleControls
+          canManage={table.canManage === true}
+          isWatching={isWatching}
+          busy={watchBusy}
+          error={watchError}
+          deleteConfirmOpen={deleteConfirmOpen}
+          deleteBusy={deleteBusy}
+          deleteError={deleteError}
+          onWatch={() => void watchTable()}
+          onUnwatch={() => void unwatchTable()}
+          onRequestDelete={() => {
+            setDeleteConfirmOpen(true);
+            setDeleteError(null);
+          }}
+          onCancelDelete={() => {
+            setDeleteConfirmOpen(false);
+            setDeleteError(null);
+          }}
+          onConfirmDelete={() => void deleteTable()}
+        />
+
+        <div className="table-seat-actions">
+          {mySeat && (
+            <SeatControls
+              tableId={tableId}
+              status={table.status}
+              onChange={refreshTable}
+            />
+          )}
+
+          {seatable && table.seats.filter(s => s !== null).length >= 2 && (
+            <StartHandButton tableId={tableId} />
+          )}
+        </div>
+      </section>
 
       <PokerTableSurface
         model={tableModel}
@@ -237,17 +573,11 @@ export function TablePage() {
         onSitAgent={sitAgent}
       />
 
-      {mySeat && (
-        <SeatControls
-          tableId={tableId}
-          status={table.status}
-          onChange={refreshTable}
-        />
-      )}
-
-      {seatable && table.seats.filter(s => s !== null).length >= 2 && (
-        <StartHandButton tableId={tableId} />
-      )}
+      <TableHandHistoryPanel
+        hands={handHistory}
+        loading={handHistoryLoading}
+        error={handHistoryError}
+      />
     </div>
   );
 }
@@ -269,7 +599,7 @@ function SeatControls({ tableId, status, onChange }: { tableId: string; status: 
   }
 
   return (
-    <div className="row" style={{ marginTop: 12 }}>
+    <div className="row">
       <button onClick={leave} disabled={busy}>
         {status === 'in_hand' ? 'Sit out next hand' : 'Leave seat'}
       </button>
@@ -292,7 +622,7 @@ function StartHandButton({ tableId }: { tableId: string }) {
   }
 
   return (
-    <div className="row" style={{ marginTop: 12 }}>
+    <div className="row">
       <button onClick={start} disabled={busy}>Start hand</button>
       {error && <span className="error">{error}</span>}
     </div>
