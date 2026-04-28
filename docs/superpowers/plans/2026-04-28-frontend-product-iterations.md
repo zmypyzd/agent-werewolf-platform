@@ -582,11 +582,11 @@ git commit -m "Upgrade player action controls"
 - Modify: `apps/web/src/styles.css`
 - Test: `apps/web/src/__tests__/simulate-page.test.tsx`
 
-- [ ] **Step 1: Add simulation request builder tests**
+- [x] **Step 1: Add simulation request builder tests**
 
 Cover valid request, 20-hand cap, at least two agents, blind validation, and strategy values.
 
-- [ ] **Step 2: Implement `SimulatePage` form**
+- [x] **Step 2: Implement `SimulatePage` form**
 
 Fields:
 
@@ -600,15 +600,15 @@ Fields:
 - number of hands
 - agent rows: name, strategy, buy-in
 
-- [ ] **Step 3: Add route and nav**
+- [x] **Step 3: Add route and nav**
 
 Add protected `/simulate` route. Set `showSimulate` true in `AppShell`.
 
-- [ ] **Step 4: Submit simulation**
+- [x] **Step 4: Submit simulation**
 
 Call `POST /simulate`. On success, show link to `/matches/:matchId` and provide a primary open-replay action.
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 ```bash
 pnpm --filter web run test -- src/__tests__/simulate-page.test.tsx src/__tests__/app-shell.test.tsx
@@ -616,7 +616,7 @@ pnpm --filter web run test -- src/__tests__/simulate-page.test.tsx src/__tests__
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/src/pages/SimulatePage.tsx apps/web/src/router.tsx apps/web/src/components/AppShell.tsx apps/web/src/lib/api.ts apps/web/src/styles.css apps/web/src/__tests__/simulate-page.test.tsx apps/web/src/__tests__/app-shell.test.tsx
