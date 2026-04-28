@@ -76,7 +76,7 @@ Execution note:
 - Modify: `apps/api/src/routes/tables.ts`
 - Test: `apps/api/src/__tests__/table-history-privacy.test.ts`
 
-- [ ] **Step 1: Write failing API tests for table hand-history privacy**
+- [x] **Step 1: Write failing API tests for table hand-history privacy**
 
 Add tests that create a table, run a hand, call:
 
@@ -97,7 +97,7 @@ expect(response.body.data[0].players[0]).toMatchObject({
 });
 ```
 
-- [ ] **Step 2: Write failing API test for `canManage`**
+- [x] **Step 2: Write failing API test for `canManage`**
 
 Create a table as Alice. Fetch the table as Alice and Bob.
 
@@ -108,7 +108,7 @@ expect(aliceResponse.body.data.canManage).toBe(true);
 expect(bobResponse.body.data.canManage).toBe(false);
 ```
 
-- [ ] **Step 3: Run the focused API tests and confirm failure**
+- [x] **Step 3: Run the focused API tests and confirm failure**
 
 Run:
 
@@ -118,7 +118,7 @@ pnpm --filter api run test -- src/__tests__/table-history-privacy.test.ts
 
 Expected: FAIL because table hand-history routes return private summaries and table detail lacks `canManage`.
 
-- [ ] **Step 4: Add public hand summary helper**
+- [x] **Step 4: Add public hand summary helper**
 
 Create `apps/api/src/routes/public-hand-summary.ts`:
 
@@ -144,11 +144,11 @@ export function publicHandSummaries(summaries: HandSummary[]): PublicHandSummary
 }
 ```
 
-- [ ] **Step 5: Use helper in match routes**
+- [x] **Step 5: Use helper in match routes**
 
 In `apps/api/src/routes/matches.ts`, replace the local public hand summary mapping with `publicHandSummary` from the new helper.
 
-- [ ] **Step 6: Use helper in table hand-history routes**
+- [x] **Step 6: Use helper in table hand-history routes**
 
 In `apps/api/src/routes/tables.ts`:
 
@@ -162,7 +162,7 @@ and:
 reply.send({ data: publicHandSummary(hand) });
 ```
 
-- [ ] **Step 7: Add `canManage` to table detail**
+- [x] **Step 7: Add `canManage` to table detail**
 
 In `GET /tables/:tableId`, return:
 
@@ -175,7 +175,7 @@ reply.send({
 });
 ```
 
-- [ ] **Step 8: Run focused API tests**
+- [x] **Step 8: Run focused API tests**
 
 Run:
 
@@ -186,7 +186,7 @@ pnpm --filter api run test -- src/__tests__/matches.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add apps/api/src/routes/public-hand-summary.ts apps/api/src/routes/matches.ts apps/api/src/routes/tables.ts apps/api/src/__tests__/table-history-privacy.test.ts
