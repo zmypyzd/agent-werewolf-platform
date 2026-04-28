@@ -37,6 +37,7 @@ function renderAgentsContent(props: Partial<Parameters<typeof AgentsPageContent>
         loading={false}
         error={null}
         busyId={null}
+        deleteInFlight={false}
         deleteAgent={null}
         onRequestDelete={() => undefined}
         onCancelDelete={() => undefined}
@@ -75,6 +76,13 @@ describe('AgentsPageContent', () => {
     expect(html).toContain('Cancel');
     expect(html).not.toContain('Delete this agent config?');
   });
+
+  it('locks all delete actions while one delete is in flight', () => {
+    const html = renderAgentsContent({ busyId: agents[0]!.agentConfigId, deleteInFlight: true });
+
+    expect(html.match(/disabled=""/g)?.length).toBe(2);
+    expect(html).toContain('Deleting');
+  });
 });
 
 describe('AgentEditForm', () => {
@@ -84,8 +92,9 @@ describe('AgentEditForm', () => {
     expect(html).toContain('Endpoint contract');
     expect(html).toContain('decision request');
     expect(html).toContain('table, hand, and action context');
-    expect(html).toContain('fold, check, call, bet, or raise');
-    expect(html).toContain('optional amount');
+    expect(html).toContain('legal actions from the request');
+    expect(html).toContain('fold, check, call, bet, raise, or all-in');
+    expect(html).toContain('Include an amount when the chosen legal action supplies minAmount or maxAmount bounds');
     expect(html).toContain('respond before the configured timeout');
     expect(html).toContain('configured auth header is sent on each request');
     expect(html).toContain('write-only');

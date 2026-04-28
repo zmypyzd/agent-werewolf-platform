@@ -273,8 +273,8 @@ export function AgentEndpointContract() {
         It must respond before the configured timeout.
       </p>
       <ul>
-        <li>Return one action: fold, check, call, bet, or raise.</li>
-        <li>Include an optional amount for bet or raise decisions.</li>
+        <li>Return one of the legal actions from the request: fold, check, call, bet, raise, or all-in.</li>
+        <li>Include an amount when the chosen legal action supplies minAmount or maxAmount bounds.</li>
         <li>Include an optional reasoning summary for replay review.</li>
       </ul>
       <p className="muted">

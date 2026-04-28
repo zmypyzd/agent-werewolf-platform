@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { ApiError, api } from '../lib/api.js';
@@ -20,6 +20,7 @@ export interface AgentsPageContentProps {
   loading: boolean;
   error: string | null;
   busyId: string | null;
+  deleteInFlight: boolean;
   deleteAgent: UserAgentConfigPublic | null;
   onRequestDelete: (agent: UserAgentConfigPublic) => void;
   onCancelDelete: () => void;
@@ -31,7 +32,9 @@ export function AgentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [deleteInFlight, setDeleteInFlight] = useState(false);
   const [deleteAgent, setDeleteAgent] = useState<UserAgentConfigPublic | null>(null);
+  const deleteInFlightRef = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -48,6 +51,9 @@ export function AgentsPage() {
   useEffect(() => { void refresh(); }, [refresh]);
 
   async function remove(id: string) {
+    if (deleteInFlightRef.current) return;
+    deleteInFlightRef.current = true;
+    setDeleteInFlight(true);
     setBusyId(id); setError(null);
     try {
       await api.del(`/me/agents/${id}`);
@@ -60,11 +66,18 @@ export function AgentsPage() {
       }
     } finally {
       setBusyId(null);
+      setDeleteInFlight(false);
+      deleteInFlightRef.current = false;
     }
   }
 
+  function requestDelete(agent: UserAgentConfigPublic) {
+    if (deleteInFlightRef.current) return;
+    setDeleteAgent(agent);
+  }
+
   function confirmDelete() {
-    if (!deleteAgent) return;
+    if (!deleteAgent || deleteInFlightRef.current) return;
     const id = deleteAgent.agentConfigId;
     setDeleteAgent(null);
     void remove(id);
@@ -77,8 +90,9 @@ export function AgentsPage() {
         loading={loading}
         error={error}
         busyId={busyId}
+        deleteInFlight={deleteInFlight}
         deleteAgent={deleteAgent}
-        onRequestDelete={setDeleteAgent}
+        onRequestDelete={requestDelete}
         onCancelDelete={() => setDeleteAgent(null)}
         onConfirmDelete={confirmDelete}
       />
@@ -91,6 +105,7 @@ export function AgentsPageContent({
   loading,
   error,
   busyId,
+  deleteInFlight,
   deleteAgent,
   onRequestDelete,
   onCancelDelete,
@@ -167,7 +182,7 @@ export function AgentsPageContent({
                     type="button"
                     className="button-danger"
                     onClick={() => onRequestDelete(agent)}
-                    disabled={busyId === agent.agentConfigId}
+                    disabled={deleteInFlight}
                   >
                     {busyId === agent.agentConfigId ? 'Deleting' : 'Delete'}
                   </button>
