@@ -66,7 +66,7 @@ const model: PokerTableViewModel = {
       position,
       displayName: occupied ? `agent-${seatIndex}` : `Seat ${seatIndex + 1}`,
       identityLabel: occupied ? `agent-${seatIndex}` : `Seat ${seatIndex + 1}`,
-      adapterLabel: adapterLabelFor(seatIndex === 0 ? 'human' : 'mock'),
+      adapterLabel: occupied ? adapterLabelFor(seatIndex === 0 ? 'human' : 'mock') : null,
       isYou: seatIndex === 0,
     };
   }),
@@ -247,7 +247,7 @@ describe('PokerTableSurface', () => {
 
   it('normalizes seat buy-in input to a positive integer chip stack', () => {
     expect(normalizeSeatBuyIn('1000')).toBe(1000);
-    expect(normalizeSeatBuyIn('42.9')).toBe(42);
+    expect(normalizeSeatBuyIn('42.9')).toBeNull();
     expect(normalizeSeatBuyIn('0')).toBeNull();
     expect(normalizeSeatBuyIn('-10')).toBeNull();
     expect(normalizeSeatBuyIn('not-a-number')).toBeNull();

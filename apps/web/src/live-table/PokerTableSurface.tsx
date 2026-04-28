@@ -121,7 +121,9 @@ function PlayerSeatNode({ seat }: { seat: PokerTableSeatModel }) {
       {seat.occupied ? (
         <>
           <div className="seat-badge-row">
-            <span className="seat-badge seat-adapter-badge">{seat.adapterLabel}</span>
+            {seat.adapterLabel ? (
+              <span className="seat-badge seat-adapter-badge">{seat.adapterLabel}</span>
+            ) : null}
             {seat.isYou ? <span className="seat-badge seat-you-badge">You</span> : null}
             {seat.isButton ? <span className="seat-badge dealer-button" aria-label="Dealer">D</span> : null}
             {seat.status ? <span className="seat-badge seat-status-badge">{seat.status}</span> : null}

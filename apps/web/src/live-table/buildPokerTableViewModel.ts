@@ -15,7 +15,7 @@ export interface PokerTableSeatModel extends LiveSeatView {
   position: SeatPosition;
   displayName: string;
   identityLabel: string;
-  adapterLabel: 'Human' | 'HTTP Agent' | 'Mock Agent';
+  adapterLabel: 'Human' | 'HTTP Agent' | 'Mock Agent' | null;
   isYou: boolean;
 }
 
@@ -107,5 +107,6 @@ function identityLabelForSeat(seat: LiveSeatView): string {
 function adapterLabelFor(adapterType: LiveSeatView['adapterType']): PokerTableSeatModel['adapterLabel'] {
   if (adapterType === 'http') return 'HTTP Agent';
   if (adapterType === 'mock') return 'Mock Agent';
-  return 'Human';
+  if (adapterType === 'human') return 'Human';
+  return null;
 }

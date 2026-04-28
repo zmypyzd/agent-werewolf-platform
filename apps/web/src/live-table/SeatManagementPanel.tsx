@@ -21,11 +21,8 @@ export const DEFAULT_SEAT_BUY_IN = 1000;
 
 export function normalizeSeatBuyIn(value: string | number): number | null {
   const numeric = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(numeric)) return null;
-
-  const integer = Math.trunc(numeric);
-  if (integer < 1) return null;
-  return integer;
+  if (!Number.isFinite(numeric) || !Number.isInteger(numeric) || numeric < 1) return null;
+  return numeric;
 }
 
 export function SeatManagementPanel({

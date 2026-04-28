@@ -142,6 +142,12 @@ describe('buildPokerTableViewModel', () => {
       isButton: false,
       isCurrentActor: false,
     });
+    expect(model.seats[3]).toMatchObject({
+      occupied: false,
+      identityLabel: 'Seat 4',
+      adapterLabel: null,
+      isYou: false,
+    });
   });
 
   it('uses cards pending labels for occupied seats without revealed cards', () => {
