@@ -2,6 +2,7 @@ import { Navigate, createBrowserRouter, useLocation } from 'react-router-dom';
 import type { RouteObject } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useAuth } from './auth/AuthContext.js';
+import { AppShell } from './components/AppShell.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { RegisterPage } from './pages/RegisterPage.js';
 import { LobbyPage } from './pages/LobbyPage.js';
@@ -22,16 +23,21 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function AppShellRoute({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  return <AppShell currentPath={location.pathname}>{children}</AppShell>;
+}
+
 const routes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
   { path: '/register', element: <RegisterPage /> },
-  { path: '/matches', element: <MatchesPage /> },
-  { path: '/matches/:matchId', element: <MatchReplayPage /> },
-  { path: '/lobby', element: <ProtectedRoute><LobbyPage /></ProtectedRoute> },
-  { path: '/tables/:tableId', element: <ProtectedRoute><TablePage /></ProtectedRoute> },
-  { path: '/agents', element: <ProtectedRoute><AgentsPage /></ProtectedRoute> },
-  { path: '/agents/new', element: <ProtectedRoute><AgentEditPage mode="new" /></ProtectedRoute> },
-  { path: '/agents/:agentId/edit', element: <ProtectedRoute><AgentEditPage mode="edit" /></ProtectedRoute> },
+  { path: '/matches', element: <AppShellRoute><MatchesPage /></AppShellRoute> },
+  { path: '/matches/:matchId', element: <AppShellRoute><MatchReplayPage /></AppShellRoute> },
+  { path: '/lobby', element: <ProtectedRoute><AppShellRoute><LobbyPage /></AppShellRoute></ProtectedRoute> },
+  { path: '/tables/:tableId', element: <ProtectedRoute><AppShellRoute><TablePage /></AppShellRoute></ProtectedRoute> },
+  { path: '/agents', element: <ProtectedRoute><AppShellRoute><AgentsPage /></AppShellRoute></ProtectedRoute> },
+  { path: '/agents/new', element: <ProtectedRoute><AppShellRoute><AgentEditPage mode="new" /></AppShellRoute></ProtectedRoute> },
+  { path: '/agents/:agentId/edit', element: <ProtectedRoute><AppShellRoute><AgentEditPage mode="edit" /></AppShellRoute></ProtectedRoute> },
   { path: '/', element: <Navigate to="/lobby" replace /> },
   { path: '*', element: <Navigate to="/lobby" replace /> },
 ];

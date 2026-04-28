@@ -1,0 +1,56 @@
+import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+
+export interface AppShellProps {
+  children: ReactNode;
+  currentPath?: string;
+  showSimulate?: boolean;
+}
+
+interface NavItem {
+  label: string;
+  href: string;
+  match: (path: string) => boolean;
+}
+
+const baseNavItems: NavItem[] = [
+  { label: 'Lobby', href: '/lobby', match: path => path === '/lobby' || path.startsWith('/tables/') },
+  { label: 'Agents', href: '/agents', match: path => path.startsWith('/agents') },
+  { label: 'Replays', href: '/matches', match: path => path.startsWith('/matches') },
+];
+
+const simulateNavItem: NavItem = {
+  label: 'Simulate',
+  href: '/simulate',
+  match: path => path.startsWith('/simulate'),
+};
+
+export function AppShell({ children, currentPath = '', showSimulate = false }: AppShellProps) {
+  const navItems = showSimulate ? [...baseNavItems, simulateNavItem] : baseNavItems;
+
+  return (
+    <div className="app-shell">
+      <header className="app-topbar">
+        <Link to="/lobby" className="app-brand">Agent Poker</Link>
+        <nav className="app-nav" aria-label="Primary navigation">
+          {navItems.map(item => {
+            const active = item.match(currentPath);
+            return (
+              <Link
+                key={item.href}
+                to={item.href}
+                className={active ? 'app-nav-link app-nav-link-active' : 'app-nav-link'}
+                aria-current={active ? 'page' : undefined}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </header>
+      <div className="app-content">
+        {children}
+      </div>
+    </div>
+  );
+}
