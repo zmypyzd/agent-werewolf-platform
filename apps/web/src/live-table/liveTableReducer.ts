@@ -32,9 +32,12 @@ export function liveTableReducer(
 ): LiveTableViewState {
   switch (event.type) {
     case 'snapshot.loaded': {
-      const seats = Array.from({ length: event.table.config.maxSeats }, (_, index) =>
+      const snapshotSeats = Array.from({ length: event.table.config.maxSeats }, (_, index) =>
         seatFromSnapshot(event.table.seats[index] ?? null, index, event.table.button, event.meUserId),
       );
+      const seats = event.table.currentHandId !== null && event.table.currentHandId === state.handId
+        ? preserveRevealedHoleCards(snapshotSeats, state.seats)
+        : snapshotSeats;
 
       return {
         ...state,
@@ -120,6 +123,7 @@ export function liveTableReducer(
         currentActorPlayerId: null,
         pendingAction:
           state.pendingAction?.privateState.playerId === event.playerId ? null : state.pendingAction,
+        pots: event.potTotal === undefined ? state.pots : [{ amount: event.potTotal }],
         seats: markCurrentActor(state.seats, null),
         actionLog: appendLog(state.actionLog, formatActionApplied(event)),
       };
@@ -137,6 +141,7 @@ export function liveTableReducer(
         currentActorPlayerId: null,
         pendingAction: null,
         seats: markCurrentActor(state.seats, null),
+        actionLog: appendLog(state.actionLog, 'hand completed'),
       };
     default:
       return state;
@@ -184,6 +189,22 @@ function seatFromSnapshot(
 
 function markCurrentActor(seats: LiveSeatView[], playerId: string | null): LiveSeatView[] {
   return seats.map(seat => ({ ...seat, isCurrentActor: !!playerId && seat.playerId === playerId }));
+}
+
+function preserveRevealedHoleCards(
+  snapshotSeats: LiveSeatView[],
+  previousSeats: LiveSeatView[],
+): LiveSeatView[] {
+  return snapshotSeats.map(seat => {
+    if (!seat.occupied || !seat.playerId || !seat.agentId) return seat;
+
+    const previous = previousSeats.find(candidate =>
+      candidate.seatIndex === seat.seatIndex &&
+      candidate.playerId === seat.playerId &&
+      candidate.agentId === seat.agentId,
+    );
+    return previous?.holeCards ? { ...seat, holeCards: previous.holeCards } : seat;
+  });
 }
 
 function appendLog(entries: LiveActionLogEntry[], label: string): LiveActionLogEntry[] {

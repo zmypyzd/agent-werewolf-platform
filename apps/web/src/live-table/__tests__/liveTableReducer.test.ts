@@ -142,6 +142,47 @@ describe('liveTableReducer', () => {
     expect(state.seats[0]!.holeCards).toBeNull();
   });
 
+  it('preserves revealed hole cards when a same-hand snapshot refresh arrives', () => {
+    const activeSnapshot: TableSnapshot = {
+      ...snapshot,
+      status: 'in_hand',
+      currentHandId: 'hand-1',
+      handNumber: 1,
+      seats: [
+        { ...snapshot.seats[0]!, stack: 950 },
+        { ...snapshot.seats[1]!, stack: 1050 },
+        null,
+        null,
+        null,
+        null,
+      ],
+    };
+    const state = reduce([
+      { type: 'snapshot.loaded', table: snapshot, meUserId: 'usr-a' },
+      { type: 'hand.started', handId: 'hand-1', handNumber: 1 },
+      {
+        type: 'table.hole_cards_revealed',
+        handId: 'hand-1',
+        playerId: 'player-a',
+        seatIndex: 0,
+        agentId: 'agent-a',
+        holeCards: cards,
+      },
+      {
+        type: 'table.hole_cards_revealed',
+        handId: 'hand-1',
+        playerId: 'player-b',
+        seatIndex: 1,
+        agentId: 'agent-b',
+        holeCards: otherCards,
+      },
+      { type: 'snapshot.loaded', table: activeSnapshot, meUserId: 'usr-a' },
+    ]);
+
+    expect(state.seats[0]!).toMatchObject({ stack: 950, holeCards: cards });
+    expect(state.seats[1]!).toMatchObject({ stack: 1050, holeCards: otherCards });
+  });
+
   it('sets pending action only from private seat action requests', () => {
     const state = reduce([
       { type: 'snapshot.loaded', table: snapshot, meUserId: 'usr-a' },
@@ -299,6 +340,21 @@ describe('liveTableReducer', () => {
       'pot awarded 150 to player-b',
     ]);
     expect(state.actionLog.map(entry => entry.id)).toEqual(['log-0', 'log-1']);
+  });
+
+  it('keeps the live pot display and completion log current during a hand', () => {
+    const state = reduce([
+      { type: 'snapshot.loaded', table: snapshot, meUserId: 'usr-a' },
+      { type: 'hand.started', handId: 'hand-1', handNumber: 1 },
+      { type: 'action.applied', playerId: 'player-b', actionType: 'call', amount: 50, potTotal: 75 },
+      { type: 'hand.completed' },
+    ]);
+
+    expect(state.pots).toEqual([{ amount: 75 }]);
+    expect(state.actionLog.map(entry => entry.label)).toEqual([
+      'player-b call 50 (pot 75)',
+      'hand completed',
+    ]);
   });
 });
 

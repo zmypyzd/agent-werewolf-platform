@@ -91,8 +91,8 @@ test('§12 demo — two users sit, hand runs to completion through the UI', asyn
   await bob.goto(tableUrl);
 
   // Step 4: each user sits at the first empty seat they see.
-  await alice.getByRole('button', { name: /sit here \(human\)/i }).first().click();
-  await bob.getByRole('button', { name: /sit here \(human\)/i }).first().click();
+  await alice.getByRole('button', { name: /^sit here$/i }).first().click();
+  await bob.getByRole('button', { name: /^sit here$/i }).first().click();
 
   // Step 5: Alice clicks Start hand — both UIs should advance via the WS stream.
   await alice.getByRole('button', { name: /start hand/i }).click();

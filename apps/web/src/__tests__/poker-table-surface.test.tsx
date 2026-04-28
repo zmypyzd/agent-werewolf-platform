@@ -7,7 +7,7 @@ import { WsClient } from '../lib/ws.js';
 import { PlayerActionPanel, validateSizedActionAmount } from '../live-table/PlayerActionPanel.js';
 import { PokerTableSurface } from '../live-table/PokerTableSurface.js';
 import { SeatManagementPanel } from '../live-table/SeatManagementPanel.js';
-import { isActionRequestLocked, refreshDelayForLiveEvent } from '../pages/TablePage.js';
+import { isActionRequestLocked, refreshDelayForLiveEvent, seatDisplayNumber } from '../pages/TablePage.js';
 import type { PokerTableViewModel, SeatPosition } from '../live-table/buildPokerTableViewModel.js';
 
 const styles = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../styles.css'), 'utf8');
@@ -226,12 +226,11 @@ describe('PokerTableSurface', () => {
   });
 
   it('stacks seats before the desktop top row can overlap', () => {
-    const mobileStack = mobileSeatStackMedia();
-    const firstDesktopWidth = mobileStack.breakpoint + 1;
+    const narrowestTwoColumnFeltWidth = 981 - 48 - 16 - 340;
     const seatWidth = parseLengthPx(declarationFor('.player-seat', 'width'));
     const topSeatSelectors = ['.seat-top-left', '.seat-top', '.seat-top-right'] as const;
     const horizontalRanges = topSeatSelectors.map(selector =>
-      horizontalRangeFor(selector, firstDesktopWidth, seatWidth),
+      horizontalRangeFor(selector, narrowestTwoColumnFeltWidth, seatWidth),
     );
 
     for (let index = 1; index < horizontalRanges.length; index += 1) {
@@ -348,6 +347,11 @@ describe('TablePage route integration', () => {
     expect(isActionRequestLocked('req-1', 'req-1', false)).toBe(true);
     expect(isActionRequestLocked('req-2', 'req-1', false)).toBe(false);
     expect(isActionRequestLocked('req-2', 'req-1', true)).toBe(true);
+  });
+
+  it('uses one-based seat numbering in the page seat summary', () => {
+    expect(seatDisplayNumber(0)).toBe(1);
+    expect(seatDisplayNumber(8)).toBe(9);
   });
 });
 

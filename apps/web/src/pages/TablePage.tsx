@@ -32,6 +32,10 @@ export function isActionRequestLocked(
   return submittingAction || (!!pendingRequestId && pendingRequestId === submittedRequestId);
 }
 
+export function seatDisplayNumber(seatIndex: number): number {
+  return seatIndex + 1;
+}
+
 // ─── component ───────────────────────────────────────────────────────────────
 
 export function TablePage() {
@@ -212,7 +216,7 @@ export function TablePage() {
         {' · '}phase {liveState.phase ?? '—'}
         {' · '}blinds {table.config.blindConfig.smallBlind}/{table.config.blindConfig.bigBlind}
         {mySeat && (
-          <> {' · '}you are seat {mySeat.seatIndex} ({mySeat.adapterType})</>
+          <> {' · '}you are seat {seatDisplayNumber(mySeat.seatIndex)} ({mySeat.adapterType})</>
         )}
       </p>
 
