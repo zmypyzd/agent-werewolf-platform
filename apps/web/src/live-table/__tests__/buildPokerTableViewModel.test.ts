@@ -93,6 +93,7 @@ describe('buildPokerTableViewModel', () => {
     expect(model.totalPot).toBe(225);
     expect(model.seats[0]!.position).toBe('top-left');
     expect(model.seats[1]!.position).toBe('top-right');
+    expect(model.seats[0]!.displayName).toBe('Seat 1');
     expect(model.seats[1]!.isCurrentActor).toBe(true);
     expect(model.visibleHands.map(hand => hand.playerId)).toEqual(['p0', 'p1']);
     expect(model.visibleHands[0]!.cards).toHaveLength(2);
@@ -125,6 +126,26 @@ describe('buildPokerTableViewModel', () => {
       'bottom-left',
       'left',
     ]);
+    expect(new Set(positionsFor(7)).size).toBe(7);
+    expect(new Set(positionsFor(9)).size).toBe(9);
+  });
+
+  it('uses no-active-hand labels and no visible hand rows before cards are dealt', () => {
+    const state: LiveTableViewState = {
+      ...baseState,
+      status: 'preparing',
+      handId: null,
+      handNumber: 0,
+      phase: null,
+      board: [],
+      pots: [],
+      seats: baseState.seats.map(seat => ({ ...seat, holeCards: null })),
+    };
+
+    const model = buildPokerTableViewModel(state, { seatable: true });
+
+    expect(model.subtitle).toBe('no active hand · waiting · blinds 25/50');
+    expect(model.visibleHands).toEqual([]);
   });
 });
 

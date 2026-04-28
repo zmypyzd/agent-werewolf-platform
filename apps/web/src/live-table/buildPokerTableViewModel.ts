@@ -1,6 +1,15 @@
 import type { Card, LiveSeatView, LiveTableViewState } from './liveTableTypes.js';
 
-export type SeatPosition = 'top-left' | 'top-right' | 'right' | 'bottom-right' | 'bottom-left' | 'left';
+export type SeatPosition =
+  | 'top-left'
+  | 'top'
+  | 'top-right'
+  | 'right'
+  | 'bottom-right'
+  | 'bottom'
+  | 'bottom-left'
+  | 'left'
+  | 'center-left';
 
 export interface PokerTableSeatModel extends LiveSeatView {
   position: SeatPosition;
@@ -34,6 +43,9 @@ const POSITION_MAP: Record<number, SeatPosition[]> = {
   4: ['top-left', 'top-right', 'bottom-right', 'bottom-left'],
   5: ['top-left', 'top-right', 'right', 'bottom-right', 'bottom-left'],
   6: ['top-left', 'top-right', 'right', 'bottom-right', 'bottom-left', 'left'],
+  7: ['top-left', 'top', 'top-right', 'right', 'bottom-right', 'bottom-left', 'left'],
+  8: ['top-left', 'top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left'],
+  9: ['top-left', 'top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left', 'center-left'],
 };
 
 export function buildPokerTableViewModel(
@@ -43,27 +55,29 @@ export function buildPokerTableViewModel(
   const seats = state.seats.map((seat, index) => ({
     ...seat,
     position: positionFor(state.seats.length, index),
-    displayName: seat.agentId ?? `Seat ${seat.seatIndex}`,
+    displayName: `Seat ${seat.seatIndex + 1}`,
   }));
   const blindLabel = state.blindConfig ? `${state.blindConfig.smallBlind}/${state.blindConfig.bigBlind}` : '--';
   const phaseLabel = state.phase ?? 'waiting';
+  const handLabel = state.handId ? `hand ${state.handId}` : 'no active hand';
+  const showVisibleHands = state.handId !== null || seats.some(seat => seat.holeCards);
 
   return {
     title: state.tableName || 'Poker Table',
-    subtitle: `hand ${state.handId ?? '--'} · ${phaseLabel} · blinds ${blindLabel}`,
+    subtitle: `${handLabel} · ${phaseLabel} · blinds ${blindLabel}`,
     phaseLabel,
     connectionStatus: state.connectionStatus,
     board: state.board,
     totalPot: state.pots.reduce((sum, pot) => sum + pot.amount, 0),
     seats,
-    visibleHands: seats
+    visibleHands: showVisibleHands ? seats
       .filter(seat => seat.occupied && seat.playerId)
       .map(seat => ({
         playerId: seat.playerId!,
         label: seat.displayName,
         cards: seat.holeCards,
         cardStatus: seat.holeCards ? 'visible' : 'cards pending',
-      })),
+      })) : [],
     actionLog: state.actionLog,
     pendingAction: state.pendingAction,
     canShowSeatControls: options.seatable,
@@ -71,6 +85,6 @@ export function buildPokerTableViewModel(
 }
 
 function positionFor(totalSeats: number, index: number): SeatPosition {
-  const normalizedTotal = Math.min(6, Math.max(2, totalSeats));
-  return (POSITION_MAP[normalizedTotal] ?? POSITION_MAP[6])![index] ?? 'left';
+  const normalizedTotal = Math.min(9, Math.max(2, totalSeats));
+  return (POSITION_MAP[normalizedTotal] ?? POSITION_MAP[9])![index] ?? 'center-left';
 }
