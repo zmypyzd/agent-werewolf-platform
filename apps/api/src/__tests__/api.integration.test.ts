@@ -245,7 +245,9 @@ describe('API Integration Tests', () => {
     expect(body.data.hands.length).toBeGreaterThan(0);
     expect(JSON.stringify(body.data)).not.toContain('"holeCards"');
     expect(JSON.stringify(body.data)).not.toContain('"handEvaluation"');
+    expect(JSON.stringify(body.data)).not.toContain('"sha256"');
     expect(body.data.hands[0]).not.toHaveProperty('seed');
+    expect(body.data.matchArtifact.manifest).not.toHaveProperty('files');
     expect(body.data.tableId).toBeTruthy();
   });
 

@@ -3,6 +3,7 @@ import { ZodError } from 'zod';
 import type { TableOrchestrator } from '@agent-poker/table-orchestrator';
 import type { IDecisionTraceStore, IHandStore, IMatchArtifactStore } from '@agent-poker/persistence';
 import { SchemaValidationError, AppError } from '@agent-poker/shared';
+import type { MatchArtifactManifest } from '@agent-poker/shared';
 import { SimulateRequestSchema } from '@agent-poker/agent-protocol';
 import { RandomMockAgent, AlwaysCallAgent, AlwaysFoldAgent, AggressiveAgent } from '@agent-poker/agent-runtime';
 import { randomUUID } from 'crypto';
@@ -13,6 +14,13 @@ interface SimulatePluginOptions extends FastifyPluginOptions {
   handStore: IHandStore;
   matchArtifactStore: IMatchArtifactStore;
   decisionTraceStore: IDecisionTraceStore;
+}
+
+type PublicMatchArtifactManifest = Omit<MatchArtifactManifest, 'files'>;
+
+function publicMatchArtifactManifest(manifest: MatchArtifactManifest): PublicMatchArtifactManifest {
+  const { files: _files, ...publicManifest } = manifest;
+  return publicManifest;
 }
 
 export async function simulateRoutes(app: FastifyInstance, opts: SimulatePluginOptions) {
@@ -91,7 +99,7 @@ export async function simulateRoutes(app: FastifyInstance, opts: SimulatePluginO
           totalHands: hands.length,
           matchArtifact: {
             matchId: matchArtifact.manifest.matchId,
-            manifest: matchArtifact.manifest,
+            manifest: publicMatchArtifactManifest(matchArtifact.manifest),
           },
         },
       });
