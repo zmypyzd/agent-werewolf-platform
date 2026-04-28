@@ -413,15 +413,15 @@ git commit -m "Expose full table creation controls"
 - Modify: `apps/web/src/styles.css`
 - Test: `apps/web/src/__tests__/table-page.test.tsx`
 
-- [ ] **Step 1: Extend web table type**
+- [x] **Step 1: Extend web table type**
 
 Add optional `canManage?: boolean` to `TableSnapshot`.
 
-- [ ] **Step 2: Add table hand-history types**
+- [x] **Step 2: Add table hand-history types**
 
 Define web-local public hand summary types that omit private cards and evaluations.
 
-- [ ] **Step 3: Write static tests for control panel**
+- [x] **Step 3: Write static tests for control panel**
 
 Assert:
 
@@ -430,7 +430,7 @@ Assert:
 - hand history rows render hand number, action count, board count, net result
 - no rendered markup contains `holeCards`
 
-- [ ] **Step 4: Implement watch/unwatch**
+- [x] **Step 4: Implement watch/unwatch**
 
 Call:
 
@@ -441,7 +441,7 @@ DELETE /tables/:tableId/watch
 
 Refresh table after success.
 
-- [ ] **Step 5: Implement owner-only delete**
+- [x] **Step 5: Implement owner-only delete**
 
 When `table.canManage === true`, show an in-app confirmation and call:
 
@@ -451,11 +451,11 @@ DELETE /tables/:tableId
 
 On success, navigate to `/lobby`.
 
-- [ ] **Step 6: Implement hand history fetch**
+- [x] **Step 6: Implement hand history fetch**
 
 Fetch `GET /tables/:tableId/hands` and render only public-safe fields.
 
-- [ ] **Step 7: Run focused tests**
+- [x] **Step 7: Run focused tests**
 
 ```bash
 pnpm --filter web run test -- src/__tests__/table-page.test.tsx
@@ -464,7 +464,7 @@ pnpm --filter web run test -- src/__tests__/poker-table-surface.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/web/src/pages/TablePage.tsx apps/web/src/live-table/liveTableTypes.ts apps/web/src/styles.css apps/web/src/__tests__/table-page.test.tsx
