@@ -89,6 +89,7 @@ describe('buildPokerTableViewModel', () => {
 
     expect(model.title).toBe('Demo Table');
     expect(model.subtitle).toBe('hand hand-1 · flop · blinds 25/50');
+    expect(model.phaseLabel).toBe('flop');
     expect(model.totalPot).toBe(225);
     expect(model.seats[0]!.position).toBe('top-left');
     expect(model.seats[1]!.position).toBe('top-right');
