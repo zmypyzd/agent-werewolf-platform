@@ -127,6 +127,7 @@ describe('buildPokerTableViewModel', () => {
       'left',
     ]);
     expect(new Set(positionsFor(7)).size).toBe(7);
+    expect(new Set(positionsFor(8)).size).toBe(8);
     expect(new Set(positionsFor(9)).size).toBe(9);
   });
 
@@ -139,7 +140,10 @@ describe('buildPokerTableViewModel', () => {
       phase: null,
       board: [],
       pots: [],
-      seats: baseState.seats.map(seat => ({ ...seat, holeCards: null })),
+      seats: baseState.seats.map((seat, index) => ({
+        ...seat,
+        holeCards: index === 0 ? seat.holeCards : null,
+      })),
     };
 
     const model = buildPokerTableViewModel(state, { seatable: true });

@@ -60,7 +60,7 @@ export function buildPokerTableViewModel(
   const blindLabel = state.blindConfig ? `${state.blindConfig.smallBlind}/${state.blindConfig.bigBlind}` : '--';
   const phaseLabel = state.phase ?? 'waiting';
   const handLabel = state.handId ? `hand ${state.handId}` : 'no active hand';
-  const showVisibleHands = state.handId !== null || seats.some(seat => seat.holeCards);
+  const showVisibleHands = state.handId !== null;
 
   return {
     title: state.tableName || 'Poker Table',
