@@ -327,10 +327,10 @@ Final verification target:
   but it must not fetch, infer, or persist hidden cards. Durable public match
   artifact pages remain public-safe.
 - Table hand history requires a safe display boundary before implementation.
-  Preferred implementation: add a web-local sanitizer that strips
-  `players[].holeCards` and `players[].handEvaluation` before rendering, then
-  follow up with a backend public-safe table hand-history DTO if this surface
-  becomes durable product behavior.
+  Preferred implementation: add backend public-safe table hand-history responses
+  that strip `players[].holeCards` and `players[].handEvaluation` before the
+  browser receives them. A web-local sanitizer can remain as a defensive layer,
+  but it is not sufficient as the primary privacy boundary.
 - Owner-only table management requires an explicit permission source. Preferred
   implementation: derive `canManage` in the route shell by comparing an exposed
   owner signal to the current user, or add a backend `canManage` field before
