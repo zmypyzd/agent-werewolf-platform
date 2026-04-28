@@ -1,5 +1,6 @@
 * { box-sizing: border-box; }
 :root {
+  --app-topbar-height: 60px;
   --surface-page: #f6f7f9;
   --surface-panel: #fff;
   --surface-muted: #eef2f6;
@@ -26,7 +27,7 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 24px;
-  min-height: 60px;
+  min-height: var(--app-topbar-height);
   border-bottom: 1px solid var(--border-subtle);
   background: rgba(255, 255, 255, .96);
   padding: 0 24px;
@@ -408,7 +409,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .action-inspector {
   position: sticky;
-  top: 16px;
+  top: calc(var(--app-topbar-height) + 16px);
 }
 
 .action-inspector dl,
