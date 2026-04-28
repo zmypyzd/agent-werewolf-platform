@@ -293,14 +293,21 @@ Acceptance:
 - Do not display private state hashes as if they are user-facing explanations.
 - Durable public match artifacts should stay public-safe.
 - Public table websocket topics must never carry `holeCards`. Only private
-  `seat:*` topics may carry the owning user's current hand cards.
+  `seat.hole_cards` messages may carry the owning user's current hand cards;
+  `seat.action_requested` carries action metadata only.
+- Public table states, hand summaries, match summaries, and match index entries
+  must not expose deterministic deck seeds, because seed plus public hand
+  metadata can reconstruct hidden cards.
 - The web websocket normalizer must ignore any public table-topic hole-card
   reveal frame if one appears from an older server or stale test fixture.
 - `/tables/:tableId/hands/start` must be owner-only and return the same
   public-safe hand summary shape as table hand-history routes.
 - `/matches/:matchId/decision-trace` must redact detailed reasoning summaries
-  from public responses while retaining non-secret metrics and hashes needed for
-  review tooling.
+  and `privateStateHash` from public responses while retaining non-secret public
+  metrics and public-state hashes needed for review tooling.
+- Public match detail must not expose artifact file hashes for private summary
+  or trace files; those hashes can become offline verification oracles for
+  guessed private seeds/state.
 - Agent endpoint documentation must state that responses echo `requestId` and
   `agentId`, because the adapter enforces that contract.
 - Table-local hand-history UI must be public-safe by default. If a future
@@ -321,8 +328,8 @@ Use focused tests during iterations and full verification before completion:
 - API helper tests for any new typed helper.
 - Existing live-table and replay tests must remain green.
 - API privacy tests cover table hand-history, `/hands/start`, public match
-  decision traces, websocket table-topic frames, and owner-only start-hand
-  permission.
+  decision traces, deterministic seed redaction, websocket table-topic frames,
+  action-request payloads, and owner-only start-hand permission.
 - Browser QA or Playwright where available for desktop/mobile layout checks.
 
 Final verification target:
@@ -336,9 +343,10 @@ Final verification target:
 ## 9. Implementation Decisions
 
 - This iteration hardens backend hole-card privacy semantics. The UI may display
-  private hole cards only from `seat:*` frames delivered to the owning user; it
-  must not fetch, infer, persist, or render hidden cards from public table
-  channels. Durable public match artifact pages remain public-safe.
+  private hole cards only from `seat.hole_cards` frames delivered to the owning
+  user; it must not fetch, infer, persist, or render hidden cards from public
+  table channels, action-request frames, deterministic seeds, or private-state
+  hashes. Durable public match artifact pages remain public-safe.
 - Table hand history requires a safe display boundary before implementation.
   Preferred implementation: add backend public-safe table hand-history responses
   that strip `players[].holeCards` and `players[].handEvaluation` before the

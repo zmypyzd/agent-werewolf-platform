@@ -20,7 +20,6 @@ const hand: HandSummary = {
   handId: 'hand-1',
   tableId: 'tbl-1',
   handNumber: 1,
-  seed: 'seed-1',
   startedAt: 1,
   completedAt: 100,
   players: [
@@ -169,7 +168,6 @@ describe('match replay view helpers', () => {
     expect(views).toEqual([{
       handId: 'hand-1',
       handNumber: 1,
-      seed: 'seed-1',
       actionCount: 2,
       eventCount: 2,
       communityCardCount: 3,

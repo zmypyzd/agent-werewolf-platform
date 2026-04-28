@@ -73,7 +73,7 @@ export interface PendingAction {
   requestId: string;
   legalActions: LegalAction[];
   deadlineAt: number;
-  privateState: { playerId: string; holeCards: [Card, Card] };
+  privateState: { playerId: string };
 }
 
 export interface LivePotView {
@@ -123,7 +123,7 @@ export type LiveTableEvent =
       requestId: string;
       legalActions: LegalAction[];
       deadlineAt: number;
-      privateState: { playerId: string; holeCards: [Card, Card] };
+      privateState: { playerId: string };
     }
   | { type: 'action.applied'; playerId: string; actionType: ActionType; amount: number; potTotal?: number }
   | { type: 'betting_round.complete'; pots: LivePotView[] }

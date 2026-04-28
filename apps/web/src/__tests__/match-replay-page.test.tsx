@@ -39,38 +39,11 @@ const record: MatchArtifactRecord = {
     tableId: 'table-1',
     createdAt: 1_777_280_000_000,
     handIds: ['hand-1'],
-    files: {
-      summary: {
-        path: 'summary.json',
-        sha256: 'summary-sha',
-        bytes: 120,
-        contentType: 'application/json',
-      },
-      replay: {
-        path: 'replay.jsonl',
-        sha256: 'replay-sha',
-        bytes: 240,
-        contentType: 'application/x-ndjson',
-      },
-      decisionTrace: {
-        path: 'decision-trace.jsonl',
-        sha256: 'trace-sha',
-        bytes: 360,
-        contentType: 'application/x-ndjson',
-      },
-      analysisSummary: {
-        path: 'analysis-summary.json',
-        sha256: 'analysis-sha',
-        bytes: 180,
-        contentType: 'application/json',
-      },
-    },
   },
   summary: {
     matchId: 'match-1',
     tableId: 'table-1',
     name: 'Replay fixture',
-    seed: 'seed-1',
     startedAt: 1_777_280_000_000,
     completedAt: 1_777_280_100_000,
     handIds: ['hand-1'],
@@ -80,7 +53,6 @@ const record: MatchArtifactRecord = {
       handId: 'hand-1',
       tableId: 'table-1',
       handNumber: 1,
-      seed: 'hand-seed-1',
       startedAt: 1,
       completedAt: 2,
       players: [

@@ -258,17 +258,12 @@ export class HandRunner {
       }
 
       const req = this.buildDecisionRequest(actor, roundState, legalActions);
-      // Include the full request shape so the realtime hub can fan out a
-      // private 'seat.action_requested' to the seated user without having to
-      // peek into the agent. The public filter strips holeCards before the
-      // event reaches any non-owner subscriber.
       this.emit('action.requested', {
         agentId: actor.agentId,
         playerId: actor.playerId,
         legalActions,
         requestId: req.requestId,
         timeoutMs: req.timeoutMs,
-        holeCards: actor.holeCards,
       });
 
       const agentInstance = this.agents.get(actor.agentId);

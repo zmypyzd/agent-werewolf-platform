@@ -25,7 +25,6 @@ export const REPLAY_STREET_FILTERS: readonly ReplayStreetFilter[] = ['all', ...H
 export interface HandReplayView {
   handId: string;
   handNumber: number;
-  seed: string;
   actionCount: number;
   eventCount: number;
   communityCardCount: number;
@@ -84,7 +83,6 @@ export function buildHandReplayViews(
     return {
       handId: hand.handId,
       handNumber: hand.handNumber,
-      seed: hand.seed,
       actionCount,
       eventCount,
       communityCardCount,

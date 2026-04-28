@@ -6,6 +6,7 @@ import { SchemaValidationError, AppError } from '@agent-poker/shared';
 import { SimulateRequestSchema } from '@agent-poker/agent-protocol';
 import { RandomMockAgent, AlwaysCallAgent, AlwaysFoldAgent, AggressiveAgent } from '@agent-poker/agent-runtime';
 import { randomUUID } from 'crypto';
+import { publicHandSummaries } from './public-hand-summary.js';
 
 interface SimulatePluginOptions extends FastifyPluginOptions {
   orchestrator: TableOrchestrator;
@@ -85,7 +86,7 @@ export async function simulateRoutes(app: FastifyInstance, opts: SimulatePluginO
       reply.send({
         data: {
           tableId: table.tableId,
-          hands,
+          hands: publicHandSummaries(hands),
           finalStacks,
           totalHands: hands.length,
           matchArtifact: {

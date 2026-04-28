@@ -2,7 +2,13 @@ import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import type { GetMatchArtifactOptions, IMatchArtifactStore } from '@agent-poker/persistence';
 import { replayEventToPublic } from '@agent-poker/realtime';
 import { AppError } from '@agent-poker/shared';
-import type { DecisionTrace, MatchSummary, ReplayEvent } from '@agent-poker/shared';
+import type {
+  DecisionTrace,
+  MatchArtifactIndexEntry,
+  MatchArtifactManifest,
+  MatchSummary,
+  ReplayEvent,
+} from '@agent-poker/shared';
 import { publicHandSummary } from './public-hand-summary.js';
 
 interface MatchesPluginOptions extends FastifyPluginOptions {
@@ -15,18 +21,38 @@ function publicReplayEvents(events: ReplayEvent[]) {
     .filter((event): event is ReplayEvent => event !== null);
 }
 
-function publicMatchSummary(summary: MatchSummary): MatchSummary {
+type PublicMatchSummary = Omit<MatchSummary, 'seed'>;
+type PublicMatchArtifactIndexEntry = Omit<MatchArtifactIndexEntry, 'seed'>;
+type PublicMatchArtifactManifest = Omit<MatchArtifactManifest, 'files'>;
+type PublicDecisionTrace = Omit<DecisionTrace, 'privateStateHash' | 'reasoningSummary'>;
+
+function publicMatchArtifactIndexEntry(entry: MatchArtifactIndexEntry): PublicMatchArtifactIndexEntry {
+  const { seed: _seed, ...publicEntry } = entry;
+  return publicEntry;
+}
+
+function publicMatchSummary(summary: MatchSummary): PublicMatchSummary {
+  const { seed: _seed, ...rest } = summary;
   return {
-    ...summary,
+    ...rest,
     hands: summary.hands.map(publicHandSummary),
   };
 }
 
-function publicDecisionTraces(traces: DecisionTrace[]): DecisionTrace[] {
-  return traces.map(trace => ({
-    ...trace,
-    reasoningSummary: null,
-  }));
+function publicMatchArtifactManifest(manifest: MatchArtifactManifest): PublicMatchArtifactManifest {
+  const { files: _files, ...publicManifest } = manifest;
+  return publicManifest;
+}
+
+function publicDecisionTraces(traces: DecisionTrace[]): PublicDecisionTrace[] {
+  return traces.map(trace => {
+    const {
+      privateStateHash: _privateStateHash,
+      reasoningSummary: _reasoningSummary,
+      ...publicTrace
+    } = trace;
+    return publicTrace;
+  });
 }
 
 async function getMatchArtifactOrThrow(
@@ -51,7 +77,7 @@ export async function matchesRoutes(app: FastifyInstance, opts: MatchesPluginOpt
 
   app.get('/matches', async (_req, reply) => {
     const entries = await matchArtifactStore.listMatchArtifacts();
-    reply.send({ data: entries });
+    reply.send({ data: entries.map(publicMatchArtifactIndexEntry) });
   });
 
   app.get<{ Params: { matchId: string } }>('/matches/:matchId', async (req, reply) => {
@@ -62,7 +88,7 @@ export async function matchesRoutes(app: FastifyInstance, opts: MatchesPluginOpt
     );
     reply.send({
       data: {
-        manifest: record.manifest,
+        manifest: publicMatchArtifactManifest(record.manifest),
         summary: publicMatchSummary(record.summary),
       },
     });

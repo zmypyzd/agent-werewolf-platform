@@ -201,17 +201,14 @@ function legalActionsValue(value: unknown): LegalAction[] | null {
   }, []);
 }
 
-function privateStateValue(value: unknown): { playerId: string; holeCards: [Card, Card] } | null {
+function privateStateValue(value: unknown): { playerId: string } | null {
   if (!isRecord(value)) return null;
 
-  const holeCards = value['holeCards'];
   const playerId = requiredStringValue(value['playerId']);
-  if (!isTwoCards(holeCards)) return null;
   if (playerId === null) return null;
 
   return {
     playerId,
-    holeCards,
   };
 }
 

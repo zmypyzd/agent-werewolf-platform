@@ -373,7 +373,7 @@ function HandBoard({
       <div className="hand-board-header">
         <div>
           <h3>Hand {hand.handNumber}</h3>
-          <p className="muted">Seed {hand.seed}</p>
+          <p className="muted">{hand.handId}</p>
         </div>
         <span className="pill">{handView?.actionCount ?? hand.allActions.length} actions</span>
       </div>

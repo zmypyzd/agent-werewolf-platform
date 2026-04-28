@@ -69,7 +69,6 @@ const hand: TablePublicHandSummary = {
   handId: 'hand-007',
   tableId: 'table-1',
   handNumber: 7,
-  seed: 'seed-7',
   startedAt: 1_777_280_000_000,
   completedAt: 1_777_280_001_000,
   players: [

@@ -10,7 +10,6 @@ const hand: HandSummary = {
   handId: 'hand-1',
   tableId: 'tbl-1',
   handNumber: 1,
-  seed: 'seed-1',
   startedAt: 1,
   completedAt: 100,
   players: [

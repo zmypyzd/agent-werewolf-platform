@@ -213,7 +213,7 @@ export const HandSummarySchema = z.object({
   finalPots: z.array(PotSchema),
 });
 
-export const PublicHandSummarySchema = HandSummarySchema.extend({
+export const PublicHandSummarySchema = HandSummarySchema.omit({ seed: true }).extend({
   players: z.array(PublicHandPlayerSummarySchema),
 });
 

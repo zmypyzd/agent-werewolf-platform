@@ -291,7 +291,7 @@ export interface HandSummary {
   finalPots: Pot[];
 }
 
-export type PublicHandSummary = Omit<HandSummary, 'players'> & {
+export type PublicHandSummary = Omit<HandSummary, 'players' | 'seed'> & {
   players: PublicHandPlayerSummary[];
 };
 

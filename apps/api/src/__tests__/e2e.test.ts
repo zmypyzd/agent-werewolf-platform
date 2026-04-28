@@ -227,6 +227,7 @@ describe('Backend e2e — full demo flow (M11)', () => {
     } }).data;
 
     expect(summary.handId).toBeTruthy();
+    expect(summary).not.toHaveProperty('seed');
     const total = summary.players.reduce((s, p) => s + p.stackAfter, 0);
     expect(total).toBe(2000);
 
@@ -246,6 +247,14 @@ describe('Backend e2e — full demo flow (M11)', () => {
       m => typeof m['topic'] === 'string' && (m['topic'] as string).startsWith('seat:'),
     );
     expect(seatFrames.some(m => m['type'] === 'seat.hole_cards')).toBe(true);
+    const actionRequestFrames = seatFrames.filter(m => m['type'] === 'seat.action_requested');
+    expect(actionRequestFrames.length).toBeGreaterThan(0);
+    for (const frame of actionRequestFrames) {
+      expect(JSON.stringify(frame)).not.toContain('"holeCards"');
+      expect(frame['payload']).toMatchObject({
+        privateState: { playerId: expect.stringMatching(/^player-/) },
+      });
+    }
 
     // Lobby: Alice was subscribed to lobby, so she saw lobby.table_created at the top.
     expect(alice.messages.some(m => m['type'] === 'lobby.table_created')).toBe(true);

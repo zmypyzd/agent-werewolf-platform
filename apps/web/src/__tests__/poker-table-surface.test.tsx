@@ -108,7 +108,6 @@ const model: PokerTableViewModel = {
     deadlineAt: 123,
     privateState: {
       playerId: 'p0',
-      holeCards: [{ rank: 'A', suit: 'c' }, { rank: 'K', suit: 'c' }],
     },
   },
   canShowSeatControls: true,
@@ -199,6 +198,7 @@ describe('PokerTableSurface', () => {
           requestId: 'req-check-all-in',
           legalActions: [{ type: 'fold' }, { type: 'check' }, { type: 'all-in', maxAmount: 900 }],
         }}
+        holeCards={model.seats[0]!.holeCards}
         error={null}
         submitting={false}
         now={0}
@@ -219,6 +219,7 @@ describe('PokerTableSurface', () => {
           requestId: 'req-bet-without-min',
           legalActions: [{ type: 'bet', maxAmount: 900 }],
         }}
+        holeCards={model.seats[0]!.holeCards}
         error={null}
         submitting={false}
         onSubmitAction={() => undefined}

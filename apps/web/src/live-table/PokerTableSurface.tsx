@@ -19,6 +19,9 @@ export function PokerTableSurface({
   onSubmitAction,
 }: PokerTableSurfaceProps) {
   const currentActor = model.seats.find(seat => seat.isCurrentActor);
+  const pendingActionSeat = model.pendingAction
+    ? model.seats.find(seat => seat.playerId === model.pendingAction?.privateState.playerId)
+    : null;
 
   return (
     <div className="poker-table-layout">
@@ -49,6 +52,7 @@ export function PokerTableSurface({
 
         <PlayerActionPanel
           pendingAction={model.pendingAction}
+          holeCards={pendingActionSeat?.holeCards ?? null}
           submitting={submittingAction}
           error={actionError}
           onSubmitAction={onSubmitAction}

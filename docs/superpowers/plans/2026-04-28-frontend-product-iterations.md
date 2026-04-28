@@ -5,8 +5,10 @@
 **Goal:** Ship 10 frontend product iterations that turn the MVP web app into a coherent agent poker workspace without violating hand-history privacy or gambling/financial boundaries.
 
 **Post-review hardening:** Public table websocket topics must never carry
-`holeCards`; `/hands/start` is owner-only and returns public-safe summaries; and
-public decision traces redact detailed reasoning summaries.
+`holeCards`; `seat.action_requested` carries no cards; public summaries redact
+deterministic seeds; `/hands/start` is owner-only and returns public-safe
+summaries; and public decision traces redact detailed reasoning summaries plus
+`privateStateHash`.
 
 **Architecture:** Start by fixing backend response boundaries that the UI depends on: public-safe table hand history and explicit table management permission. Then add a shared app shell, upgrade Lobby/Table/Agent/Replay pages, and add a Simulation Studio. Each task is independently testable and should be committed before moving to the next task.
 

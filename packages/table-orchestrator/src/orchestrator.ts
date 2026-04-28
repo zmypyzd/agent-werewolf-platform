@@ -493,14 +493,13 @@ export class TableOrchestrator {
           if (seat && seat.adapterType === 'human') {
             const requestId = event.data['requestId'];
             const legalActions = event.data['legalActions'];
-            const holeCards = event.data['holeCards'];
             const timeoutMs = Number(event.data['timeoutMs'] ?? DEFAULT_TIMEOUT_MS);
-            if (typeof requestId === 'string' && Array.isArray(legalActions) && holeCards) {
+            if (typeof requestId === 'string' && Array.isArray(legalActions)) {
               hub.publishSeat(seat.ownerUserId, tableId, 'seat.action_requested', {
                 handId: event.handId,
                 requestId,
                 legalActions,
-                privateState: { playerId: seat.playerId, holeCards },
+                privateState: { playerId: seat.playerId },
                 deadlineAt: Date.now() + timeoutMs,
               });
             }

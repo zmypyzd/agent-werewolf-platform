@@ -75,8 +75,8 @@ publish `seat.hole_cards` only to the owning user's private seat channel. Public
 `table:*` topics must not include `holeCards`, including explicit reveal frames.
 
 `seat.action_requested` remains private to the human player's seat owner and is
-the only source that enables action submission. Seeing another player's cards
-does not create permission to act for that player.
+the only source that enables action submission. It carries action metadata only;
+the current user's cards come from `seat.hole_cards`.
 
 ### Tests To Change
 

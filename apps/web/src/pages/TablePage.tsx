@@ -56,7 +56,6 @@ export interface TablePublicHandSummary {
   handId: string;
   tableId: string;
   handNumber: number;
-  seed: string;
   startedAt: number;
   completedAt: number;
   players: TablePublicHandPlayerSummary[];

@@ -98,11 +98,6 @@ export function liveTableReducer(
           deadlineAt: event.deadlineAt,
           privateState: event.privateState,
         },
-        seats: state.seats.map(seat =>
-          seat.playerId === event.privateState.playerId
-            ? { ...seat, holeCards: event.privateState.holeCards }
-            : seat,
-        ),
       };
     case 'action.applied':
       return {

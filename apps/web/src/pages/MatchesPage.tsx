@@ -6,7 +6,6 @@ interface MatchArtifactIndexEntry {
   matchId: string;
   tableId: string;
   name: string;
-  seed: string;
   handCount: number;
   agentIds: string[];
   startedAt: number;

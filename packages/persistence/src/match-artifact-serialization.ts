@@ -113,7 +113,16 @@ export function buildArtifact(input: SaveMatchArtifactInput, createdAt = Date.no
 
 function toPublicHandSummary(hand: HandSummary): PublicHandSummary {
   return {
-    ...hand,
+    handId: hand.handId,
+    tableId: hand.tableId,
+    handNumber: hand.handNumber,
+    startedAt: hand.startedAt,
+    completedAt: hand.completedAt,
+    blindConfig: hand.blindConfig,
+    communityCards: hand.communityCards,
+    allActions: hand.allActions,
+    results: hand.results,
+    finalPots: hand.finalPots,
     players: hand.players.map(player => {
       const { holeCards: _holeCards, handEvaluation: _handEvaluation, ...publicPlayer } = player;
       return publicPlayer;

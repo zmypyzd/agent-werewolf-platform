@@ -85,6 +85,8 @@ describe('API Integration Tests', () => {
     expect(res.statusCode).toBe(201);
     const body = JSON.parse(res.payload);
     expect(body.data.tableId).toBeTruthy();
+    expect(body.data.config).not.toHaveProperty('seed');
+    expect(body.data.canManage).toBe(true);
   });
 
   it('api-002: POST /tables missing blindConfig → 400', async () => {
@@ -106,6 +108,7 @@ describe('API Integration Tests', () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.payload);
     expect(body.data.tableId).toBe(table.tableId);
+    expect(body.data.config).not.toHaveProperty('seed');
   });
 
   it('api-005: GET /tables/nonexistent → 404', async () => {
@@ -174,6 +177,7 @@ describe('API Integration Tests', () => {
     expect(body.data.communityCards).toBeDefined();
     expect(JSON.stringify(body.data)).not.toContain('"holeCards"');
     expect(JSON.stringify(body.data)).not.toContain('"handEvaluation"');
+    expect(body.data).not.toHaveProperty('seed');
   });
 
   it('api-012: GET /tables/:id/hands → 200 array', async () => {
@@ -239,6 +243,9 @@ describe('API Integration Tests', () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.payload);
     expect(body.data.hands.length).toBeGreaterThan(0);
+    expect(JSON.stringify(body.data)).not.toContain('"holeCards"');
+    expect(JSON.stringify(body.data)).not.toContain('"handEvaluation"');
+    expect(body.data.hands[0]).not.toHaveProperty('seed');
     expect(body.data.tableId).toBeTruthy();
   });
 

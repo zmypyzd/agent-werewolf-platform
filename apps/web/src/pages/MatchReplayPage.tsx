@@ -52,8 +52,6 @@ export function MatchReplayPageContent({
   onSelectHand,
   onSelectAction,
 }: MatchReplayPageContentProps) {
-  const analysisFile = record.manifest.files.analysisSummary;
-
   return (
     <div className="page" style={{ maxWidth: 1180 }}>
       <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -66,7 +64,6 @@ export function MatchReplayPageContent({
 
       <p className="muted" style={{ overflowWrap: 'anywhere' }}>
         match {record.summary.matchId}
-        {' · '}seed {record.summary.seed}
         {' · '}completed {formatTime(record.summary.completedAt)}
       </p>
 
@@ -150,19 +147,13 @@ export function MatchReplayPageContent({
         <h2>Artifact Metadata</h2>
         <dl>
           <div>
-            <dt>Summary SHA-256</dt>
-            <dd>{record.manifest.files.summary.sha256}</dd>
+            <dt>Created</dt>
+            <dd>{formatTime(record.manifest.createdAt)}</dd>
           </div>
           <div>
-            <dt>Replay SHA-256</dt>
-            <dd>{record.manifest.files.replay.sha256}</dd>
+            <dt>Hands</dt>
+            <dd>{record.manifest.handIds.length}</dd>
           </div>
-          {analysisFile ? (
-            <div>
-              <dt>Analysis SHA-256</dt>
-              <dd>{analysisFile.sha256}</dd>
-            </div>
-          ) : null}
         </dl>
       </section>
     </div>

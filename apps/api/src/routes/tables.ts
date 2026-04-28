@@ -8,6 +8,7 @@ import {
   NotImplementedError,
   ForbiddenError,
 } from '@agent-poker/shared';
+import type { TableState } from '@agent-poker/shared';
 import {
   CreateTableRequestSchema,
   AddAgentRequestSchema,
@@ -28,6 +29,20 @@ interface TablesPluginOptions extends FastifyPluginOptions {
   orchestrator: TableOrchestrator;
   handStore: InstanceType<typeof MemoryHandStore>;
   agentConfigStore: IUserAgentConfigStore;
+}
+
+type PublicTableState = Omit<TableState, 'config'> & {
+  config: Omit<TableState['config'], 'seed'>;
+  canManage?: boolean;
+};
+
+function publicTableState(table: TableState, options: { canManage?: boolean } = {}): PublicTableState {
+  const { seed: _seed, ...publicConfig } = table.config;
+  return {
+    ...table,
+    config: publicConfig,
+    ...(options.canManage !== undefined ? { canManage: options.canManage } : {}),
+  };
 }
 
 export async function tablesRoutes(app: FastifyInstance, opts: TablesPluginOptions) {
@@ -57,7 +72,7 @@ export async function tablesRoutes(app: FastifyInstance, opts: TablesPluginOptio
         },
         ownerUserId,
       );
-      reply.status(201).send({ data: table });
+      reply.status(201).send({ data: publicTableState(table, { canManage: true }) });
     },
   );
 
@@ -83,10 +98,9 @@ export async function tablesRoutes(app: FastifyInstance, opts: TablesPluginOptio
         throw e;
       });
       reply.send({
-        data: {
-          ...table,
+        data: publicTableState(table, {
           canManage: orchestrator.getTableOwnerUserId(req.params.tableId) === req.user!.userId,
-        },
+        }),
       });
     },
   );

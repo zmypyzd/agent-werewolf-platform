@@ -61,7 +61,6 @@ export interface HandSummary {
   handId: string;
   tableId: string;
   handNumber: number;
-  seed: string;
   startedAt: number;
   completedAt: number;
   players: PublicHandPlayerSummary[];
@@ -72,32 +71,18 @@ export interface HandSummary {
   finalPots: Pot[];
 }
 
-export interface MatchArtifactFileRef {
-  path: string;
-  sha256: string;
-  bytes: number;
-  contentType: string;
-}
-
 export interface MatchArtifactManifest {
   artifactVersion: 1;
   matchId: string;
   tableId: string;
   createdAt: number;
   handIds: string[];
-  files: {
-    summary: MatchArtifactFileRef;
-    replay: MatchArtifactFileRef;
-    decisionTrace: MatchArtifactFileRef;
-    analysisSummary: MatchArtifactFileRef;
-  };
 }
 
 export interface MatchSummary {
   matchId: string;
   tableId: string;
   name: string;
-  seed: string;
   startedAt: number;
   completedAt: number;
   handIds: string[];

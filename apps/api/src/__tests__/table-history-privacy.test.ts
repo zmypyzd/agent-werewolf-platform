@@ -86,6 +86,7 @@ async function createCompletedHand() {
   const handBody = JSON.parse(hand.body) as { data: { handId: string; players: Record<string, unknown>[] } };
   expect(JSON.stringify(handBody.data)).not.toContain('"holeCards"');
   expect(JSON.stringify(handBody.data)).not.toContain('"handEvaluation"');
+  expect(handBody.data).not.toHaveProperty('seed');
   expectPublicHandPlayers(handBody.data.players);
   const handId = handBody.data.handId;
 
@@ -159,6 +160,8 @@ describe('table management permission', () => {
     expect(bobResponse.statusCode).toBe(200);
     expect(JSON.parse(aliceResponse.body).data.canManage).toBe(true);
     expect(JSON.parse(bobResponse.body).data.canManage).toBe(false);
+    expect(JSON.parse(aliceResponse.body).data.config).not.toHaveProperty('seed');
+    expect(JSON.parse(bobResponse.body).data.config).not.toHaveProperty('seed');
   });
 
   it('POST /api/v1/tables/:tableId/hands/start is owner-only', async () => {

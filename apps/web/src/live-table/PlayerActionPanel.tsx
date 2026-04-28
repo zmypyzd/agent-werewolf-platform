@@ -6,6 +6,7 @@ const RED_SUITS = new Set<Card['suit']>(['h', 'd']);
 
 export interface PlayerActionPanelProps {
   pendingAction: PendingAction | null;
+  holeCards: [Card, Card] | null;
   submitting: boolean;
   error: string | null;
   now?: number;
@@ -19,6 +20,7 @@ export type SizedActionValidationResult =
 
 export function PlayerActionPanel({
   pendingAction,
+  holeCards,
   submitting,
   error,
   now = Date.now(),
@@ -79,8 +81,14 @@ export function PlayerActionPanel({
             <strong>{deadlineLabel}</strong>
           </div>
           <div className="mini-card-row" aria-label="Your hole cards">
-            <PanelCard card={pendingAction.privateState.holeCards[0]} />
-            <PanelCard card={pendingAction.privateState.holeCards[1]} />
+            {holeCards ? (
+              <>
+                <PanelCard card={holeCards[0]} />
+                <PanelCard card={holeCards[1]} />
+              </>
+            ) : (
+              <span className="card-back">Cards pending</span>
+            )}
           </div>
         </div>
       </div>

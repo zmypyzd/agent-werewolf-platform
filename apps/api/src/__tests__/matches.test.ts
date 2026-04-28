@@ -88,17 +88,19 @@ describe('match artifact API', () => {
     expect(list.statusCode).toBe(200);
     const listBody = JSON.parse(list.payload);
     expect(listBody.data.map((entry: { matchId: string }) => entry.matchId)).toContain(matchId);
+    expect(listBody.data[0]).not.toHaveProperty('seed');
 
     const record = await app.inject({ method: 'GET', url: `/api/v1/matches/${matchId}` });
     expect(record.statusCode).toBe(200);
     const recordBody = JSON.parse(record.payload);
+    expect(recordBody.data.summary).not.toHaveProperty('seed');
     expect(recordBody.data.summary.hands).toHaveLength(1);
+    expect(recordBody.data.summary.hands[0]).not.toHaveProperty('seed');
     expect(recordBody.data.replayEvents).toBeUndefined();
     expect(recordBody.data.decisionTraces).toBeUndefined();
     expect(recordBody.data.analysisSummary).toBeUndefined();
-    expect(recordBody.data.manifest.files.summary.sha256).toMatch(/^[a-f0-9]{64}$/);
-    expect(recordBody.data.manifest.files.decisionTrace.path).toBe('decision-trace.jsonl');
-    expect(recordBody.data.manifest.files.analysisSummary.path).toBe('analysis-summary.json');
+    expect(recordBody.data.manifest).not.toHaveProperty('files');
+    expect(recordBody.data.manifest.handIds).toEqual([expect.stringMatching(/^hand-/)]);
 
     const replay = await app.inject({ method: 'GET', url: `/api/v1/matches/${matchId}/replay` });
     expect(replay.statusCode).toBe(200);
@@ -153,6 +155,8 @@ describe('match artifact API', () => {
     const recordBody = JSON.parse(record.payload);
     expect(JSON.stringify(recordBody.data)).not.toContain('"holeCards"');
     expect(JSON.stringify(recordBody.data)).not.toContain('"handEvaluation"');
+    expect(recordBody.data.summary).not.toHaveProperty('seed');
+    expect(recordBody.data.summary.hands[0]).not.toHaveProperty('seed');
     expect(recordBody.data.replayEvents).toBeUndefined();
   });
 
@@ -181,9 +185,9 @@ describe('match artifact API', () => {
     expect(JSON.stringify(body.data)).not.toContain('rawChainOfThought');
     expect(JSON.stringify(body.data)).not.toContain('keyObservations');
     expect(JSON.stringify(body.data)).not.toContain('consideredActions');
+    expect(JSON.stringify(body.data)).not.toContain('privateStateHash');
+    expect(JSON.stringify(body.data)).not.toContain('reasoningSummary');
     expect(body.data[0].publicStateHash).toMatch(/^[a-f0-9]{64}$/);
-    expect(body.data[0].privateStateHash).toMatch(/^[a-f0-9]{64}$/);
-    expect(body.data[0].reasoningSummary).toBeNull();
   });
 
   it('public match analysis summarizes decisions without reasoning text', async () => {

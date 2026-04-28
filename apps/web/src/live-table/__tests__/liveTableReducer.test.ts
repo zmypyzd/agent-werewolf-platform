@@ -192,7 +192,7 @@ describe('liveTableReducer', () => {
         requestId: 'req-1',
         deadlineAt: 1234,
         legalActions: [{ type: 'fold' }, { type: 'call', callAmount: 50 }],
-        privateState: { playerId: 'player-a', holeCards: cards },
+        privateState: { playerId: 'player-a' },
       },
     ]);
 
@@ -201,10 +201,10 @@ describe('liveTableReducer', () => {
       requestId: 'req-1',
       legalActions: [{ type: 'fold' }, { type: 'call', callAmount: 50 }],
     });
-    expect(state.seats[0]!.holeCards).toEqual(cards);
+    expect(state.seats[0]!.holeCards).toBeNull();
   });
 
-  it('updates private action cards only on the matching player seat', () => {
+  it('does not update private cards from action requests', () => {
     const state = reduce([
       { type: 'snapshot.loaded', table: sharedOwnerSnapshot, meUserId: 'usr-a' },
       {
@@ -213,14 +213,14 @@ describe('liveTableReducer', () => {
         requestId: 'req-1',
         deadlineAt: 1234,
         legalActions: [{ type: 'fold' }, { type: 'call', callAmount: 50 }],
-        privateState: { playerId: 'player-b', holeCards: cards },
+        privateState: { playerId: 'player-b' },
       },
     ]);
 
     expect(state.seats[0]!.isMe).toBe(true);
     expect(state.seats[1]!.isMe).toBe(true);
     expect(state.seats[0]!.holeCards).toBeNull();
-    expect(state.seats[1]!.holeCards).toEqual(cards);
+    expect(state.seats[1]!.holeCards).toBeNull();
   });
 
   it('updates private hole cards only on the identified seat', () => {
@@ -324,7 +324,7 @@ describe('liveTableReducer', () => {
         requestId: 'req-1',
         deadlineAt: 1234,
         legalActions: [{ type: 'fold' }, { type: 'call', callAmount: 50 }],
-        privateState: { playerId: 'player-a', holeCards: cards },
+        privateState: { playerId: 'player-a' },
       },
       { type: 'action.applied', playerId: 'player-a', actionType: 'call', amount: 50, potTotal: 100 },
     ]);

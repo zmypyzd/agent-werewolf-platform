@@ -20,10 +20,10 @@ hand cards.
 Backend:
 
 - Modify `packages/table-orchestrator/src/orchestrator.ts`
-  - Emits `table.hole_cards_revealed` on the table topic when internal hole cards are dealt.
-  - Keeps existing private `seat.hole_cards` and `seat.action_requested` flows.
+  - Emits `seat.hole_cards` only on private seat topics when internal hole cards are dealt.
+  - Keeps `seat.action_requested` private and free of `holeCards`.
 - Modify `apps/api/src/__tests__/ws.test.ts`
-  - Replaces the spectator no-hole-card invariant with explicit realtime reveal coverage.
+  - Preserves the spectator no-hole-card invariant and verifies private seat-card delivery.
 
 Frontend state:
 
