@@ -1,0 +1,76 @@
+import type { Card, LiveSeatView, LiveTableViewState } from './liveTableTypes.js';
+
+export type SeatPosition = 'top-left' | 'top-right' | 'right' | 'bottom-right' | 'bottom-left' | 'left';
+
+export interface PokerTableSeatModel extends LiveSeatView {
+  position: SeatPosition;
+  displayName: string;
+}
+
+export interface VisibleHandModel {
+  playerId: string;
+  label: string;
+  cards: [Card, Card] | null;
+  cardStatus: 'visible' | 'cards pending';
+}
+
+export interface PokerTableViewModel {
+  title: string;
+  subtitle: string;
+  phaseLabel: string;
+  connectionStatus: LiveTableViewState['connectionStatus'];
+  board: Card[];
+  totalPot: number;
+  seats: PokerTableSeatModel[];
+  visibleHands: VisibleHandModel[];
+  actionLog: LiveTableViewState['actionLog'];
+  pendingAction: LiveTableViewState['pendingAction'];
+  canShowSeatControls: boolean;
+}
+
+const POSITION_MAP: Record<number, SeatPosition[]> = {
+  2: ['top-left', 'bottom-right'],
+  3: ['top-left', 'right', 'bottom-left'],
+  4: ['top-left', 'top-right', 'bottom-right', 'bottom-left'],
+  5: ['top-left', 'top-right', 'right', 'bottom-right', 'bottom-left'],
+  6: ['top-left', 'top-right', 'right', 'bottom-right', 'bottom-left', 'left'],
+};
+
+export function buildPokerTableViewModel(
+  state: LiveTableViewState,
+  options: { seatable: boolean },
+): PokerTableViewModel {
+  const seats = state.seats.map((seat, index) => ({
+    ...seat,
+    position: positionFor(state.seats.length, index),
+    displayName: seat.agentId ?? `Seat ${seat.seatIndex}`,
+  }));
+  const blindLabel = state.blindConfig ? `${state.blindConfig.smallBlind}/${state.blindConfig.bigBlind}` : '--';
+  const phaseLabel = state.phase ?? 'waiting';
+
+  return {
+    title: state.tableName || 'Poker Table',
+    subtitle: `hand ${state.handId ?? '--'} · ${phaseLabel} · blinds ${blindLabel}`,
+    phaseLabel,
+    connectionStatus: state.connectionStatus,
+    board: state.board,
+    totalPot: state.pots.reduce((sum, pot) => sum + pot.amount, 0),
+    seats,
+    visibleHands: seats
+      .filter(seat => seat.occupied && seat.playerId)
+      .map(seat => ({
+        playerId: seat.playerId!,
+        label: seat.displayName,
+        cards: seat.holeCards,
+        cardStatus: seat.holeCards ? 'visible' : 'cards pending',
+      })),
+    actionLog: state.actionLog,
+    pendingAction: state.pendingAction,
+    canShowSeatControls: options.seatable,
+  };
+}
+
+function positionFor(totalSeats: number, index: number): SeatPosition {
+  const normalizedTotal = Math.min(6, Math.max(2, totalSeats));
+  return (POSITION_MAP[normalizedTotal] ?? POSITION_MAP[6])![index] ?? 'left';
+}
