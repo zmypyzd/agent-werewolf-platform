@@ -1,10 +1,17 @@
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import type { HandSummary, ReplayEvent } from '../lib/matchArtifacts.js';
 import {
+  REPLAY_STREET_FILTERS,
   buildActionTimeline,
   buildHandReplayViews,
+  filterActionTimelineByStreet,
   formatCard,
   formatCountLabel,
+  getNextActionId,
+  getPreviousActionId,
+  resolveSelectedStreetFilter,
   type ActionTimelineItem,
+  type ReplayStreetFilter,
 } from '../lib/matchReplayView.js';
 
 export interface ReplayWorkbenchProps {
@@ -33,9 +40,99 @@ export function ReplayWorkbench({
   const handViews = buildHandReplayViews(hands, replayEvents);
   const selectedHand = hands.find(hand => hand.handId === selectedHandId) ?? null;
   const selectedHandView = handViews.find(hand => hand.handId === selectedHand?.handId) ?? null;
-  const timeline = buildActionTimeline(selectedHand, replayEvents);
-  const selectedAction = timeline.find(action => action.id === selectedActionId) ?? timeline[0] ?? null;
+  const timeline = useMemo(
+    () => buildActionTimeline(selectedHand, replayEvents),
+    [replayEvents, selectedHand],
+  );
+  const [streetFilter, setStreetFilter] = useState<ReplayStreetFilter>('all');
+  const [isPlaying, setIsPlaying] = useState(false);
+  const filteredTimeline = useMemo(
+    () => filterActionTimelineByStreet(timeline, streetFilter),
+    [streetFilter, timeline],
+  );
+  const selectedAction = filteredTimeline.find(action => action.id === selectedActionId)
+    ?? filteredTimeline[0]
+    ?? null;
   const stackEntries = Object.entries(finalStacks);
+  const selectedActionPosition = selectedAction
+    ? filteredTimeline.findIndex(action => action.id === selectedAction.id) + 1
+    : 0;
+
+  useEffect(() => {
+    setIsPlaying(false);
+    setStreetFilter('all');
+  }, [selectedHandId]);
+
+  useEffect(() => {
+    if (filteredTimeline.length === 0) {
+      setIsPlaying(false);
+      return;
+    }
+    if (selectedActionId && filteredTimeline.some(action => action.id === selectedActionId)) return;
+    onSelectAction(filteredTimeline[0]!.id);
+  }, [filteredTimeline, onSelectAction, selectedActionId]);
+
+  const selectPreviousAction = useCallback(() => {
+    const previousActionId = getPreviousActionId(timeline, selectedAction?.id ?? null, streetFilter);
+    if (!previousActionId) return;
+    setIsPlaying(false);
+    onSelectAction(previousActionId);
+  }, [onSelectAction, selectedAction?.id, streetFilter, timeline]);
+
+  const selectNextAction = useCallback(() => {
+    const nextActionId = getNextActionId(timeline, selectedAction?.id ?? null, streetFilter);
+    if (!nextActionId) {
+      setIsPlaying(false);
+      return;
+    }
+    setIsPlaying(false);
+    onSelectAction(nextActionId);
+  }, [onSelectAction, selectedAction?.id, streetFilter, timeline]);
+
+  const handleSelectAction = useCallback((actionId: string) => {
+    setIsPlaying(false);
+    onSelectAction(actionId);
+  }, [onSelectAction]);
+
+  useEffect(() => {
+    if (!isPlaying) return undefined;
+    const intervalId = window.setInterval(() => {
+      const currentActionId = selectedActionId && filteredTimeline.some(action => action.id === selectedActionId)
+        ? selectedActionId
+        : filteredTimeline[0]?.id ?? null;
+      const nextActionId = getNextActionId(timeline, currentActionId, streetFilter);
+      if (!nextActionId) {
+        setIsPlaying(false);
+        return;
+      }
+      onSelectAction(nextActionId);
+    }, 800);
+
+    return () => window.clearInterval(intervalId);
+  }, [filteredTimeline, isPlaying, onSelectAction, selectedActionId, streetFilter, timeline]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (shouldIgnoreReplayKeyboardTarget(event.target)) return;
+      if (event.key === 'ArrowLeft') {
+        const previousActionId = getPreviousActionId(timeline, selectedAction?.id ?? null, streetFilter);
+        if (!previousActionId) return;
+        event.preventDefault();
+        setIsPlaying(false);
+        onSelectAction(previousActionId);
+      }
+      if (event.key === 'ArrowRight') {
+        const nextActionId = getNextActionId(timeline, selectedAction?.id ?? null, streetFilter);
+        if (!nextActionId) return;
+        event.preventDefault();
+        setIsPlaying(false);
+        onSelectAction(nextActionId);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onSelectAction, selectedAction?.id, streetFilter, timeline]);
 
   return (
     <section className="workbench-panel">
@@ -62,6 +159,24 @@ export function ReplayWorkbench({
         )}
       </div>
 
+      <ReplayControls
+        actionCount={filteredTimeline.length}
+        isPlaying={isPlaying}
+        selectedActionPosition={selectedActionPosition}
+        selectedStreetFilter={streetFilter}
+        canStepBackward={getPreviousActionId(timeline, selectedAction?.id ?? null, streetFilter) !== null}
+        canStepForward={getNextActionId(timeline, selectedAction?.id ?? null, streetFilter) !== null}
+        onSelectAction={handleSelectAction}
+        onSelectStreetFilter={filter => {
+          setIsPlaying(false);
+          setStreetFilter(filter);
+        }}
+        onStepBackward={selectPreviousAction}
+        onStepForward={selectNextAction}
+        onTogglePlay={() => setIsPlaying(current => !current)}
+        timeline={filteredTimeline}
+      />
+
       <div className="workbench-grid">
         <HandRail
           handViews={handViews}
@@ -71,12 +186,108 @@ export function ReplayWorkbench({
         <HandBoard
           hand={selectedHand}
           handView={selectedHandView}
-          timeline={timeline}
+          timeline={filteredTimeline}
           selectedActionId={selectedAction?.id ?? null}
-          onSelectAction={onSelectAction}
+          selectedStreetFilter={streetFilter}
+          onSelectAction={handleSelectAction}
         />
         <ActionInspector hand={selectedHand} selectedAction={selectedAction} />
       </div>
+    </section>
+  );
+}
+
+function ReplayControls({
+  actionCount,
+  canStepBackward,
+  canStepForward,
+  isPlaying,
+  selectedActionPosition,
+  selectedStreetFilter,
+  timeline,
+  onSelectAction,
+  onSelectStreetFilter,
+  onStepBackward,
+  onStepForward,
+  onTogglePlay,
+}: {
+  actionCount: number;
+  canStepBackward: boolean;
+  canStepForward: boolean;
+  isPlaying: boolean;
+  selectedActionPosition: number;
+  selectedStreetFilter: ReplayStreetFilter;
+  timeline: ActionTimelineItem[];
+  onSelectAction: (actionId: string) => void;
+  onSelectStreetFilter: (streetFilter: ReplayStreetFilter) => void;
+  onStepBackward: () => void;
+  onStepForward: () => void;
+  onTogglePlay: () => void;
+}) {
+  const selectedFilter = resolveSelectedStreetFilter(selectedStreetFilter);
+
+  const handleRangeChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const actionPosition = Number.parseInt(event.currentTarget.value, 10);
+    const action = timeline[actionPosition - 1];
+    if (action) onSelectAction(action.id);
+  };
+
+  return (
+    <section aria-label="Replay controls" className="replay-controls">
+      <div className="replay-control-row">
+        <button
+          className="button-secondary replay-control-button"
+          disabled={!canStepBackward}
+          onClick={onStepBackward}
+          type="button"
+        >
+          Previous
+        </button>
+        <button
+          className="button-secondary replay-control-button"
+          disabled={actionCount === 0 || (!isPlaying && !canStepForward)}
+          onClick={onTogglePlay}
+          type="button"
+        >
+          {isPlaying ? 'Pause' : 'Play'}
+        </button>
+        <button
+          className="button-secondary replay-control-button"
+          disabled={!canStepForward}
+          onClick={onStepForward}
+          type="button"
+        >
+          Next
+        </button>
+        <label className="action-range-control">
+          <span>
+            Action {selectedActionPosition || 0} of {actionCount}
+          </span>
+          <input
+            aria-label="Action position"
+            disabled={actionCount === 0}
+            max={actionCount}
+            min={actionCount === 0 ? 0 : 1}
+            onChange={handleRangeChange}
+            type="range"
+            value={selectedActionPosition}
+          />
+        </label>
+      </div>
+      <fieldset className="street-filter-group">
+        <legend>Street filter</legend>
+        {REPLAY_STREET_FILTERS.map(filter => (
+          <button
+            aria-pressed={filter === selectedFilter}
+            className="street-filter-button"
+            key={filter}
+            onClick={() => onSelectStreetFilter(filter)}
+            type="button"
+          >
+            {formatStreetFilter(filter)}
+          </button>
+        ))}
+      </fieldset>
     </section>
   );
 }
@@ -123,12 +334,14 @@ function HandBoard({
   handView,
   timeline,
   selectedActionId,
+  selectedStreetFilter,
   onSelectAction,
 }: {
   hand: HandSummary | null;
   handView: ReturnType<typeof buildHandReplayViews>[number] | null;
   timeline: ActionTimelineItem[];
   selectedActionId: string | null;
+  selectedStreetFilter: ReplayStreetFilter;
   onSelectAction: (actionId: string) => void;
 }) {
   if (!hand) {
@@ -186,7 +399,7 @@ function HandBoard({
       <div className="action-timeline">
         <h4>Action Timeline</h4>
         {timeline.length === 0 ? (
-          <p className="muted">No actions recorded.</p>
+          <p className="muted">{formatTimelineEmptyState(selectedStreetFilter)}</p>
         ) : (
           timeline.map(action => (
             <button
@@ -256,4 +469,23 @@ function formatTimelineAmount(amount: number): string {
 
 function formatInspectorAmount(amount: number): string {
   return amount === 0 ? 'n/a' : String(amount);
+}
+
+function formatStreetFilter(filter: ReplayStreetFilter): string {
+  return filter === 'all' ? 'All' : formatCountLabel(filter);
+}
+
+function formatTimelineEmptyState(filter: ReplayStreetFilter): string {
+  return filter === 'all'
+    ? 'No actions recorded.'
+    : `No ${formatCountLabel(filter)} actions recorded.`;
+}
+
+function shouldIgnoreReplayKeyboardTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable
+    || target.tagName === 'INPUT'
+    || target.tagName === 'SELECT'
+    || target.tagName === 'TEXTAREA'
+    || target.tagName === 'BUTTON';
 }

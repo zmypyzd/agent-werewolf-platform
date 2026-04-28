@@ -9,7 +9,18 @@ import type {
 } from './matchArtifacts.js';
 
 const SUIT_GLYPH: Record<Suit, string> = { s: 'S', h: 'H', d: 'D', c: 'C' };
-const HAND_PHASES = new Set<HandPhase>(['preflop', 'flop', 'turn', 'river', 'showdown', 'complete']);
+const HAND_PHASE_VALUES: readonly HandPhase[] = [
+  'preflop',
+  'flop',
+  'turn',
+  'river',
+  'showdown',
+  'complete',
+];
+const HAND_PHASES = new Set<HandPhase>(HAND_PHASE_VALUES);
+
+export type ReplayStreetFilter = 'all' | HandPhase;
+export const REPLAY_STREET_FILTERS: readonly ReplayStreetFilter[] = ['all', ...HAND_PHASE_VALUES];
 
 export interface HandReplayView {
   handId: string;
@@ -115,6 +126,44 @@ export function buildDistributionRows(counts: Record<string, number>): Distribut
   return Object.entries(counts)
     .map(([label, count]) => ({ label, count, percent: count / total }))
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+export function resolveSelectedStreetFilter(value: unknown): ReplayStreetFilter {
+  if (value === 'all') return 'all';
+  return isHandPhase(value) ? value : 'all';
+}
+
+export function filterActionTimelineByStreet(
+  timeline: ActionTimelineItem[],
+  streetFilter: ReplayStreetFilter,
+): ActionTimelineItem[] {
+  const selectedStreet = resolveSelectedStreetFilter(streetFilter);
+  if (selectedStreet === 'all') return timeline;
+  return timeline.filter(action => action.street === selectedStreet);
+}
+
+export function getPreviousActionId(
+  timeline: ActionTimelineItem[],
+  selectedActionId: string | null,
+  streetFilter: ReplayStreetFilter = 'all',
+): string | null {
+  if (!selectedActionId) return null;
+  const filteredTimeline = filterActionTimelineByStreet(timeline, streetFilter);
+  const selectedIndex = filteredTimeline.findIndex(action => action.id === selectedActionId);
+  if (selectedIndex <= 0) return null;
+  return filteredTimeline[selectedIndex - 1]?.id ?? null;
+}
+
+export function getNextActionId(
+  timeline: ActionTimelineItem[],
+  selectedActionId: string | null,
+  streetFilter: ReplayStreetFilter = 'all',
+): string | null {
+  if (!selectedActionId) return null;
+  const filteredTimeline = filterActionTimelineByStreet(timeline, streetFilter);
+  const selectedIndex = filteredTimeline.findIndex(action => action.id === selectedActionId);
+  if (selectedIndex < 0) return null;
+  return filteredTimeline[selectedIndex + 1]?.id ?? null;
 }
 
 function matchAppliedEvents(

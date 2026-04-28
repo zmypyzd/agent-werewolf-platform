@@ -85,6 +85,14 @@ describe('ReplayWorkbench', () => {
     );
 
     expect(html).toContain('Replay Workbench');
+    expect(html).toContain('aria-label="Replay controls"');
+    expect(html).toContain('Previous');
+    expect(html).toContain('Play');
+    expect(html).toContain('Next');
+    expect(html).toContain('type="range"');
+    expect(html).toContain('aria-label="Action position"');
+    expect(html).toContain('Street filter');
+    expect(html).toContain('aria-pressed="true" class="street-filter-button"');
     expect(html).toContain('aria-label="Final stacks"');
     expect(html).toContain('aria-label="Hands"');
     expect(html).toContain('aria-label="Community cards"');

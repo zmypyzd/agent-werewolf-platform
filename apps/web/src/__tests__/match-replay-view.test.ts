@@ -4,10 +4,15 @@ import {
   buildActionTimeline,
   buildDistributionRows,
   buildHandReplayViews,
+  filterActionTimelineByStreet,
   formatCard,
   formatCountLabel,
   formatNullableMs,
   formatNullablePercent,
+  getNextActionId,
+  getPreviousActionId,
+  resolveSelectedStreetFilter,
+  type ActionTimelineItem,
 } from '../lib/matchReplayView.js';
 
 const hand: HandSummary = {
@@ -97,6 +102,49 @@ const events: ReplayEvent[] = [
     eventType: 'player_action',
     timestamp: 3,
     data: { phase: 'turn' },
+  },
+];
+
+const timeline: ActionTimelineItem[] = [
+  {
+    id: 'hand-1:0',
+    eventId: 'event-1',
+    ordinal: 1,
+    playerId: 'bot-a',
+    actionType: 'call',
+    amount: 50,
+    street: 'preflop',
+    eventType: 'action.applied',
+  },
+  {
+    id: 'hand-1:1',
+    eventId: 'event-2',
+    ordinal: 2,
+    playerId: 'bot-b',
+    actionType: 'check',
+    amount: 0,
+    street: 'flop',
+    eventType: 'action.applied',
+  },
+  {
+    id: 'hand-1:2',
+    eventId: 'event-3',
+    ordinal: 3,
+    playerId: 'bot-a',
+    actionType: 'bet',
+    amount: 100,
+    street: 'flop',
+    eventType: 'action.applied',
+  },
+  {
+    id: 'hand-1:3',
+    eventId: 'event-4',
+    ordinal: 4,
+    playerId: 'bot-b',
+    actionType: 'fold',
+    amount: 0,
+    street: null,
+    eventType: 'action.applied',
   },
 ];
 
@@ -328,5 +376,37 @@ describe('match replay view helpers', () => {
       { label: 'raise', count: 2, percent: 1 / 3 },
       { label: 'fold', count: 1, percent: 1 / 6 },
     ]);
+  });
+
+  it('gets previous and next action ids within the selected street filter', () => {
+    expect(getPreviousActionId(timeline, 'hand-1:2')).toBe('hand-1:1');
+    expect(getNextActionId(timeline, 'hand-1:1')).toBe('hand-1:2');
+    expect(getPreviousActionId(timeline, 'hand-1:2', 'flop')).toBe('hand-1:1');
+    expect(getNextActionId(timeline, 'hand-1:1', 'flop')).toBe('hand-1:2');
+    expect(getPreviousActionId(timeline, 'hand-1:1', 'flop')).toBeNull();
+    expect(getNextActionId(timeline, 'hand-1:2', 'flop')).toBeNull();
+  });
+
+  it('returns null for previous and next when the selected action is stale', () => {
+    expect(getPreviousActionId(timeline, 'missing')).toBeNull();
+    expect(getNextActionId(timeline, null)).toBeNull();
+  });
+
+  it('resolves selected street filters and filters timeline actions', () => {
+    expect(resolveSelectedStreetFilter('flop')).toBe('flop');
+    expect(resolveSelectedStreetFilter('all')).toBe('all');
+    expect(resolveSelectedStreetFilter('bogus')).toBe('all');
+    expect(resolveSelectedStreetFilter(null)).toBe('all');
+    expect(filterActionTimelineByStreet(timeline, 'all').map(action => action.id)).toEqual([
+      'hand-1:0',
+      'hand-1:1',
+      'hand-1:2',
+      'hand-1:3',
+    ]);
+    expect(filterActionTimelineByStreet(timeline, 'flop').map(action => action.id)).toEqual([
+      'hand-1:1',
+      'hand-1:2',
+    ]);
+    expect(filterActionTimelineByStreet(timeline, 'river')).toEqual([]);
   });
 });
