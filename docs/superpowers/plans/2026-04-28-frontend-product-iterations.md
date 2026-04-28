@@ -692,7 +692,7 @@ git commit -m "Upgrade agent management"
 - Modify: `apps/web/e2e/demo.spec.ts` or add focused e2e specs if Playwright is available
 - Test: existing replay and analysis tests
 
-- [ ] **Step 1: Add replay player state helpers**
+- [x] **Step 1: Add replay player state helpers**
 
 Add pure helpers for:
 
@@ -701,11 +701,11 @@ Add pure helpers for:
 - selected street
 - timeline action filtering
 
-- [ ] **Step 2: Write replay helper tests**
+- [x] **Step 2: Write replay helper tests**
 
 Use existing `match-replay-view.test.ts` and add previous/next/street filter cases.
 
-- [ ] **Step 3: Add replay controls**
+- [x] **Step 3: Add replay controls**
 
 Render:
 
@@ -715,11 +715,11 @@ Render:
 - action range input
 - street markers or filter controls
 
-- [ ] **Step 4: Add keyboard stepping**
+- [x] **Step 4: Add keyboard stepping**
 
 Left/right arrows step actions when focus is not inside an input, select, textarea, or button.
 
-- [ ] **Step 5: Add analysis sorting helpers**
+- [x] **Step 5: Add analysis sorting helpers**
 
 Support sorting agents by:
 
@@ -730,11 +730,11 @@ Support sorting agents by:
 - fallback count
 - missing reasoning count
 
-- [ ] **Step 6: Add warning styles**
+- [x] **Step 6: Add warning styles**
 
 Timeout, invalid, and fallback metrics use warning classes when non-zero.
 
-- [ ] **Step 7: Run focused tests**
+- [x] **Step 7: Run focused tests**
 
 ```bash
 pnpm --filter web run test -- src/__tests__/match-replay-view.test.ts src/__tests__/match-replay-workbench.test.tsx src/__tests__/match-analysis.test.tsx
@@ -742,7 +742,7 @@ pnpm --filter web run test -- src/__tests__/match-replay-view.test.ts src/__test
 
 Expected: PASS.
 
-- [ ] **Step 8: Run full web verification**
+- [x] **Step 8: Run full web verification**
 
 ```bash
 pnpm --filter web run test
@@ -752,7 +752,7 @@ pnpm lint
 
 Expected: PASS.
 
-- [ ] **Step 9: Browser QA when available**
+- [x] **Step 9: Browser QA when available**
 
 If Playwright dependencies are installed:
 
@@ -769,7 +769,7 @@ If not installed, start the dev server and run a browser smoke test manually wit
 - Replay/Analysis
 - 375px mobile layout
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add apps/web/src/pages/MatchReplayWorkbench.tsx apps/web/src/pages/MatchAnalysisDashboard.tsx apps/web/src/lib/matchReplayView.ts apps/web/src/styles.css apps/web/src/__tests__ apps/web/e2e
