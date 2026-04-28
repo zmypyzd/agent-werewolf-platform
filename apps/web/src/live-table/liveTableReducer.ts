@@ -53,7 +53,7 @@ export function liveTableReducer(
     case 'hand.started':
       return {
         ...state,
-        handId: event.handId,
+        handId: event.handId ?? state.handId,
         handNumber: event.handNumber,
         phase: 'preflop',
         board: [],
@@ -63,20 +63,30 @@ export function liveTableReducer(
         actionLog: [],
         seats: state.seats.map(seat => ({ ...seat, isCurrentActor: false, holeCards: null })),
       };
-    case 'table.hole_cards_revealed':
+    case 'table.hole_cards_revealed': {
+      if (state.handId && state.handId !== event.handId) return state;
+
       return {
         ...state,
+        handId: state.handId ?? event.handId,
         seats: state.seats.map(seat =>
-          seat.playerId === event.playerId || seat.seatIndex === event.seatIndex
+          seatMatchesIdentity(seat, event)
             ? { ...seat, holeCards: event.holeCards }
             : seat,
         ),
       };
-    case 'seat.hole_cards':
+    }
+    case 'seat.hole_cards': {
+      if (state.handId && state.handId !== event.handId) return state;
+
       return {
         ...state,
-        seats: state.seats.map(seat => (seat.isMe ? { ...seat, holeCards: event.holeCards } : seat)),
+        handId: state.handId ?? event.handId,
+        seats: state.seats.map(seat =>
+          seatMatchesIdentity(seat, event) ? { ...seat, holeCards: event.holeCards } : seat,
+        ),
       };
+    }
     case 'community_cards.dealt':
       return { ...state, phase: event.phase, board: [...state.board, ...event.cards] };
     case 'action.requested':
@@ -86,8 +96,11 @@ export function liveTableReducer(
         seats: markCurrentActor(state.seats, event.playerId),
       };
     case 'seat.action_requested':
+      if (state.handId && state.handId !== event.handId) return state;
+
       return {
         ...state,
+        handId: state.handId ?? event.handId,
         pendingAction: {
           handId: event.handId,
           requestId: event.requestId,
@@ -96,13 +109,17 @@ export function liveTableReducer(
           privateState: event.privateState,
         },
         seats: state.seats.map(seat =>
-          seat.isMe ? { ...seat, holeCards: event.privateState.holeCards } : seat,
+          seat.playerId === event.privateState.playerId
+            ? { ...seat, holeCards: event.privateState.holeCards }
+            : seat,
         ),
       };
     case 'action.applied':
       return {
         ...state,
         currentActorPlayerId: null,
+        pendingAction:
+          state.pendingAction?.privateState.playerId === event.playerId ? null : state.pendingAction,
         seats: markCurrentActor(state.seats, null),
         actionLog: appendLog(state.actionLog, formatActionApplied(event)),
       };
@@ -170,11 +187,28 @@ function markCurrentActor(seats: LiveSeatView[], playerId: string | null): LiveS
 }
 
 function appendLog(entries: LiveActionLogEntry[], label: string): LiveActionLogEntry[] {
-  return [...entries, { id: `${Date.now()}:${entries.length}`, label }].slice(-50);
+  return [...entries, { id: nextLogId(entries), label }].slice(-50);
 }
 
 function formatActionApplied(event: Extract<LiveTableEvent, { type: 'action.applied' }>): string {
   const amount = event.amount > 0 ? ` ${event.amount}` : '';
   const pot = event.potTotal === undefined ? '' : ` (pot ${event.potTotal})`;
   return `${event.playerId} ${event.actionType}${amount}${pot}`;
+}
+
+function nextLogId(entries: LiveActionLogEntry[]): string {
+  const lastId = entries.at(-1)?.id;
+  const lastNumber = lastId?.startsWith('log-') ? Number(lastId.slice('log-'.length)) : NaN;
+  return `log-${Number.isInteger(lastNumber) ? lastNumber + 1 : entries.length}`;
+}
+
+function seatMatchesIdentity(
+  seat: LiveSeatView,
+  identity: { playerId: string; seatIndex: number; agentId: string },
+): boolean {
+  return (
+    seat.seatIndex === identity.seatIndex &&
+    seat.playerId === identity.playerId &&
+    seat.agentId === identity.agentId
+  );
 }

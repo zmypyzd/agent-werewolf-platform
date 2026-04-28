@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialLiveTableState, liveTableReducer } from '../liveTableReducer.js';
+import { normalizeLiveTableEvent } from '../normalizeLiveTableEvent.js';
 import type { Card, LiveTableEvent, TableSnapshot } from '../liveTableTypes.js';
+import type { WsMessage } from '../../lib/ws.js';
 
 const cards: [Card, Card] = [
   { rank: 'A', suit: 's' },
   { rank: 'K', suit: 'h' },
+];
+
+const otherCards: [Card, Card] = [
+  { rank: '8', suit: 'c' },
+  { rank: '8', suit: 'd' },
 ];
 
 const snapshot: TableSnapshot = {
@@ -51,8 +58,27 @@ const snapshot: TableSnapshot = {
   button: 0,
 };
 
+const sharedOwnerSnapshot: TableSnapshot = {
+  ...snapshot,
+  seats: [
+    snapshot.seats[0]!,
+    {
+      ...snapshot.seats[1]!,
+      ownerUserId: 'usr-a',
+    },
+    null,
+    null,
+    null,
+    null,
+  ],
+};
+
 function reduce(events: LiveTableEvent[]) {
   return events.reduce(liveTableReducer, createInitialLiveTableState());
+}
+
+function message(type: string, payload: Record<string, unknown>): WsMessage {
+  return { topic: 'table:tbl-1', type, payload };
 }
 
 describe('liveTableReducer', () => {
@@ -137,6 +163,122 @@ describe('liveTableReducer', () => {
     expect(state.seats[0]!.holeCards).toEqual(cards);
   });
 
+  it('updates private action cards only on the matching player seat', () => {
+    const state = reduce([
+      { type: 'snapshot.loaded', table: sharedOwnerSnapshot, meUserId: 'usr-a' },
+      {
+        type: 'seat.action_requested',
+        handId: 'hand-1',
+        requestId: 'req-1',
+        deadlineAt: 1234,
+        legalActions: [{ type: 'fold' }, { type: 'call', callAmount: 50 }],
+        privateState: { playerId: 'player-b', holeCards: cards },
+      },
+    ]);
+
+    expect(state.seats[0]!.isMe).toBe(true);
+    expect(state.seats[1]!.isMe).toBe(true);
+    expect(state.seats[0]!.holeCards).toBeNull();
+    expect(state.seats[1]!.holeCards).toEqual(cards);
+  });
+
+  it('updates private hole cards only on the identified seat', () => {
+    const privateEvent = normalizeLiveTableEvent(message('seat.hole_cards', {
+      handId: 'hand-1',
+      playerId: 'player-b',
+      seatIndex: 1,
+      agentId: 'agent-b',
+      holeCards: cards,
+    }));
+
+    expect(privateEvent).not.toBeNull();
+    const state = reduce([
+      { type: 'snapshot.loaded', table: sharedOwnerSnapshot, meUserId: 'usr-a' },
+      privateEvent!,
+    ]);
+
+    expect(state.seats[0]!.isMe).toBe(true);
+    expect(state.seats[1]!.isMe).toBe(true);
+    expect(state.seats[0]!.holeCards).toBeNull();
+    expect(state.seats[1]!.holeCards).toEqual(cards);
+  });
+
+  it('preserves the current hand id when hand.started omits handId', () => {
+    const started = normalizeLiveTableEvent(message('hand.started', { handNumber: 7 }));
+
+    expect(started).toEqual({ type: 'hand.started', handNumber: 7 });
+    const state = reduce([
+      {
+        type: 'snapshot.loaded',
+        table: { ...snapshot, currentHandId: 'hand-from-snapshot' },
+        meUserId: 'usr-a',
+      },
+      started!,
+    ]);
+
+    expect(state.handId).toBe('hand-from-snapshot');
+  });
+
+  it('uses a reveal hand id when no current hand id exists', () => {
+    const state = reduce([
+      { type: 'snapshot.loaded', table: snapshot, meUserId: 'usr-a' },
+      {
+        type: 'table.hole_cards_revealed',
+        handId: 'hand-from-reveal',
+        playerId: 'player-b',
+        seatIndex: 1,
+        agentId: 'agent-b',
+        holeCards: cards,
+      },
+    ]);
+
+    expect(state.handId).toBe('hand-from-reveal');
+    expect(state.seats[1]!.holeCards).toEqual(cards);
+  });
+
+  it('ignores stale or mismatched public hole-card reveals', () => {
+    const state = reduce([
+      { type: 'snapshot.loaded', table: snapshot, meUserId: 'usr-a' },
+      { type: 'hand.started', handId: 'hand-1', handNumber: 1 },
+      {
+        type: 'table.hole_cards_revealed',
+        handId: 'hand-old',
+        playerId: 'player-b',
+        seatIndex: 1,
+        agentId: 'agent-b',
+        holeCards: cards,
+      },
+      {
+        type: 'table.hole_cards_revealed',
+        handId: 'hand-1',
+        playerId: 'player-b',
+        seatIndex: 0,
+        agentId: 'agent-b',
+        holeCards: otherCards,
+      },
+    ]);
+
+    expect(state.seats[0]!.holeCards).toBeNull();
+    expect(state.seats[1]!.holeCards).toBeNull();
+  });
+
+  it('clears a pending action when that player action is applied', () => {
+    const state = reduce([
+      { type: 'snapshot.loaded', table: snapshot, meUserId: 'usr-a' },
+      {
+        type: 'seat.action_requested',
+        handId: 'hand-1',
+        requestId: 'req-1',
+        deadlineAt: 1234,
+        legalActions: [{ type: 'fold' }, { type: 'call', callAmount: 50 }],
+        privateState: { playerId: 'player-a', holeCards: cards },
+      },
+      { type: 'action.applied', playerId: 'player-a', actionType: 'call', amount: 50, potTotal: 100 },
+    ]);
+
+    expect(state.pendingAction).toBeNull();
+  });
+
   it('updates board, pots, current actor, and action log from live events', () => {
     const state = reduce([
       { type: 'snapshot.loaded', table: snapshot, meUserId: 'usr-a' },
@@ -156,5 +298,38 @@ describe('liveTableReducer', () => {
       'player-b raise 100 (pot 150)',
       'pot awarded 150 to player-b',
     ]);
+    expect(state.actionLog.map(entry => entry.id)).toEqual(['log-0', 'log-1']);
+  });
+});
+
+describe('normalizeLiveTableEvent', () => {
+  it('returns null for non-record payloads', () => {
+    expect(normalizeLiveTableEvent({
+      topic: 'table:tbl-1',
+      type: 'action.requested',
+      payload: null as unknown as Record<string, unknown>,
+    })).toBeNull();
+    expect(normalizeLiveTableEvent({
+      topic: 'table:tbl-1',
+      type: 'action.requested',
+      payload: [] as unknown as Record<string, unknown>,
+    })).toBeNull();
+  });
+
+  it('returns null for malformed required fields', () => {
+    expect(normalizeLiveTableEvent(message('action.requested', { playerId: '' }))).toBeNull();
+    expect(normalizeLiveTableEvent(message('action.applied', {
+      playerId: 'player-a',
+      actionType: 'jam',
+      amount: 50,
+    }))).toBeNull();
+    expect(normalizeLiveTableEvent(message('community_cards.dealt', {
+      phase: 'banana',
+      cards: [{ rank: 'Q', suit: 'd' }],
+    }))).toBeNull();
+    expect(normalizeLiveTableEvent(message('pot.awarded', {
+      amount: 'not-a-number',
+      winnerIds: ['player-b'],
+    }))).toBeNull();
   });
 });

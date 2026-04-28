@@ -182,4 +182,50 @@ describe('WS /ws', () => {
 
     spec.ws.close();
   }, 10_000);
+
+  it('private hole-card frames include the owning seat identity', async () => {
+    const aliceSid = await registerAs('alice-private@x.test');
+    const tableId = await createTable(aliceSid);
+    const tableTopic = `table:${tableId}`;
+
+    const alice = await connectWs(aliceSid);
+    await subscribeAndWaitForPong(alice, tableTopic);
+
+    for (let i = 0; i < 2; i++) {
+      await fetch(`${baseUrl}/api/v1/tables/${tableId}/agents`, {
+        method: 'POST',
+        headers: { ...CSRF, cookie: `apk_sid=${aliceSid}` },
+        body: JSON.stringify({
+          name: `PrivateBot${i}`,
+          adapterType: 'mock',
+          strategy: 'always-call',
+          buyIn: 1000,
+        }),
+      });
+    }
+
+    await fetch(`${baseUrl}/api/v1/tables/${tableId}/hands/start`, {
+      method: 'POST',
+      headers: { ...CSRF, cookie: `apk_sid=${aliceSid}` },
+      body: JSON.stringify({}),
+    });
+
+    await awaitMessage(alice.messages, m => m['type'] === 'hand.completed', 4000);
+
+    const seatFrames = alice.messages.filter(
+      m => typeof m['topic'] === 'string' && (m['topic'] as string).startsWith('seat:') && m['type'] === 'seat.hole_cards',
+    );
+    expect(seatFrames).toHaveLength(2);
+
+    for (const frame of seatFrames) {
+      const payload = frame['payload'] as Record<string, unknown>;
+      expect(payload['handId']).toEqual(expect.stringMatching(/^hand-/));
+      expect(payload['playerId']).toEqual(expect.stringMatching(/^player-/));
+      expect(payload['agentId']).toEqual(expect.stringMatching(/^agent-/));
+      expect(typeof payload['seatIndex']).toBe('number');
+      expect(payload['holeCards']).toHaveLength(2);
+    }
+
+    alice.ws.close();
+  }, 10_000);
 });

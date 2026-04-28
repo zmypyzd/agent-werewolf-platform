@@ -487,6 +487,9 @@ export class TableOrchestrator {
             });
             hub.publishSeat(seat.ownerUserId, tableId, 'seat.hole_cards', {
               handId: event.handId,
+              playerId: seat.playerId,
+              seatIndex: seat.seatIndex,
+              agentId: seat.agentId,
               holeCards,
             });
           }
