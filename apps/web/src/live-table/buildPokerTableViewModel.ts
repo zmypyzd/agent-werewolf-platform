@@ -14,6 +14,9 @@ export type SeatPosition =
 export interface PokerTableSeatModel extends LiveSeatView {
   position: SeatPosition;
   displayName: string;
+  identityLabel: string;
+  adapterLabel: 'Human' | 'HTTP Agent' | 'Mock Agent';
+  isYou: boolean;
 }
 
 export interface VisibleHandModel {
@@ -52,11 +55,18 @@ export function buildPokerTableViewModel(
   state: LiveTableViewState,
   options: { seatable: boolean },
 ): PokerTableViewModel {
-  const seats = state.seats.map((seat, index) => ({
-    ...seat,
-    position: positionFor(state.seats.length, index),
-    displayName: `Seat ${seat.seatIndex + 1}`,
-  }));
+  const seats = state.seats.map((seat, index) => {
+    const identityLabel = identityLabelForSeat(seat);
+
+    return {
+      ...seat,
+      position: positionFor(state.seats.length, index),
+      displayName: identityLabel,
+      identityLabel,
+      adapterLabel: adapterLabelFor(seat.adapterType),
+      isYou: seat.isMe,
+    };
+  });
   const blindLabel = state.blindConfig ? `${state.blindConfig.smallBlind}/${state.blindConfig.bigBlind}` : '--';
   const phaseLabel = state.phase ?? 'waiting';
   const handLabel = state.handId ? `hand ${state.handId}` : 'no active hand';
@@ -87,4 +97,15 @@ export function buildPokerTableViewModel(
 function positionFor(totalSeats: number, index: number): SeatPosition {
   const normalizedTotal = Math.min(9, Math.max(2, totalSeats));
   return (POSITION_MAP[normalizedTotal] ?? POSITION_MAP[9])![index] ?? 'center-left';
+}
+
+function identityLabelForSeat(seat: LiveSeatView): string {
+  if (!seat.occupied) return `Seat ${seat.seatIndex + 1}`;
+  return seat.agentId ?? seat.playerId ?? `Seat ${seat.seatIndex + 1}`;
+}
+
+function adapterLabelFor(adapterType: LiveSeatView['adapterType']): PokerTableSeatModel['adapterLabel'] {
+  if (adapterType === 'http') return 'HTTP Agent';
+  if (adapterType === 'mock') return 'Mock Agent';
+  return 'Human';
 }

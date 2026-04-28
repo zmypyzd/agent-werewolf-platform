@@ -110,18 +110,22 @@ function PlayerSeatNode({ seat }: { seat: PokerTableSeatModel }) {
     `seat-${seat.position}`,
     seat.occupied ? 'is-occupied' : 'is-open',
     seat.isCurrentActor ? 'is-actor' : '',
-    seat.isMe ? 'is-me' : '',
+    seat.isYou ? 'is-me' : '',
   ].filter(Boolean).join(' ');
 
   return (
     <article className={className}>
       <div className="seat-topline">
-        <strong>{seat.displayName}</strong>
-        {seat.isButton ? <span className="dealer-button" aria-label="Dealer button">D</span> : null}
+        <strong>{seat.identityLabel}</strong>
       </div>
       {seat.occupied ? (
         <>
-          <span className="seat-meta">Seat {seat.seatIndex + 1} · {seat.adapterType}</span>
+          <div className="seat-badge-row">
+            <span className="seat-badge seat-adapter-badge">{seat.adapterLabel}</span>
+            {seat.isYou ? <span className="seat-badge seat-you-badge">You</span> : null}
+            {seat.isButton ? <span className="seat-badge dealer-button" aria-label="Dealer">D</span> : null}
+            {seat.status ? <span className="seat-badge seat-status-badge">{seat.status}</span> : null}
+          </div>
           <span className="seat-stack">{seat.stack ?? 0} chips</span>
           <div className="mini-card-row">
             {seat.holeCards ? (

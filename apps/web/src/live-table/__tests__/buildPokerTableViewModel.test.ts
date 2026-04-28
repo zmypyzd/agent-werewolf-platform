@@ -93,11 +93,55 @@ describe('buildPokerTableViewModel', () => {
     expect(model.totalPot).toBe(225);
     expect(model.seats[0]!.position).toBe('top-left');
     expect(model.seats[1]!.position).toBe('top-right');
-    expect(model.seats[0]!.displayName).toBe('Seat 1');
+    expect(model.seats[0]!.displayName).toBe('a0');
     expect(model.seats[1]!.isCurrentActor).toBe(true);
     expect(model.visibleHands.map(hand => hand.playerId)).toEqual(['p0', 'p1']);
     expect(model.visibleHands[0]!.cards).toHaveLength(2);
     expect(model.canShowSeatControls).toBe(true);
+  });
+
+  it('derives stable identity, adapter, you, actor, and dealer labels for occupied seats', () => {
+    const state: LiveTableViewState = {
+      ...baseState,
+      seats: baseState.seats.map((seat, index) => index === 2 ? {
+        seatIndex: 2,
+        occupied: true,
+        playerId: 'p2',
+        agentId: 'http-agent-2',
+        ownerUserId: 'u2',
+        adapterType: 'http',
+        stack: 1200,
+        status: 'waiting',
+        isButton: false,
+        isCurrentActor: false,
+        isMe: false,
+        holeCards: null,
+      } : seat),
+    };
+
+    const model = buildPokerTableViewModel(state, { seatable: true });
+
+    expect(model.seats[0]).toMatchObject({
+      identityLabel: 'a0',
+      adapterLabel: 'Human',
+      isYou: true,
+      isButton: true,
+      isCurrentActor: false,
+    });
+    expect(model.seats[1]).toMatchObject({
+      identityLabel: 'a1',
+      adapterLabel: 'Mock Agent',
+      isYou: false,
+      isButton: false,
+      isCurrentActor: true,
+    });
+    expect(model.seats[2]).toMatchObject({
+      identityLabel: 'http-agent-2',
+      adapterLabel: 'HTTP Agent',
+      isYou: false,
+      isButton: false,
+      isCurrentActor: false,
+    });
   });
 
   it('uses cards pending labels for occupied seats without revealed cards', () => {

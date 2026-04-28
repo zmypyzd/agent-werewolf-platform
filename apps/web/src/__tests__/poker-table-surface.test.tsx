@@ -6,9 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WsClient } from '../lib/ws.js';
 import { PlayerActionPanel, validateSizedActionAmount } from '../live-table/PlayerActionPanel.js';
 import { PokerTableSurface } from '../live-table/PokerTableSurface.js';
-import { SeatManagementPanel } from '../live-table/SeatManagementPanel.js';
-import { isActionRequestLocked, refreshDelayForLiveEvent, seatDisplayNumber } from '../pages/TablePage.js';
+import { SeatManagementPanel, normalizeSeatBuyIn } from '../live-table/SeatManagementPanel.js';
+import {
+  buildAgentSeatRequestBody,
+  buildHumanSeatRequestBody,
+  isActionRequestLocked,
+  refreshDelayForLiveEvent,
+  seatDisplayNumber,
+} from '../pages/TablePage.js';
 import type { PokerTableViewModel, SeatPosition } from '../live-table/buildPokerTableViewModel.js';
+import type { SeatAdapterType } from '../live-table/liveTableTypes.js';
 
 const styles = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../styles.css'), 'utf8');
 
@@ -58,6 +65,9 @@ const model: PokerTableViewModel = {
             : null,
       position,
       displayName: occupied ? `agent-${seatIndex}` : `Seat ${seatIndex + 1}`,
+      identityLabel: occupied ? `agent-${seatIndex}` : `Seat ${seatIndex + 1}`,
+      adapterLabel: adapterLabelFor(seatIndex === 0 ? 'human' : 'mock'),
+      isYou: seatIndex === 0,
     };
   }),
   visibleHands: [
@@ -115,6 +125,12 @@ describe('PokerTableSurface', () => {
     expect(html).toContain('agent-0');
     expect(html).toContain('agent-1');
     expect(html).toContain('Seat 4');
+    expect(html).toContain('Human');
+    expect(html).toContain('Mock Agent');
+    expect(html).toContain('You');
+    expect(html).toContain('aria-label="Dealer"');
+    expect(html).toContain('active');
+    expect(html).toContain('900 chips');
     expect(html).toContain('A♣');
     expect(html).toContain('K♣');
     expect(html).toContain('8♣');
@@ -201,6 +217,10 @@ describe('PokerTableSurface', () => {
 
     expect(html).toContain('Open Seats');
     expect(html).toContain('Seat 4');
+    expect(html).toContain('name="buyIn"');
+    expect(html).toContain('value="1000"');
+    expect(html).toContain('min="1"');
+    expect(html).toContain('Buy-in chips');
     expect(html).toContain('Sit here');
     expect(html).toContain('Sit agent at seat 4');
     expect(html).toContain('Range Bot');
@@ -223,6 +243,14 @@ describe('PokerTableSurface', () => {
     expect(html).toContain('Already seated at this table');
     expect(html).not.toContain('Sit here');
     expect(html).toContain('Sit agent at seat 4');
+  });
+
+  it('normalizes seat buy-in input to a positive integer chip stack', () => {
+    expect(normalizeSeatBuyIn('1000')).toBe(1000);
+    expect(normalizeSeatBuyIn('42.9')).toBe(42);
+    expect(normalizeSeatBuyIn('0')).toBeNull();
+    expect(normalizeSeatBuyIn('-10')).toBeNull();
+    expect(normalizeSeatBuyIn('not-a-number')).toBeNull();
   });
 
   it('stacks seats before the desktop top row can overlap', () => {
@@ -353,7 +381,22 @@ describe('TablePage route integration', () => {
     expect(seatDisplayNumber(0)).toBe(1);
     expect(seatDisplayNumber(8)).toBe(9);
   });
+
+  it('builds seat request bodies from the selected chip buy-in', () => {
+    expect(buildHumanSeatRequestBody(2, 1500)).toEqual({ seatIndex: 2, buyIn: 1500 });
+    expect(buildAgentSeatRequestBody(3, 'cfg-7', 750)).toEqual({
+      seatIndex: 3,
+      buyIn: 750,
+      agentConfigId: 'cfg-7',
+    });
+  });
 });
+
+function adapterLabelFor(adapterType: SeatAdapterType): 'Human' | 'HTTP Agent' | 'Mock Agent' {
+  if (adapterType === 'human') return 'Human';
+  if (adapterType === 'http') return 'HTTP Agent';
+  return 'Mock Agent';
+}
 
 class FakeWebSocket {
   static readonly CONNECTING = 0;

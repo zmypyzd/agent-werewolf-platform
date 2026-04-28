@@ -912,7 +912,7 @@ button { padding: 8px 16px; cursor: pointer; }
   display: grid;
   gap: 5px;
   width: 166px;
-  min-height: 112px;
+  min-height: 144px;
   padding: 10px;
   border: 1px solid #35423f;
   border-radius: 8px;
@@ -955,7 +955,47 @@ button { padding: 8px 16px; cursor: pointer; }
   font-size: 12px;
 }
 
+.seat-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.seat-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  border: 1px solid rgba(220, 229, 225, .26);
+  border-radius: 999px;
+  background: rgba(238, 245, 239, .1);
+  color: #dbe8df;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.seat-adapter-badge {
+  border-color: rgba(124, 185, 141, .42);
+  color: #bde7c8;
+}
+
+.seat-you-badge {
+  border-color: rgba(97, 170, 218, .52);
+  color: #b8ddf6;
+}
+
+.seat-status-badge {
+  border-color: rgba(232, 197, 124, .48);
+  color: #f0d89c;
+}
+
 .seat-stack {
+  color: #f4f7f5;
+  font-size: 13px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
@@ -970,6 +1010,8 @@ button { padding: 8px 16px; cursor: pointer; }
   border-radius: 999px;
   background: #f6efe2;
   color: #251b10;
+  padding: 0;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -1134,6 +1176,10 @@ button { padding: 8px 16px; cursor: pointer; }
   margin-top: 12px;
 }
 
+.seat-buy-in-control {
+  max-width: 180px;
+}
+
 .seat-management-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -1167,14 +1213,14 @@ button { padding: 8px 16px; cursor: pointer; }
   }
 
   .poker-felt {
-    min-height: 1320px;
+    min-height: 1600px;
   }
 
   .player-seat {
     left: 50%;
     right: auto;
     width: min(260px, calc(100% - 28px));
-    min-height: 104px;
+    min-height: 132px;
     transform: translateX(-50%);
   }
 
@@ -1194,17 +1240,17 @@ button { padding: 8px 16px; cursor: pointer; }
   }
 
   .seat-top-left { top: 14px; }
-  .seat-top { top: 136px; }
-  .seat-top-right { top: 258px; }
-  .seat-right { top: 380px; }
-  .seat-bottom-right { top: 502px; }
-  .seat-bottom { top: 624px; }
-  .seat-bottom-left { top: 746px; }
-  .seat-left { top: 868px; }
-  .seat-center-left { top: 990px; }
+  .seat-top { top: 166px; }
+  .seat-top-right { top: 318px; }
+  .seat-right { top: 470px; }
+  .seat-bottom-right { top: 622px; }
+  .seat-bottom { top: 774px; }
+  .seat-bottom-left { top: 926px; }
+  .seat-left { top: 1078px; }
+  .seat-center-left { top: 1230px; }
 
   .community-board {
-    top: 1212px;
+    top: 1510px;
     min-width: 0;
     width: calc(100% - 28px);
   }

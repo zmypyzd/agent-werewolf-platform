@@ -7,7 +7,7 @@ import { buildPokerTableViewModel } from '../live-table/buildPokerTableViewModel
 import { createInitialLiveTableState, liveTableReducer } from '../live-table/liveTableReducer.js';
 import { normalizeLiveTableEvent } from '../live-table/normalizeLiveTableEvent.js';
 import { PokerTableSurface } from '../live-table/PokerTableSurface.js';
-import { SeatManagementPanel } from '../live-table/SeatManagementPanel.js';
+import { SeatManagementPanel, normalizeSeatBuyIn } from '../live-table/SeatManagementPanel.js';
 import type { WsMessage } from '../lib/ws.js';
 import type { ActionType, Card, HandPhase, LiveTableEvent, TableSnapshot } from '../live-table/liveTableTypes.js';
 
@@ -83,6 +83,27 @@ export function isActionRequestLocked(
 
 export function seatDisplayNumber(seatIndex: number): number {
   return seatIndex + 1;
+}
+
+export interface HumanSeatRequestBody {
+  seatIndex: number;
+  buyIn: number;
+}
+
+export interface AgentSeatRequestBody extends HumanSeatRequestBody {
+  agentConfigId: string;
+}
+
+export function buildHumanSeatRequestBody(seatIndex: number, buyIn: number): HumanSeatRequestBody {
+  return { seatIndex, buyIn };
+}
+
+export function buildAgentSeatRequestBody(
+  seatIndex: number,
+  agentConfigId: string,
+  buyIn: number,
+): AgentSeatRequestBody {
+  return { seatIndex, buyIn, agentConfigId };
 }
 
 export function formatTableNetResult(results: TableHandResult[]): string {
@@ -611,12 +632,18 @@ export function TablePage() {
     });
   }, [deleteBusy, navigate, tableId]);
 
-  const sitHuman = useCallback(async (seatIndex: number) => {
+  const sitHuman = useCallback(async (seatIndex: number, buyIn: number) => {
     if (!tableId) return;
+    const selectedBuyIn = normalizeSeatBuyIn(buyIn);
+    if (selectedBuyIn === null) {
+      setSeatError('Enter a positive chip buy-in.');
+      return;
+    }
+
     setBusySeatIndex(seatIndex);
     setSeatError(null);
     try {
-      await api.post(`/tables/${tableId}/seats`, { seatIndex, buyIn: 1000 });
+      await api.post(`/tables/${tableId}/seats`, buildHumanSeatRequestBody(seatIndex, selectedBuyIn));
       await refreshTable();
     } catch (e) {
       setSeatError(e instanceof ApiError ? e.message : 'Failed to sit');
@@ -625,12 +652,18 @@ export function TablePage() {
     }
   }, [refreshTable, tableId]);
 
-  const sitAgent = useCallback(async (seatIndex: number, agentConfigId: string) => {
+  const sitAgent = useCallback(async (seatIndex: number, agentConfigId: string, buyIn: number) => {
     if (!tableId) return;
+    const selectedBuyIn = normalizeSeatBuyIn(buyIn);
+    if (selectedBuyIn === null) {
+      setSeatError('Enter a positive chip buy-in.');
+      return;
+    }
+
     setBusySeatIndex(seatIndex);
     setSeatError(null);
     try {
-      await api.post(`/tables/${tableId}/seats/agent`, { seatIndex, buyIn: 1000, agentConfigId });
+      await api.post(`/tables/${tableId}/seats/agent`, buildAgentSeatRequestBody(seatIndex, agentConfigId, selectedBuyIn));
       await refreshTable();
     } catch (e) {
       setSeatError(e instanceof ApiError ? e.message : 'Failed to seat agent');
