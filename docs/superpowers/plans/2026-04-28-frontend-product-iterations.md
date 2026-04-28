@@ -529,7 +529,7 @@ git commit -m "Improve live table seat identity"
 - Modify: `apps/web/src/styles.css`
 - Test: `apps/web/src/__tests__/poker-table-surface.test.tsx`
 
-- [ ] **Step 1: Add action label helpers**
+- [x] **Step 1: Add action label helpers**
 
 Export pure helpers:
 
@@ -539,23 +539,23 @@ buildPresetAmounts(action: LegalAction, potAmount?: number): number[]
 formatDeadline(deadlineAt: number, now: number): string
 ```
 
-- [ ] **Step 2: Write helper tests**
+- [x] **Step 2: Write helper tests**
 
 Cover Fold, Check, Call 50, Raise, All-in, min/max presets, and expired deadline.
 
-- [ ] **Step 3: Render title-cased action buttons**
+- [x] **Step 3: Render title-cased action buttons**
 
 Buttons must use labels like `Fold`, `Check`, `Call 50`, `All-in 900`.
 
-- [ ] **Step 4: Render bet/raise presets**
+- [x] **Step 4: Render bet/raise presets**
 
 For sized actions, show min, midpoint, max/all-in presets when values are valid and distinct.
 
-- [ ] **Step 5: Render deadline state**
+- [x] **Step 5: Render deadline state**
 
 Show a compact turn timer using `deadlineAt`.
 
-- [ ] **Step 6: Run focused tests**
+- [x] **Step 6: Run focused tests**
 
 ```bash
 pnpm --filter web run test -- src/__tests__/poker-table-surface.test.tsx
@@ -563,7 +563,7 @@ pnpm --filter web run test -- src/__tests__/poker-table-surface.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/web/src/live-table/PlayerActionPanel.tsx apps/web/src/styles.css apps/web/src/__tests__/poker-table-surface.test.tsx
