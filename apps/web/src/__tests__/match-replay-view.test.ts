@@ -11,6 +11,7 @@ import {
   formatNullablePercent,
   getNextActionId,
   getPreviousActionId,
+  resolveActiveReplayStreetFilter,
   resolveSelectedStreetFilter,
   type ActionTimelineItem,
 } from '../lib/matchReplayView.js';
@@ -397,6 +398,8 @@ describe('match replay view helpers', () => {
     expect(resolveSelectedStreetFilter('all')).toBe('all');
     expect(resolveSelectedStreetFilter('bogus')).toBe('all');
     expect(resolveSelectedStreetFilter(null)).toBe('all');
+    expect(resolveActiveReplayStreetFilter('flop', 'hand-2', 'hand-1')).toBe('all');
+    expect(resolveActiveReplayStreetFilter('flop', 'hand-1', 'hand-1')).toBe('flop');
     expect(filterActionTimelineByStreet(timeline, 'all').map(action => action.id)).toEqual([
       'hand-1:0',
       'hand-1:1',

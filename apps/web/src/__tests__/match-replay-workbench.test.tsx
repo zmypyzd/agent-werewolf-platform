@@ -1,7 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { HandSummary, ReplayEvent } from '../lib/matchArtifacts.js';
-import { ReplayWorkbench } from '../pages/MatchReplayWorkbench.js';
+import {
+  ReplayWorkbench,
+  shouldIgnoreReplayKeyboardEvent,
+} from '../pages/MatchReplayWorkbench.js';
 
 const hand: HandSummary = {
   handId: 'hand-1',
@@ -69,6 +72,24 @@ const replayEvents: ReplayEvent[] = [{
 }];
 
 describe('ReplayWorkbench', () => {
+  it('does not treat modified arrow keys as replay shortcuts', () => {
+    const baseEvent = {
+      altKey: false,
+      ctrlKey: false,
+      defaultPrevented: false,
+      metaKey: false,
+      shiftKey: false,
+      target: null,
+    };
+
+    expect(shouldIgnoreReplayKeyboardEvent(baseEvent)).toBe(false);
+    expect(shouldIgnoreReplayKeyboardEvent({ ...baseEvent, altKey: true })).toBe(true);
+    expect(shouldIgnoreReplayKeyboardEvent({ ...baseEvent, ctrlKey: true })).toBe(true);
+    expect(shouldIgnoreReplayKeyboardEvent({ ...baseEvent, metaKey: true })).toBe(true);
+    expect(shouldIgnoreReplayKeyboardEvent({ ...baseEvent, shiftKey: true })).toBe(true);
+    expect(shouldIgnoreReplayKeyboardEvent({ ...baseEvent, defaultPrevented: true })).toBe(true);
+  });
+
   it('renders hand rail, public board, action timeline, and inspector', () => {
     const html = renderToStaticMarkup(
       <ReplayWorkbench

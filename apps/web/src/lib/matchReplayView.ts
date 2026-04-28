@@ -133,6 +133,15 @@ export function resolveSelectedStreetFilter(value: unknown): ReplayStreetFilter 
   return isHandPhase(value) ? value : 'all';
 }
 
+export function resolveActiveReplayStreetFilter(
+  streetFilter: ReplayStreetFilter,
+  selectedHandId: string | null,
+  previousSelectedHandId: string | null,
+): ReplayStreetFilter {
+  if (selectedHandId !== previousSelectedHandId) return 'all';
+  return resolveSelectedStreetFilter(streetFilter);
+}
+
 export function filterActionTimelineByStreet(
   timeline: ActionTimelineItem[],
   streetFilter: ReplayStreetFilter,
