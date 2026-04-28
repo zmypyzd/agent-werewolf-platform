@@ -344,7 +344,7 @@ git commit -m "Upgrade lobby table operations"
 - Modify: `apps/web/src/pages/LobbyPage.tsx`
 - Modify: `apps/web/src/__tests__/lobby-page.test.tsx`
 
-- [ ] **Step 1: Add pure request builder**
+- [x] **Step 1: Add pure request builder**
 
 Export:
 
@@ -362,11 +362,11 @@ It should validate:
 - `defaultTimeoutMs > 0`
 - `0 <= maxSpectators <= 1000`
 
-- [ ] **Step 2: Write validation tests**
+- [x] **Step 2: Write validation tests**
 
 Cover valid request and invalid blind relationship.
 
-- [ ] **Step 3: Add form fields**
+- [x] **Step 3: Add form fields**
 
 Expose:
 
@@ -388,7 +388,7 @@ Submit body must match:
 }
 ```
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 ```bash
 pnpm --filter web run test -- src/__tests__/lobby-page.test.tsx
@@ -396,7 +396,7 @@ pnpm --filter web run test -- src/__tests__/lobby-page.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/pages/LobbyPage.tsx apps/web/src/__tests__/lobby-page.test.tsx
