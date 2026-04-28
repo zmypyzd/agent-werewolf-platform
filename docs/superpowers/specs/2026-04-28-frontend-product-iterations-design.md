@@ -35,10 +35,14 @@ The frontend does not yet cover or weakly covers these backend capabilities:
   no UI for demo mock agents.
 - `POST /tables/:tableId/watch` and `DELETE /tables/:tableId/watch`: no explicit
   watch/unwatch state.
-- `GET /tables/:tableId/state`: no current-state inspection UI.
+- `GET /tables/:tableId/state`: backend currently returns `null` by design, so
+  current-state inspection is backend-dependent and deferred.
 - `GET /tables/:tableId/hands`, `GET /tables/:tableId/hands/:handId`, and
   `GET /tables/:tableId/hands/:handId/replay`: no table-local hand history or
-  single-hand replay entry point.
+  single-hand replay entry point. These routes currently expose full hand
+  summaries to authenticated callers, including private `holeCards`, so frontend
+  hand-history work must first use a public-safe DTO or strictly sanitize the
+  response before rendering.
 - `GET /matches/:matchId/decision-trace`: no UI entry point. This should stay
   public-safe and avoid raw chain-of-thought or private state display.
 - `GET /health`: no service status indicator.
@@ -68,7 +72,9 @@ an agent competition and review workspace:
 
 Add a consistent app shell across authenticated and public pages:
 
-- Primary navigation: Lobby, Simulate, Agents, Replays.
+- Primary navigation: Lobby, Agents, Replays. Simulate joins the primary nav in
+  the same iteration that `/simulate` is implemented, or Iteration 1 must create
+  a real placeholder route before linking to it.
 - Secondary context actions live in page headers: create table, close table,
   start hand, run simulation, new agent.
 - Public replay pages still work without auth where the backend allows it, but
@@ -109,7 +115,8 @@ Scope:
 
 Acceptance:
 
-- Common navigation appears across primary product pages.
+- Common navigation appears across primary product pages. It must not link to a
+  missing `/simulate` route.
 - Main buttons, links, inputs, cards, tables, status chips, empty states, and
   error states have consistent styles.
 - Major inline table styles are replaced by reusable classes.
@@ -160,11 +167,16 @@ Scope:
 Acceptance:
 
 - User can explicitly watch/unwatch a table.
-- Owner can close/delete a table when allowed by backend.
+- Owner can close/delete a table when allowed by backend. The implementation
+  must first add or consume an explicit management signal such as `canManage` or
+  `ownerUserId`; the UI must not show destructive table controls to every user
+  and rely only on a 403 response.
 - Start hand, leave seat, sit out next hand, watch state, and table metadata are
   grouped in a clear control area.
-- Table hand history section lists completed hands from
-  `/tables/:tableId/hands`.
+- Table hand history section lists completed hands only after the response is
+  public-safe. It must not render `players[].holeCards` or hand evaluations from
+  raw table hand summaries unless the backend intentionally exposes a safe
+  authenticated player-specific view.
 
 ### Iteration 5: Seat Identity And Table Readability
 
@@ -219,6 +231,8 @@ Acceptance:
 - The page respects the 20-hand cap.
 - On success, user can navigate directly to the generated match replay.
 - Errors are shown inline with retry available.
+- The primary navigation gains the Simulate item in this iteration if it was not
+  added as a working placeholder earlier.
 
 ### Iteration 8: Agent Lab Productization
 
@@ -278,6 +292,9 @@ Acceptance:
 - Do not display raw chain-of-thought.
 - Do not display private state hashes as if they are user-facing explanations.
 - Durable public match artifacts should stay public-safe.
+- Table-local hand-history UI must be public-safe by default. If a future
+  authenticated personal-hand view is added, it must clearly scope private cards
+  to the owning player.
 - `authHeaderValue` remains write-only.
 - Spectator behavior must align with final backend privacy policy. If table-topic
   hole-card reveal is kept for entertainment demos, it must be explicit and not
@@ -309,6 +326,17 @@ Final verification target:
   The UI may display hole cards that the live websocket stream explicitly sends,
   but it must not fetch, infer, or persist hidden cards. Durable public match
   artifact pages remain public-safe.
+- Table hand history requires a safe display boundary before implementation.
+  Preferred implementation: add a web-local sanitizer that strips
+  `players[].holeCards` and `players[].handEvaluation` before rendering, then
+  follow up with a backend public-safe table hand-history DTO if this surface
+  becomes durable product behavior.
+- Owner-only table management requires an explicit permission source. Preferred
+  implementation: derive `canManage` in the route shell by comparing an exposed
+  owner signal to the current user, or add a backend `canManage` field before
+  rendering destructive controls.
+- `/tables/:tableId/state` is not a frontend iteration target until the backend
+  returns a non-null state.
 - Table-local hand history starts as an embedded panel on `/tables/:tableId`.
   A dedicated `/tables/:tableId/hands/:handId` route is deferred until the
   embedded panel becomes too large.
