@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { WebSocket } from 'ws';
 import { buildServer } from '../server.js';
+
+vi.mock('@agent-poker/table-orchestrator', async () => import('../../../../packages/table-orchestrator/src/index.js'));
 
 const CSRF = { 'content-type': 'application/json', 'x-requested-with': 'fetch' };
 
@@ -110,7 +112,7 @@ describe('WS /ws', () => {
     b.ws.close();
   });
 
-  it('a spectator does not receive any frame containing holeCards while a hand runs with mock agents', async () => {
+  it('a spectator receives revealed hole cards for each player on the table topic', async () => {
     const aliceSid = await registerAs('alice@x.test');
     const spectatorSid = await registerAs('spec@x.test');
     const tableId = await createTable(aliceSid);
@@ -119,14 +121,19 @@ describe('WS /ws', () => {
     spec.ws.send(JSON.stringify({ topic: `table:${tableId}`, type: 'subscribe', payload: {} }));
     await new Promise(r => setTimeout(r, 50));
 
-    // Sit two mock agents under Alice and start a hand. Mock agents complete instantly.
     for (let i = 0; i < 2; i++) {
       await fetch(`${baseUrl}/api/v1/tables/${tableId}/agents`, {
         method: 'POST',
         headers: { ...CSRF, cookie: `apk_sid=${aliceSid}` },
-        body: JSON.stringify({ name: `Bot${i}`, adapterType: 'mock', strategy: 'always-call', buyIn: 1000 }),
+        body: JSON.stringify({
+          name: `Bot${i}`,
+          adapterType: 'mock',
+          strategy: 'always-call',
+          buyIn: 1000,
+        }),
       });
     }
+
     await fetch(`${baseUrl}/api/v1/tables/${tableId}/hands/start`, {
       method: 'POST',
       headers: { ...CSRF, cookie: `apk_sid=${aliceSid}` },
@@ -135,12 +142,22 @@ describe('WS /ws', () => {
 
     await awaitMessage(spec.messages, m => m['type'] === 'hand.completed', 4000);
 
-    // Capture every frame the spectator received and confirm no hole cards.
-    const dump = JSON.stringify(spec.messages);
-    expect(dump).not.toContain('"holeCards"');
-    // Sanity: did receive *some* table events.
-    const tableFrames = spec.messages.filter(m => typeof m['topic'] === 'string' && (m['topic'] as string).startsWith('table:'));
-    expect(tableFrames.length).toBeGreaterThan(0);
+    const revealFrames = spec.messages.filter(m => m['type'] === 'table.hole_cards_revealed');
+    expect(revealFrames).toHaveLength(2);
+
+    const seenPlayers = new Set<string>();
+    for (const frame of revealFrames) {
+      expect(frame['topic']).toBe(`table:${tableId}`);
+      const payload = frame['payload'] as Record<string, unknown>;
+      expect(payload['handId']).toEqual(expect.stringMatching(/^hand-/));
+      expect(payload['playerId']).toEqual(expect.stringMatching(/^player-/));
+      expect(payload['agentId']).toEqual(expect.stringMatching(/^agent-/));
+      expect(typeof payload['seatIndex']).toBe('number');
+      expect(payload['holeCards']).toHaveLength(2);
+      seenPlayers.add(String(payload['playerId']));
+    }
+
+    expect(seenPlayers.size).toBe(2);
 
     spec.ws.close();
   }, 10_000);
