@@ -483,7 +483,7 @@ git commit -m "Add table lifecycle controls"
 - Test: `apps/web/src/live-table/__tests__/buildPokerTableViewModel.test.ts`
 - Test: `apps/web/src/__tests__/poker-table-surface.test.tsx`
 
-- [ ] **Step 1: Extend seat view model**
+- [x] **Step 1: Extend seat view model**
 
 Add:
 
@@ -493,19 +493,19 @@ adapterLabel: 'Human' | 'HTTP Agent' | 'Mock Agent';
 isYou: boolean;
 ```
 
-- [ ] **Step 2: Write view-model tests**
+- [x] **Step 2: Write view-model tests**
 
 Assert human/http/mock labels, you marker, current actor, and dealer state.
 
-- [ ] **Step 3: Render identity badges**
+- [x] **Step 3: Render identity badges**
 
 Seat nodes must show adapter badge, you marker, dealer marker, status, and stack.
 
-- [ ] **Step 4: Add buy-in input to seat controls**
+- [x] **Step 4: Add buy-in input to seat controls**
 
 Seat management should pass a selected buy-in to human and agent seat calls.
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 ```bash
 pnpm --filter web run test -- src/live-table/__tests__/buildPokerTableViewModel.test.ts src/__tests__/poker-table-surface.test.tsx
@@ -513,7 +513,7 @@ pnpm --filter web run test -- src/live-table/__tests__/buildPokerTableViewModel.
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/src/live-table apps/web/src/pages/TablePage.tsx apps/web/src/__tests__/poker-table-surface.test.tsx
