@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useReducer, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ApiError,
@@ -45,6 +45,18 @@ export type SimulateRequestResult =
   | { ok: true; request: SimulateRequest }
   | { ok: false; error: string };
 
+export interface SimulateSubmissionState {
+  error: string | null;
+  matchId: string | null;
+  submitting: boolean;
+}
+
+export type SimulateSubmissionTransition =
+  | { type: 'submit-start' }
+  | { type: 'validation-error'; error: string }
+  | { type: 'api-error'; error: string }
+  | { type: 'api-success'; matchId: string };
+
 const defaultFormState: SimulateFormState = {
   name: 'Research simulation',
   maxSeats: 6,
@@ -59,6 +71,27 @@ const defaultFormState: SimulateFormState = {
     { name: 'Caller Bot', strategy: 'always-call', buyIn: 2000 },
   ],
 };
+
+const initialSubmissionState: SimulateSubmissionState = {
+  error: null,
+  matchId: null,
+  submitting: false,
+};
+
+export function reduceSimulateSubmissionState(
+  _state: SimulateSubmissionState,
+  transition: SimulateSubmissionTransition,
+): SimulateSubmissionState {
+  switch (transition.type) {
+    case 'submit-start':
+      return { error: null, matchId: null, submitting: true };
+    case 'validation-error':
+    case 'api-error':
+      return { error: transition.error, matchId: null, submitting: false };
+    case 'api-success':
+      return { error: null, matchId: transition.matchId, submitting: false };
+  }
+}
 
 export function buildSimulateRequest(input: SimulateFormState): SimulateRequestResult {
   const name = input.name.trim();
@@ -165,28 +198,29 @@ export function SimulationSuccessActions({ matchId }: { matchId: string }) {
 
 export function SimulatePage() {
   const [form, setForm] = useState<SimulateFormState>(defaultFormState);
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [matchId, setMatchId] = useState<string | null>(null);
+  const [submission, dispatchSubmission] = useReducer(
+    reduceSimulateSubmissionState,
+    initialSubmissionState,
+  );
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setError(null);
+    dispatchSubmission({ type: 'submit-start' });
 
     const result = buildSimulateRequest(form);
     if (!result.ok) {
-      setError(result.error);
+      dispatchSubmission({ type: 'validation-error', error: result.error });
       return;
     }
 
-    setSubmitting(true);
     try {
       const response = await api.simulate(result.request);
-      setMatchId(response.matchArtifact.matchId);
+      dispatchSubmission({ type: 'api-success', matchId: response.matchArtifact.matchId });
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Failed to run simulation');
-    } finally {
-      setSubmitting(false);
+      dispatchSubmission({
+        type: 'api-error',
+        error: e instanceof ApiError ? e.message : 'Failed to run simulation',
+      });
     }
   }
 
@@ -396,16 +430,18 @@ export function SimulatePage() {
             </div>
           </section>
 
-          {error && <div className="error alert-error" role="alert">{error}</div>}
+          {submission.error && (
+            <div className="error alert-error" role="alert">{submission.error}</div>
+          )}
 
           <div className="simulate-submit-row">
-            <button className="button-primary" type="submit" disabled={submitting}>
-              {submitting ? 'Running simulation...' : 'Run simulation'}
+            <button className="button-primary" type="submit" disabled={submission.submitting}>
+              {submission.submitting ? 'Running simulation...' : 'Run simulation'}
             </button>
           </div>
         </form>
 
-        {matchId ? <SimulationSuccessActions matchId={matchId} /> : null}
+        {submission.matchId ? <SimulationSuccessActions matchId={submission.matchId} /> : null}
       </div>
     </div>
   );

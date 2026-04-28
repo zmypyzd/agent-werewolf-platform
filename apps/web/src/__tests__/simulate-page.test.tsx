@@ -5,7 +5,9 @@ import {
   SimulatePage,
   SimulationSuccessActions,
   buildSimulateRequest,
+  reduceSimulateSubmissionState,
   type SimulateFormState,
+  type SimulateSubmissionState,
 } from '../pages/SimulatePage.js';
 
 const validInput: SimulateFormState = {
@@ -87,6 +89,34 @@ describe('buildSimulateRequest', () => {
     expect(buildSimulateRequest({ ...validInput, agents })).toEqual({
       ok: false,
       error: 'Agent 2 strategy must be random, always-call, always-fold, or aggressive.',
+    });
+  });
+});
+
+describe('reduceSimulateSubmissionState', () => {
+  it('clears a previous success result when a rerun starts and fails validation', () => {
+    const previousSuccess: SimulateSubmissionState = {
+      error: null,
+      matchId: 'match-old',
+      submitting: false,
+    };
+
+    const submitting = reduceSimulateSubmissionState(previousSuccess, { type: 'submit-start' });
+    expect(submitting).toEqual({
+      error: null,
+      matchId: null,
+      submitting: true,
+    });
+
+    expect(
+      reduceSimulateSubmissionState(submitting, {
+        type: 'validation-error',
+        error: 'Number of hands cannot exceed 20.',
+      }),
+    ).toEqual({
+      error: 'Number of hands cannot exceed 20.',
+      matchId: null,
+      submitting: false,
     });
   });
 });
