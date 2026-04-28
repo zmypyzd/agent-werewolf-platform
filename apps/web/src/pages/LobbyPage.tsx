@@ -29,6 +29,81 @@ export interface LobbyPageContentProps {
   onCreate: (tableId: string) => void;
 }
 
+export interface CreateTableFormState {
+  name: string;
+  maxSeats: number;
+  smallBlind: number;
+  bigBlind: number;
+  ante: number;
+  seed: string;
+  defaultTimeoutMs: number;
+  maxSpectators: number;
+}
+
+export interface CreateTableRequest {
+  name: string;
+  maxSeats: number;
+  blindConfig: BlindConfig;
+  defaultTimeoutMs: number;
+  seed?: string;
+  maxSpectators: number;
+}
+
+export type CreateTableRequestResult =
+  | { ok: true; request: CreateTableRequest }
+  | { ok: false; error: string };
+
+export function buildCreateTableRequest(input: CreateTableFormState): CreateTableRequestResult {
+  if (!input.name.trim()) {
+    return { ok: false, error: 'Name is required.' };
+  }
+
+  if (!Number.isInteger(input.maxSeats) || input.maxSeats < 2 || input.maxSeats > 9) {
+    return { ok: false, error: 'Max seats must be between 2 and 9.' };
+  }
+
+  if (!Number.isInteger(input.smallBlind) || input.smallBlind < 1) {
+    return { ok: false, error: 'Small blind must be at least 1.' };
+  }
+
+  if (!Number.isInteger(input.bigBlind) || input.bigBlind < input.smallBlind) {
+    return { ok: false, error: 'Big blind must be greater than or equal to small blind.' };
+  }
+
+  if (!Number.isInteger(input.ante) || input.ante < 0) {
+    return { ok: false, error: 'Ante cannot be negative.' };
+  }
+
+  if (!Number.isInteger(input.defaultTimeoutMs) || input.defaultTimeoutMs <= 0) {
+    return { ok: false, error: 'Default timeout must be greater than 0.' };
+  }
+
+  if (
+    !Number.isInteger(input.maxSpectators) ||
+    input.maxSpectators < 0 ||
+    input.maxSpectators > 1000
+  ) {
+    return { ok: false, error: 'Max spectators must be between 0 and 1000.' };
+  }
+
+  const seed = input.seed.trim();
+  return {
+    ok: true,
+    request: {
+      name: input.name,
+      maxSeats: input.maxSeats,
+      blindConfig: {
+        smallBlind: input.smallBlind,
+        bigBlind: input.bigBlind,
+        ante: input.ante,
+      },
+      defaultTimeoutMs: input.defaultTimeoutMs,
+      ...(seed ? { seed } : {}),
+      maxSpectators: input.maxSpectators,
+    },
+  };
+}
+
 export function LobbyPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -173,20 +248,34 @@ function CreateTableForm({ onCreated }: { onCreated: (tableId: string) => void }
   const [maxSeats, setMaxSeats] = useState(6);
   const [smallBlind, setSmallBlind] = useState(25);
   const [bigBlind, setBigBlind] = useState(50);
+  const [ante, setAnte] = useState(0);
+  const [seed, setSeed] = useState('');
+  const [defaultTimeoutMs, setDefaultTimeoutMs] = useState(5000);
+  const [maxSpectators, setMaxSpectators] = useState(100);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    const result = buildCreateTableRequest({
+      name,
+      maxSeats,
+      smallBlind,
+      bigBlind,
+      ante,
+      seed,
+      defaultTimeoutMs,
+      maxSpectators,
+    });
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const data = await api.post<{ tableId: string }>('/tables', {
-        name,
-        maxSeats,
-        blindConfig: { smallBlind, bigBlind, ante: 0 },
-        defaultTimeoutMs: 5000,
-      });
+      const data = await api.post<{ tableId: string }>('/tables', result.request);
       onCreated(data.tableId);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Failed to create table');
@@ -218,6 +307,25 @@ function CreateTableForm({ onCreated }: { onCreated: (tableId: string) => void }
           <input type="number" min={1} value={bigBlind}
                  onChange={e => setBigBlind(Number(e.target.value))} style={{ width: 80 }} />
         </div>
+      </label>
+      <label>
+        Ante
+        <input type="number" min={0} value={ante}
+               onChange={e => setAnte(Number(e.target.value))} />
+      </label>
+      <label>
+        Seed
+        <input value={seed} onChange={e => setSeed(e.target.value)} placeholder="Optional" />
+      </label>
+      <label>
+        Default timeout (ms)
+        <input type="number" min={1} value={defaultTimeoutMs}
+               onChange={e => setDefaultTimeoutMs(Number(e.target.value))} />
+      </label>
+      <label>
+        Max spectators
+        <input type="number" min={0} max={1000} value={maxSpectators}
+               onChange={e => setMaxSpectators(Number(e.target.value))} />
       </label>
       <button className="button-primary" type="submit" disabled={submitting}>
         {submitting ? 'Creating…' : 'Create table'}

@@ -2,7 +2,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom/server.js';
 import type { ComponentProps } from 'react';
 import { describe, expect, it } from 'vitest';
-import { LobbyPageContent, type TableSummary } from '../pages/LobbyPage.js';
+import {
+  LobbyPageContent,
+  buildCreateTableRequest,
+  type CreateTableFormState,
+  type TableSummary,
+} from '../pages/LobbyPage.js';
 
 const tables: TableSummary[] = [
   {
@@ -104,5 +109,64 @@ describe('LobbyPageContent', () => {
     expect(renderLobbyContent({ tables: [], loading: true })).toContain('Loading tables');
     expect(renderLobbyContent({ tables: [], loading: false })).toContain('No tables yet');
     expect(renderLobbyContent({ error: 'Failed to load tables' })).toContain('Failed to load tables');
+  });
+
+  it('renders controls for all create table fields', () => {
+    const html = renderLobbyContent();
+
+    expect(html).toContain('Name');
+    expect(html).toContain('Max seats');
+    expect(html).toContain('Small / Big blind');
+    expect(html).toContain('Ante');
+    expect(html).toContain('Seed');
+    expect(html).toContain('Default timeout (ms)');
+    expect(html).toContain('Max spectators');
+  });
+});
+
+describe('buildCreateTableRequest', () => {
+  const validInput: CreateTableFormState = {
+    name: 'Research Table',
+    maxSeats: 6,
+    smallBlind: 25,
+    bigBlind: 50,
+    ante: 5,
+    seed: '  repeatable-seed  ',
+    defaultTimeoutMs: 7500,
+    maxSpectators: 250,
+  };
+
+  it('builds the exact create table request body for valid input', () => {
+    expect(buildCreateTableRequest(validInput)).toEqual({
+      ok: true,
+      request: {
+        name: 'Research Table',
+        maxSeats: 6,
+        blindConfig: { smallBlind: 25, bigBlind: 50, ante: 5 },
+        defaultTimeoutMs: 7500,
+        seed: 'repeatable-seed',
+        maxSpectators: 250,
+      },
+    });
+  });
+
+  it('omits a blank seed from the request body', () => {
+    expect(buildCreateTableRequest({ ...validInput, seed: '   ' })).toEqual({
+      ok: true,
+      request: {
+        name: 'Research Table',
+        maxSeats: 6,
+        blindConfig: { smallBlind: 25, bigBlind: 50, ante: 5 },
+        defaultTimeoutMs: 7500,
+        maxSpectators: 250,
+      },
+    });
+  });
+
+  it('rejects a big blind below the small blind', () => {
+    expect(buildCreateTableRequest({ ...validInput, smallBlind: 50, bigBlind: 25 })).toEqual({
+      ok: false,
+      error: 'Big blind must be greater than or equal to small blind.',
+    });
   });
 });
