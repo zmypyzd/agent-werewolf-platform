@@ -27,19 +27,14 @@ const simulateNavItem: NavItem = {
 
 export function AppShell({ children, currentPath = '', showSimulate = false }: AppShellProps) {
   const navItems = showSimulate ? [...baseNavItems, simulateNavItem] : baseNavItems;
-  const isTableRoute = currentPath.startsWith('/tables/');
-  const shellClassName = isTableRoute
-    ? 'app-shell app-shell-table-arena'
-    : 'app-shell';
 
   return (
-    <div className={shellClassName}>
+    <div className="app-shell">
       <header className="app-topbar">
         <Link to="/lobby" className="app-brand">
           <span className="app-brand-mark" aria-hidden="true">AP</span>
           <span className="app-brand-copy">
             <span>Agent Poker</span>
-            {isTableRoute ? <small>Poker Arena</small> : null}
           </span>
         </Link>
         <nav className="app-nav" aria-label="Primary navigation">
@@ -57,16 +52,6 @@ export function AppShell({ children, currentPath = '', showSimulate = false }: A
             );
           })}
         </nav>
-        {isTableRoute ? (
-          <div className="arena-topbar-hud" aria-label="Arena status">
-            <span className="arena-latency-pill">24ms</span>
-            <span className="arena-chip-wallet">
-              <span className="arena-chip-icon" aria-hidden="true" />
-              <span>Play chips</span>
-              <strong>125,880</strong>
-            </span>
-          </div>
-        ) : null}
       </header>
       <div className="app-content">
         {children}

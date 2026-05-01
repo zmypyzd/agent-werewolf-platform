@@ -18,9 +18,6 @@ body {
   color: var(--text-primary);
   font-family: system-ui, -apple-system, sans-serif;
 }
-body:has(.app-shell-table-arena) {
-  background: #080d16;
-}
 :focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
@@ -1911,119 +1908,6 @@ button { padding: 8px 16px; cursor: pointer; }
   }
 }
 
-.app-shell-table-arena {
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at 24% 16%, rgba(22, 171, 214, .18), transparent 24%),
-    radial-gradient(circle at 76% 10%, rgba(224, 176, 73, .12), transparent 22%),
-    linear-gradient(180deg, #09111e 0%, #101522 46%, #080d16 100%);
-  color: #e9f1f6;
-}
-
-.app-shell-table-arena .app-topbar {
-  position: static;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(220px, auto) 1fr auto;
-  justify-content: stretch;
-  border-bottom-color: rgba(151, 172, 194, .18);
-  background: rgba(6, 12, 22, .88);
-  box-shadow: 0 14px 36px rgba(0, 0, 0, .28);
-  backdrop-filter: blur(16px);
-}
-
-.app-shell-table-arena .app-brand {
-  color: #f6d786;
-  letter-spacing: 0;
-}
-
-.app-shell-table-arena .app-brand-mark {
-  display: inline-grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid rgba(246, 215, 134, .54);
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 35% 24%, rgba(255, 255, 255, .4), transparent 18%),
-    linear-gradient(145deg, #f3c65c, #8e5d13);
-  color: #0d111b;
-  font-size: 12px;
-  font-weight: 900;
-  box-shadow: 0 0 22px rgba(226, 177, 66, .22);
-}
-
-.app-shell-table-arena .app-brand-copy small {
-  display: block;
-  color: #8ea0b5;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-}
-
-.app-shell-table-arena .app-nav {
-  justify-content: center;
-}
-
-.app-shell-table-arena .app-nav-link {
-  color: #aab7c8;
-}
-
-.app-shell-table-arena .app-nav-link:hover,
-.app-shell-table-arena .app-nav-link-active {
-  background: rgba(242, 204, 111, .12);
-  color: #f4d47c;
-}
-
-.arena-topbar-hud {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  min-width: 0;
-}
-
-.arena-latency-pill {
-  color: #4de686;
-  font-size: 13px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.arena-chip-wallet {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 38px;
-  border: 1px solid rgba(151, 172, 194, .22);
-  border-radius: 999px;
-  background: rgba(8, 13, 22, .72);
-  color: #9fb0c5;
-  padding: 5px 12px 5px 6px;
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
-}
-
-.arena-chip-wallet strong {
-  color: #f5f7fb;
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
-}
-
-.arena-chip-icon {
-  width: 26px;
-  height: 26px;
-  border: 2px dashed rgba(255, 255, 255, .74);
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 50% 50%, #f7f1e3 0 18%, transparent 20%),
-    conic-gradient(#d94343 0 12%, #f6f0e4 12% 18%, #d94343 18% 36%, #f6f0e4 36% 42%, #d94343 42% 60%, #f6f0e4 60% 66%, #d94343 66% 84%, #f6f0e4 84% 90%, #d94343 90%);
-  box-shadow: 0 0 15px rgba(214, 53, 66, .28);
-}
-
 .table-arena-page {
   width: 100%;
   color: #e9f1f6;
@@ -3029,18 +2913,6 @@ button { padding: 8px 16px; cursor: pointer; }
 @media (max-width: 860px) {
   .table-arena-page {
     padding: 14px;
-  }
-
-  .app-shell-table-arena .app-topbar {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    align-items: start;
-    padding-block: 10px;
-  }
-
-  .app-shell-table-arena .app-nav,
-  .arena-topbar-hud {
-    justify-content: flex-start;
   }
 
   .poker-arena-shell .poker-felt {
