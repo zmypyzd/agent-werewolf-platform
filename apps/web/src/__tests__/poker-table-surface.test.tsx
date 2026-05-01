@@ -569,7 +569,7 @@ describe('PokerTableSurface', () => {
     expect(declarationFor('.poker-arena-shell .poker-table-header', 'position', tableHeaderBlock)).toBe('absolute');
     expect(declarationFor('.poker-arena-shell .poker-table-header', 'width', tableHeaderBlock)).toBe('280px');
     expect(declarationFor('.poker-arena-shell .live-side-rail', 'gap', sideRailBlock)).toBe('0');
-    expect(declarationFor('.poker-arena-shell .live-side-rail', 'border-radius', sideRailBlock)).toBe('8px');
+    expect(declarationFor('.poker-arena-shell .live-side-rail', 'border-radius', sideRailBlock)).toBe('var(--radius-md)');
     expect(declarationFor('.poker-arena-shell .live-side-rail .rail-card', 'background', sideRailCardBlock)).toBe('transparent');
     expect(declarationFor('.poker-arena-shell .live-side-rail .rail-card', 'box-shadow', sideRailCardBlock)).toBe('none');
     expect(declarationFor('.seat-wager', 'position', seatWagerBlock)).toBe('absolute');
