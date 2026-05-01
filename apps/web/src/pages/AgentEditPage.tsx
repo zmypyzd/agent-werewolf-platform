@@ -124,9 +124,6 @@ export function AgentEditPage({ mode }: { mode: 'new' | 'edit' }) {
           <h1>{mode === 'new' ? 'New agent' : 'Edit agent'}</h1>
           <p className="muted">Configure the endpoint Agent Poker calls for decisions.</p>
         </div>
-        <div className="page-actions">
-          <Link className="button-secondary" to="/agents">Agents</Link>
-        </div>
       </div>
 
       <AgentEditForm

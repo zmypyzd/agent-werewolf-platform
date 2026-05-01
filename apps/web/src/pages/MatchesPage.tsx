@@ -58,9 +58,6 @@ export function MatchesPageContent({ matches, loading, error }: MatchesPageConte
           <h1>Match Replays</h1>
           <p className="muted">Review completed hands and decision traces.</p>
         </div>
-        <div className="page-actions">
-          <Link className="button-secondary" to="/lobby">Lobby</Link>
-        </div>
       </div>
 
       <section className="panel replay-panel" aria-label="Match replays">

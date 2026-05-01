@@ -15,8 +15,7 @@ function formatTime(ms: number): string {
 function ReplayNavigationLinks() {
   return (
     <div className="row" style={{ marginTop: 12 }}>
-      <Link to="/matches">Back to matches</Link>
-      <Link to="/lobby">Lobby</Link>
+      <Link to="/matches">← Back to matches</Link>
     </div>
   );
 }
@@ -55,10 +54,9 @@ export function MatchReplayPageContent({
   return (
     <div className="page" style={{ maxWidth: 1180 }}>
       <div className="row" style={{ justifyContent: 'space-between' }}>
-        <h1>{record.summary.name}</h1>
-        <div className="row">
-          <Link to="/matches">Match replays</Link>
-          <Link to="/lobby">Lobby</Link>
+        <div>
+          <Link to="/matches">← Back to matches</Link>
+          <h1 style={{ marginTop: 4 }}>{record.summary.name}</h1>
         </div>
       </div>
 

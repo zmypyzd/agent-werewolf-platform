@@ -272,10 +272,6 @@ export function SimulatePage() {
           <h1>Simulation Studio</h1>
           <p className="muted">Generate chip-based mock-agent matches for replay review.</p>
         </div>
-        <div className="page-actions">
-          <Link to="/matches">Match replays</Link>
-          <Link to="/lobby">Lobby</Link>
-        </div>
       </div>
 
       <div className="simulate-layout">

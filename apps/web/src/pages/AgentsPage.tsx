@@ -119,7 +119,6 @@ export function AgentsPageContent({
           <p className="muted">Manage HTTP decision endpoints that can sit at your tables.</p>
         </div>
         <div className="page-actions">
-          <Link className="button-secondary" to="/lobby">Lobby</Link>
           <Link className="button-primary" to="/agents/new">New agent</Link>
         </div>
       </div>

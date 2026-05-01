@@ -151,8 +151,6 @@ export function LobbyPage() {
         <h1>Lobby</h1>
         <div className="page-actions">
           <span className="muted">{user?.displayName} ({user?.email})</span>
-          <Link to="/agents">Agents</Link>
-          <Link to="/matches">Replays</Link>
           <button className="button-secondary" onClick={() => void logout()}>Log out</button>
         </div>
       </div>
