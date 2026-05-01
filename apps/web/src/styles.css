@@ -1,16 +1,41 @@
 * { box-sizing: border-box; }
 :root {
+  /* === Layout === */
   --app-topbar-height: 60px;
+
+  /* === Surfaces === */
   --surface-page: #f6f7f9;
   --surface-panel: #fff;
   --surface-muted: #eef2f6;
   --border-subtle: #d8dee6;
+
+  /* === Text === */
   --text-primary: #151b23;
   --text-secondary: #526070;
+
+  /* === Accents === */
   --accent-primary: #1769aa;
   --accent-primary-hover: #125487;
+
+  /* === Danger === */
   --danger: #b42318;
   --danger-hover: #8f1d13;
+
+  /* === Type scale (PR0 — codex challenge #4 sequencing) === */
+  --font-2xs: 10px;
+  --font-xs: 12px;
+  --font-sm: 13px;
+  --font-base: 14px;
+  --font-lg: 16px;
+  --font-xl: 20px;
+  --font-2xl: 28px;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* === Radius scale (PR0) === */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
 }
 body {
   margin: 0;
