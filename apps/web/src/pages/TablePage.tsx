@@ -490,6 +490,17 @@ export function TablePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  // Arena dark theme: set [data-theme="arena"] on <html> while TablePage is
+  // mounted so :root token values cascade through to the dark-arena palette.
+  // OQ2 (PR1 Task A commit 7): codex challenge #2 confirmed this is safe in
+  // the CSR-only project (no FOUC risk via hydration).
+  useEffect(() => {
+    document.documentElement.dataset.theme = 'arena';
+    return () => {
+      delete document.documentElement.dataset.theme;
+    };
+  }, []);
+
   const [table, setTable] = useState<TableSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [handHistory, setHandHistory] = useState<TablePublicHandSummary[]>([]);

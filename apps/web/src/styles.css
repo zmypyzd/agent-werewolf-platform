@@ -59,6 +59,28 @@
   --space-6: 24px;
   --space-8: 32px;
 }
+
+[data-theme="arena"] {
+  /* === Surfaces (arena overrides) === */
+  --surface-page: #080d16;
+  --surface-panel: #172033;
+  --surface-muted: #243246;
+  --surface-subtle: #15191d;
+  --border-subtle: #2d3535;
+
+  /* === Text (light-on-dark) === */
+  --text-primary: #f5f7fa;
+  --text-secondary: #9aa6b8;
+
+  /* === Accents (arena gold-blue scheme) === */
+  --accent-primary: #258de3;
+  --accent-primary-hover: #145ca8;
+  --accent-link: var(--accent-primary);
+
+  /* === States (arena variants) === */
+  --state-success: #2f7d6b;
+}
+
 body {
   margin: 0;
   background: var(--surface-page);
