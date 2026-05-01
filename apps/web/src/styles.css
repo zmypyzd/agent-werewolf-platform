@@ -96,20 +96,20 @@ body {
   border-radius: 999px;
   background: linear-gradient(145deg, #f3c65c, #8e5d13);
   color: #0d111b;
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 900;
 }
 .auth-brand strong {
   display: block;
   color: #f6d786;
-  font-size: 18px;
+  font-size: var(--font-xl);
   line-height: 1;
 }
 .auth-brand span:not(.auth-brand-mark) {
   display: block;
   margin-top: 3px;
   color: #8ea0b5;
-  font-size: 10px;
+  font-size: var(--font-2xs);
   font-weight: 800;
   letter-spacing: 3px;
   text-transform: uppercase;
@@ -174,7 +174,7 @@ body {
   align-items: center;
   gap: 9px;
   color: var(--text-primary);
-  font-size: 18px;
+  font-size: var(--font-xl);
   font-weight: 800;
   text-decoration: none;
 }
@@ -197,7 +197,7 @@ body {
   border-radius: 6px;
   color: var(--text-secondary);
   padding: 7px 10px;
-  font-size: 14px;
+  font-size: var(--font-base);
   font-weight: 700;
   text-decoration: none;
 }
@@ -275,7 +275,7 @@ body {
   background: #f5f9fc;
   color: #244761;
   padding: 3px 9px;
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 800;
   white-space: nowrap;
 }
@@ -283,7 +283,7 @@ body {
   width: 100%;
   border-collapse: collapse;
   background: var(--surface-panel);
-  font-size: 14px;
+  font-size: var(--font-base);
 }
 .data-table th,
 .data-table td {
@@ -294,7 +294,7 @@ body {
 }
 .data-table th {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -336,7 +336,7 @@ body {
 .create-table-core h2,
 .create-table-advanced h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--font-xl);
 }
 .create-table-field-grid {
   display: grid;
@@ -411,7 +411,7 @@ body {
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
-  font-size: 18px;
+  font-size: var(--font-xl);
 }
 .lobby-table-metrics {
   display: grid;
@@ -424,7 +424,7 @@ body {
 }
 .lobby-table-metrics dt {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -521,7 +521,7 @@ body {
 .page { padding: 24px; max-width: 960px; margin: 0 auto; }
 .row { display: flex; gap: 12px; align-items: center; }
 form { display: flex; flex-direction: column; gap: 12px; max-width: 360px; }
-label { display: flex; flex-direction: column; font-size: 14px; gap: 4px; }
+label { display: flex; flex-direction: column; font-size: var(--font-base); gap: 4px; }
 input, select, textarea {
   min-height: 36px;
   border: 1px solid #aeb8c3;
@@ -529,7 +529,7 @@ input, select, textarea {
   background: var(--surface-panel);
   color: var(--text-primary);
   padding: 8px 10px;
-  font-size: 14px;
+  font-size: var(--font-base);
 }
 input:focus, select:focus, textarea:focus {
   outline: 2px solid rgba(23, 105, 170, .24);
@@ -537,8 +537,8 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--accent-primary);
 }
 button { padding: 8px 16px; cursor: pointer; }
-.error { color: #b00020; font-size: 13px; }
-.muted { color: #666; font-size: 13px; }
+.error { color: #b00020; font-size: var(--font-sm); }
+.muted { color: #666; font-size: var(--font-sm); }
 .agent-lab-panel {
   display: grid;
   gap: 14px;
@@ -571,7 +571,7 @@ button { padding: 8px 16px; cursor: pointer; }
   background: var(--surface-panel);
   padding: 5px 9px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 800;
 }
 .agent-config-card h3,
@@ -591,7 +591,7 @@ button { padding: 8px 16px; cursor: pointer; }
 }
 .agent-config-metrics dt {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -601,7 +601,7 @@ button { padding: 8px 16px; cursor: pointer; }
 }
 .agent-config-metrics code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 13px;
+  font-size: var(--font-sm);
 }
 .agent-card-actions {
   display: flex;
@@ -680,11 +680,11 @@ button { padding: 8px 16px; cursor: pointer; }
 .analysis-panel { margin-top: 16px; }
 .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 8px; margin: 12px 0 16px; }
 .metric-grid div { border: 1px solid #d6d6d6; border-radius: 4px; padding: 10px; min-height: 68px; }
-.metric-grid strong { display: block; font-size: 18px; line-height: 1.2; }
-.metric-grid span { display: block; margin-top: 4px; color: #666; font-size: 12px; }
+.metric-grid strong { display: block; font-size: var(--font-xl); line-height: 1.2; }
+.metric-grid span { display: block; margin-top: 4px; color: #666; font-size: var(--font-xs); }
 .analysis-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; align-items: start; }
 .analysis-block h3 { margin-bottom: 8px; }
-.compact-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.compact-table { width: 100%; border-collapse: collapse; font-size: var(--font-base); }
 .compact-table th, .compact-table td { padding: 7px 8px; border-bottom: 1px solid #e4e4e4; text-align: left; vertical-align: top; }
 .compact-table th { font-weight: 700; }
 
@@ -734,7 +734,7 @@ button { padding: 8px 16px; cursor: pointer; }
 .match-summary-strip strong {
   display: block;
   color: #1f2933;
-  font-size: 20px;
+  font-size: var(--font-xl);
   line-height: 1.15;
 }
 
@@ -742,7 +742,7 @@ button { padding: 8px 16px; cursor: pointer; }
   display: block;
   margin-top: 3px;
   color: #626f7f;
-  font-size: 12px;
+  font-size: var(--font-xs);
 }
 
 .workbench-panel {
@@ -812,7 +812,7 @@ button { padding: 8px 16px; cursor: pointer; }
   align-items: center;
   margin-left: auto;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--font-sm);
   font-weight: 700;
 }
 
@@ -834,7 +834,7 @@ button { padding: 8px 16px; cursor: pointer; }
 .street-filter-group legend {
   margin-right: 2px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -846,7 +846,7 @@ button { padding: 8px 16px; cursor: pointer; }
   background: #f5f9fc;
   color: #244761;
   padding: 5px 10px;
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 800;
 }
 
@@ -898,7 +898,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .hand-rail-item span {
   color: #626f7f;
-  font-size: 12px;
+  font-size: var(--font-xs);
 }
 
 .hand-rail-item[aria-pressed="true"],
@@ -930,7 +930,7 @@ button { padding: 8px 16px; cursor: pointer; }
   background: #f5f9fc;
   color: #244761;
   padding: 4px 9px;
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -970,7 +970,7 @@ button { padding: 8px 16px; cursor: pointer; }
   display: grid;
   gap: 3px;
   padding: 10px;
-  font-size: 13px;
+  font-size: var(--font-sm);
 }
 
 .result-card span {
@@ -996,7 +996,7 @@ button { padding: 8px 16px; cursor: pointer; }
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--font-sm);
 }
 
 .timeline-row span:first-child {
@@ -1026,7 +1026,7 @@ button { padding: 8px 16px; cursor: pointer; }
 .action-inspector dt,
 .artifact-metadata dt {
   color: #626f7f;
-  font-size: 12px;
+  font-size: var(--font-xs);
 }
 
 .action-inspector dd,
@@ -1088,7 +1088,7 @@ button { padding: 8px 16px; cursor: pointer; }
   align-items: center;
   border-bottom: 1px solid #eef1f4;
   padding-bottom: 7px;
-  font-size: 13px;
+  font-size: var(--font-sm);
 }
 
 .matrix-row strong {
@@ -1121,14 +1121,14 @@ button { padding: 8px 16px; cursor: pointer; }
 .agent-metrics strong {
   display: block;
   overflow-wrap: anywhere;
-  font-size: 16px;
+  font-size: var(--font-lg);
 }
 
 .agent-metrics span {
   display: block;
   margin-top: 2px;
   color: #626f7f;
-  font-size: 12px;
+  font-size: var(--font-xs);
 }
 
 .agent-sort-control {
@@ -1137,7 +1137,7 @@ button { padding: 8px 16px; cursor: pointer; }
   gap: 8px;
   align-items: center;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--font-sm);
   font-weight: 700;
 }
 
@@ -1198,7 +1198,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .table-danger-title {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -1393,7 +1393,7 @@ button { padding: 8px 16px; cursor: pointer; }
   padding: 5px 10px;
   color: #254052;
   background: #f4f8fb;
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -1453,7 +1453,7 @@ button { padding: 8px 16px; cursor: pointer; }
   background: #d8a64a;
   color: #241805;
   padding: 5px 14px;
-  font-size: 13px;
+  font-size: var(--font-sm);
   white-space: nowrap;
   box-shadow: 0 6px 14px rgba(0, 0, 0, .18);
 }
@@ -1504,7 +1504,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .seat-meta {
   color: #b8c6bf;
-  font-size: 12px;
+  font-size: var(--font-xs);
 }
 
 .seat-badge-row {
@@ -1523,7 +1523,7 @@ button { padding: 8px 16px; cursor: pointer; }
   background: rgba(238, 245, 239, .1);
   color: #dbe8df;
   padding: 2px 7px;
-  font-size: 11px;
+  font-size: var(--font-xs);
   font-weight: 800;
   line-height: 1;
   white-space: nowrap;
@@ -1546,7 +1546,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .seat-stack {
   color: #f4f7f5;
-  font-size: 13px;
+  font-size: var(--font-sm);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -1563,7 +1563,7 @@ button { padding: 8px 16px; cursor: pointer; }
   background: #f6efe2;
   color: #251b10;
   padding: 0;
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 800;
 }
 
@@ -1606,7 +1606,7 @@ button { padding: 8px 16px; cursor: pointer; }
   display: grid;
   justify-items: center;
   gap: 1px;
-  font-size: 10px;
+  font-size: var(--font-2xs);
   letter-spacing: 0;
   line-height: .84;
 }
@@ -1623,7 +1623,7 @@ button { padding: 8px 16px; cursor: pointer; }
 }
 
 .playing-card-pip {
-  font-size: 20px;
+  font-size: var(--font-xl);
   line-height: 1;
 }
 
@@ -1647,7 +1647,7 @@ button { padding: 8px 16px; cursor: pointer; }
     linear-gradient(135deg, rgba(255, 255, 255, .18), transparent 32%),
     repeating-linear-gradient(45deg, #86303c, #86303c 5px, #b53645 5px, #b53645 10px);
   color: #e5eef2;
-  font-size: 12px;
+  font-size: var(--font-xs);
 }
 
 .card-back::before {
@@ -1670,7 +1670,7 @@ button { padding: 8px 16px; cursor: pointer; }
   background-size: 10px 10px;
   color: #fff2e3;
   font-family: system-ui, -apple-system, sans-serif;
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 900;
 }
 
@@ -1729,7 +1729,7 @@ button { padding: 8px 16px; cursor: pointer; }
   overflow: auto;
   padding-left: 18px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
+  font-size: var(--font-sm);
 }
 
 .player-action-panel {
@@ -1766,14 +1766,14 @@ button { padding: 8px 16px; cursor: pointer; }
 }
 
 .turn-timer span {
-  font-size: 11px;
+  font-size: var(--font-xs);
   font-weight: 700;
   line-height: 1;
   text-transform: uppercase;
 }
 
 .turn-timer strong {
-  font-size: 16px;
+  font-size: var(--font-lg);
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -1824,7 +1824,7 @@ button { padding: 8px 16px; cursor: pointer; }
 }
 
 .sized-action-label {
-  font-size: 13px;
+  font-size: var(--font-sm);
   font-weight: 700;
 }
 
@@ -1847,7 +1847,7 @@ button { padding: 8px 16px; cursor: pointer; }
 .sized-action-presets button {
   padding: 6px 8px;
   background: var(--surface-panel);
-  font-size: 12px;
+  font-size: var(--font-xs);
 }
 
 .seat-management-panel {
@@ -2011,7 +2011,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .poker-arena-shell .poker-table-header h1 {
   color: #f7fbff;
-  font-size: 20px;
+  font-size: var(--font-xl);
 }
 
 .poker-arena-shell .table-connection {
@@ -2062,7 +2062,7 @@ button { padding: 8px 16px; cursor: pointer; }
   z-index: 1;
   transform: translate(-50%, -50%);
   color: rgba(234, 248, 238, .11);
-  font-size: 18px;
+  font-size: var(--font-xl);
   font-weight: 900;
   letter-spacing: 6px;
   pointer-events: none;
@@ -2081,7 +2081,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .community-label {
   color: #9fb3c8;
-  font-size: 11px;
+  font-size: var(--font-xs);
   font-weight: 900;
   text-transform: uppercase;
 }
@@ -2124,7 +2124,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .poker-arena-shell .playing-card-index,
 .arena-action-console .playing-card-index {
-  font-size: 13px;
+  font-size: var(--font-sm);
 }
 
 .poker-arena-shell .playing-card-face,
@@ -2159,7 +2159,7 @@ button { padding: 8px 16px; cursor: pointer; }
     linear-gradient(180deg, #f5c86e, #bb7e26);
   color: #1d1305;
   padding: 7px 22px;
-  font-size: 18px;
+  font-size: var(--font-xl);
   font-weight: 900;
   letter-spacing: .5px;
   box-shadow: 0 0 32px rgba(235, 180, 73, .38), 0 10px 24px rgba(0, 0, 0, .36);
@@ -2180,7 +2180,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .arena-phase-label {
   color: #7aafd4;
-  font-size: 11px;
+  font-size: var(--font-xs);
   font-weight: 900;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -2230,7 +2230,7 @@ button { padding: 8px 16px; cursor: pointer; }
   min-height: 18px;
   border-radius: 4px;
   padding: 2px 8px;
-  font-size: 10px;
+  font-size: var(--font-2xs);
   font-weight: 900;
   letter-spacing: .6px;
   line-height: 1;
@@ -2298,7 +2298,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .seat-wager-action {
   color: #8fa0b4;
-  font-size: 9px;
+  font-size: var(--font-2xs);
   font-weight: 900;
   line-height: 1;
   text-transform: uppercase;
@@ -2306,7 +2306,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .seat-wager-amount {
   color: #f7e08f;
-  font-size: 13px;
+  font-size: var(--font-sm);
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -2379,7 +2379,7 @@ button { padding: 8px 16px; cursor: pointer; }
   background: rgba(11, 16, 24, .86);
   color: #f7c350;
   padding: 3px 8px;
-  font-size: 11px;
+  font-size: var(--font-xs);
   font-weight: 900;
   letter-spacing: 0;
   line-height: 1;
@@ -2416,7 +2416,7 @@ button { padding: 8px 16px; cursor: pointer; }
     radial-gradient(circle at 38% 24%, rgba(255, 255, 255, .28), transparent 18%),
     linear-gradient(145deg, #243246, #0b1019);
   color: #f2d076;
-  font-size: 15px;
+  font-size: var(--font-lg);
   font-weight: 900;
   box-shadow: inset 0 -10px 18px rgba(0, 0, 0, .32);
 }
@@ -2438,12 +2438,12 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .poker-arena-shell .seat-topline strong {
   color: #f7fbff;
-  font-size: 14px;
+  font-size: var(--font-base);
 }
 
 .poker-arena-shell .seat-stack {
   color: #f4d477;
-  font-size: 15px;
+  font-size: var(--font-lg);
 }
 
 .poker-arena-shell .player-seat .playing-card,
@@ -2454,11 +2454,11 @@ button { padding: 8px 16px; cursor: pointer; }
 }
 
 .poker-arena-shell .player-seat .playing-card-index {
-  font-size: 8px;
+  font-size: var(--font-2xs);
 }
 
 .poker-arena-shell .player-seat .playing-card-pip {
-  font-size: 21px;
+  font-size: var(--font-xl);
 }
 
 .poker-arena-shell .community-board .playing-card,
@@ -2468,7 +2468,7 @@ button { padding: 8px 16px; cursor: pointer; }
 }
 
 .poker-arena-shell .community-board .playing-card-index {
-  font-size: 15px;
+  font-size: var(--font-lg);
 }
 
 .poker-arena-shell .community-board .playing-card-pip {
@@ -2490,11 +2490,11 @@ button { padding: 8px 16px; cursor: pointer; }
   left: -10px;
   width: 30px;
   height: 30px;
-  font-size: 10px;
+  font-size: var(--font-2xs);
 }
 
 .poker-arena-shell .player-seat.is-open .seat-meta {
-  font-size: 10px;
+  font-size: var(--font-2xs);
   color: #6a7a8a;
 }
 
@@ -2560,7 +2560,7 @@ button { padding: 8px 16px; cursor: pointer; }
 }
 
 .hero-hand-showcase .playing-card-index {
-  font-size: 17px;
+  font-size: var(--font-lg);
 }
 
 .hero-hand-showcase .playing-card-pip {
@@ -2625,7 +2625,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .poker-arena-shell .rail-card h2 {
   color: #f2ca64;
-  font-size: 14px;
+  font-size: var(--font-base);
 }
 
 .arena-side-tabs {
@@ -2644,7 +2644,7 @@ button { padding: 8px 16px; cursor: pointer; }
   align-items: center;
   justify-content: center;
   color: #8fa0b4;
-  font-size: 13px;
+  font-size: var(--font-sm);
   font-weight: 800;
 }
 
@@ -2673,7 +2673,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .arena-stat-list dt {
   color: #8fa0b4;
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 800;
 }
 
@@ -2712,7 +2712,7 @@ button { padding: 8px 16px; cursor: pointer; }
   border-radius: 999px;
   background: rgba(244, 203, 99, .18);
   color: #f3cb63;
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 900;
 }
 
@@ -2729,7 +2729,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .poker-arena-shell .live-log-list {
   color: #b7c4d4;
-  font-size: 12px;
+  font-size: var(--font-xs);
 }
 
 .poker-arena-shell .live-log-list li {
@@ -2811,7 +2811,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .arena-raise-control .sized-action-label {
   color: #f5cf67;
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 900;
   text-transform: uppercase;
 }
@@ -2835,7 +2835,7 @@ button { padding: 8px 16px; cursor: pointer; }
 .arena-raise-control .sized-action-range {
   justify-self: end;
   margin-top: -8px;
-  font-size: 11px;
+  font-size: var(--font-xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2860,7 +2860,7 @@ button { padding: 8px 16px; cursor: pointer; }
   border: 1px solid rgba(255, 255, 255, .18);
   border-radius: 10px;
   color: var(--surface-panel);
-  font-size: 16px;
+  font-size: var(--font-lg);
   font-weight: 900;
   letter-spacing: .5px;
   text-transform: uppercase;
@@ -3035,7 +3035,7 @@ button { padding: 8px 16px; cursor: pointer; }
     border-radius: 999px;
     background: rgba(244, 203, 99, .16);
     color: #f3cb63;
-    font-size: 12px;
+    font-size: var(--font-xs);
     font-weight: 900;
   }
 
@@ -3055,7 +3055,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
   .mobile-seat-main span {
     color: #9fb0c5;
-    font-size: 12px;
+    font-size: var(--font-xs);
   }
 
   .arena-action-console,
@@ -3083,7 +3083,7 @@ button { padding: 8px 16px; cursor: pointer; }
   .arena-action-console .card-back {
     width: 42px;
     height: 58px;
-    font-size: 18px;
+    font-size: var(--font-xl);
   }
 
   .arena-side-tabs {
