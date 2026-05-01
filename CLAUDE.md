@@ -1,3 +1,95 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project
+
+Multi-agent Texas Hold'em poker platform for technical experimentation. **Not** a real-money product — no wagering, deposits, withdrawals, odds markets, or financial transactions. Do not add any such features.
+
+Stack: TypeScript 5.5 (strict), Node 20, pnpm 10.33.2 workspaces, Vitest 2, Fastify 4 + Zod, React 18 + Vite 5. Modules use NodeNext resolution and `"type": "module"`; relative imports must use `.js` extensions even for `.ts` sources.
+
+## Commands
+
+```bash
+pnpm install
+pnpm build                                              # build everything (tsc -b across workspace)
+pnpm test                                               # full Vitest workspace
+pnpm test:watch | pnpm test:coverage
+pnpm lint                                               # tsc -p tsconfig.json --noEmit, per package
+pnpm typecheck                                          # build-mode tsc, filtered to errors only
+pnpm dev:api                                            # Fastify on :3000, /api/v1 prefix
+pnpm --filter web dev                                   # Vite on :5173, proxies /api and /ws to :3000
+pnpm demo                                               # local simulation, see examples/local-simulation
+```
+
+Filter to a single package while iterating, e.g.:
+
+```bash
+pnpm --filter @agent-poker/poker-engine run test
+pnpm --filter api run test
+pnpm --filter web run test
+pnpm --filter web e2e                                   # Playwright (opt-in; install separately, see apps/web/package.json)
+```
+
+Run a single Vitest spec:
+
+```bash
+pnpm --filter @agent-poker/poker-engine exec vitest run src/__tests__/hand-evaluator.test.ts
+pnpm --filter @agent-poker/poker-engine exec vitest run -t 'evaluates straight flush'
+```
+
+API match-artifact storage mode is selected by env (`MATCH_ARTIFACT_STORE=memory|file`, plus `MATCH_ARTIFACT_BASE_DIR` for `file`). Default is `memory`.
+
+## Architecture (big picture)
+
+The codebase is a layered monorepo where dependency direction is load-bearing — keep it pointing one way:
+
+```
+shared ─┬── agent-protocol ──┐
+        ├── poker-engine ────┤
+        │                    ├── table-orchestrator ──┐
+        ├── agent-runtime ───┤                        ├── apps/api ── apps/web
+        ├── auth ────────────┤                        │
+        ├── persistence ─────┤                        │
+        └── realtime ────────┘                        │
+examples/mock-agents → agent-runtime + poker-engine ──┘
+examples/local-simulation drives the orchestrator directly (no API).
+```
+
+**Hard rules that the layering encodes:**
+
+- `packages/poker-engine` is pure: no I/O, no logging, no network, no `Math.random()`. Only depends on `shared`. All randomness flows through `createSeededRng(seed)`; each hand seeds itself as `${tableSeed}-${handNumber}` so replays are reproducible. Never reach for `Math.random()` here — the reproducibility test will fail.
+- `packages/shared` has no runtime deps — types, constants, errors only. Other packages import down into it; it never imports up.
+- `packages/agent-protocol` is the Zod boundary. All external input (API request bodies, agent responses) is validated here before it reaches orchestrator/engine.
+- `packages/agent-runtime` owns the `IAgent` interface and adapters (mock, HTTP, WS, human). Every agent call goes through `TimeoutHandler` — there is no unbounded agent execution path.
+- `packages/table-orchestrator` (`hand-runner.ts`, `orchestrator.ts`, `scheduled-match-runner.ts`) is where engine + agents + persistence + realtime hub are stitched together. The engine doesn't know agents exist; the orchestrator drives it.
+- `apps/api` is Fastify-only glue. `server.ts:buildServer` wires stores (memory by default; SQLite for users/sessions/agent-config; pluggable match-artifact store), the `RealtimeHub`, the `authPlugin` (cookie sessions + CSRF), and route modules under `src/routes/`. The error handler maps `AppError` codes (in `@agent-poker/shared`) to HTTP status — add new error codes there, not in the route.
+- `apps/web` is a React/Vite SPA (router under `src/router.tsx`, pages in `src/pages/`, live-table UI in `src/live-table/`). Vite dev server proxies `/api` and `/ws` to the API. Web tests are Vitest; e2e is Playwright under `apps/web/e2e/` (opt-in install).
+
+**Information-isolation invariant — protect this with tests:**
+
+- `AgentDecisionRequest.publicState` must not contain hole cards for any player.
+- `privateState` contains hole cards only for the requesting agent.
+- Public match artifacts (`/api/v1/matches/:id`, `/replay`, `/decision-trace`, `/analysis`) redact private hole cards and hole-card events.
+- Decision traces persist a bounded `reasoningSummary`, never raw chain-of-thought, and enforce per-trace + per-match byte/count caps. Until match identity is split out, traces use `tableId` as the temporary `matchId`.
+
+**Match artifact storage** is provider-neutral: routes depend on `IMatchArtifactStore`; durable backends implement `IObjectStore`. `apps/api/src/match-artifact-store-factory.ts` picks the implementation from env. Add new providers by implementing `IObjectStore` — don't reach for cloud SDKs in route code.
+
+**Auth:** `packages/auth` provides cookie sessions (`apk_sid`), CSRF (`X-Requested-With: fetch`), password hashing, and a rate limiter. Mutating routes require `requireAuth`; `/api/v1/matches/*` is public read-only. Sessions/users/agent-configs persist in SQLite (`packages/persistence/src/sqlite/`); the API defaults to `:memory:` SQLite when no `authDb` is injected, which is why test runs are isolated.
+
+## Conventions
+
+- Tests live in `src/__tests__/` colocated with each package; name them `*.test.ts(x)`. Web e2e is the only exception (`apps/web/e2e/`).
+- Do not mock the poker engine in integration tests — use the real engine; only mock I/O.
+- Use `vi.useFakeTimers()` for any test touching `TimeoutHandler`.
+- TypeScript is strict with `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`. No `any`, no `// @ts-ignore` — fix the root cause.
+- Files: `kebab-case.ts`. Classes/types: `PascalCase`. Functions/vars: `camelCase`. Constants: `SCREAMING_SNAKE_CASE`.
+- `examples/local-simulation` writes per-hand and per-match artifacts to `examples/local-simulation/output/...`; those JSON/JSONL files are gitignored.
+
+## Documentation
+
+`docs/` is the source of truth for design decisions — put rationale there, not in code comments. Key files: `agent-poker-platform-greenfield-spec.md`, `agent-poker-platform-implementation-plan.md`, `agent-poker-platform-api-and-protocol.md`, `agent-poker-platform-test-plan.md`, plus `phase-2-web-platform-*.md` for the web milestone. `docs/agent-poker-platform-CLAUDE.md` is the longer-form version of this file and is kept in sync with it.
+
 <!-- TEAMAGENT:START - 自动管理，请勿手动编辑 -->
 ## TeamAgent 经验（54条活跃知识，为你编译了 27 条（token 预算 3000）)
 - 使用 忽略 <local-command-caveat> 包裹的消息，除非用户明确要求分析 而非 <local-command-caveat>——该标签内容由本地命令自动生成，非用户意图表达；AI 主动响应会污染对话上下文，误把系统噪声当用户指令 [1.00] [预置]
