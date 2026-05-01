@@ -16,6 +16,8 @@
   /* === Accents === */
   --accent-primary: #1769aa;
   --accent-primary-hover: #125487;
+  --accent-link: var(--accent-primary);
+  --accent-link-visited: #6b4d99;
 
   /* === Danger === */
   --danger: #b42318;
@@ -837,7 +839,7 @@ button { padding: 8px 16px; cursor: pointer; }
 }
 
 .street-filter-button[aria-pressed="true"] {
-  border-color: #1f5f9c;
+  border-color: var(--accent-primary);
   background: #eef5fb;
   color: #16466f;
 }
@@ -889,9 +891,9 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .hand-rail-item[aria-pressed="true"],
 .timeline-row[aria-pressed="true"] {
-  border-color: #1f5f9c;
+  border-color: var(--accent-primary);
   background: #eef5fb;
-  box-shadow: inset 3px 0 0 #1f5f9c;
+  box-shadow: inset 3px 0 0 var(--accent-primary);
 }
 
 .hand-board {
