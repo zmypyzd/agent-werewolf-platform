@@ -99,3 +99,33 @@ export interface IUserAgentConfigStore {
   update(userId: string, agentConfigId: string, patch: PatchUserAgentConfig): Promise<UserAgentConfig>;
   delete(userId: string, agentConfigId: string): Promise<void>;
 }
+
+// ─── AgentInvite ─────────────────────────────────────────────────────────────
+
+export interface AgentInvite {
+  token: string;
+  ownerUserId: string;
+  displayName: string | null;
+  notes: string | null;
+  expiresAt: number;
+  usedAt: number | null;
+  revokedAt: number | null;
+  registeredAgentConfigId: string | null;
+  createdAt: number;
+}
+
+export interface NewAgentInvite {
+  token: string;
+  ownerUserId: string;
+  displayName: string | null;
+  notes: string | null;
+  expiresAt: number;
+}
+
+export interface IAgentInviteStore {
+  create(invite: NewAgentInvite): Promise<AgentInvite>;
+  list(ownerUserId: string): Promise<AgentInvite[]>;
+  findByToken(token: string): Promise<AgentInvite | null>;
+  markUsed(token: string, registeredAgentConfigId: string): Promise<void>;
+  revokeUnused(ownerUserId: string, token: string): Promise<boolean>;
+}

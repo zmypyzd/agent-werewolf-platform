@@ -573,6 +573,68 @@ button { padding: 8px 16px; cursor: pointer; }
   display: grid;
   gap: 14px;
 }
+.agent-invite-panel {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  border-color: #b9d5e8;
+  background: #fbfdff;
+}
+.agent-lab-panel + .agent-lab-panel {
+  margin-top: var(--space-4);
+}
+.agent-invite-url {
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid #d6e3ee;
+  border-radius: var(--radius-sm);
+  background: var(--surface-subtle);
+  padding: 10px 12px;
+}
+.agent-invite-url code {
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
+}
+.agent-invite-prompt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-3);
+}
+.agent-invite-prompt {
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-panel);
+  padding: var(--space-3);
+}
+.agent-invite-prompt-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.agent-invite-prompt h3 {
+  margin: 0;
+  font-size: var(--font-base);
+}
+.agent-invite-prompt pre {
+  max-height: 300px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid #e3e8ee;
+  border-radius: var(--radius-sm);
+  background: var(--surface-subtle);
+  padding: var(--space-3);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .agent-config-list {
   display: grid;
   gap: var(--space-3);

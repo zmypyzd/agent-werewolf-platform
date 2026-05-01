@@ -73,6 +73,18 @@ export class AgentInUseError extends AppError {
   }
 }
 
+export class AgentInviteNotFoundError extends AppError {
+  constructor(token: string) {
+    super('AGENT_INVITE_NOT_FOUND', `Agent invite ${token} not found`);
+  }
+}
+
+export class AgentInviteUnavailableError extends AppError {
+  constructor(token: string) {
+    super('AGENT_INVITE_UNAVAILABLE', `Agent invite ${token} has expired, been used, or been revoked`);
+  }
+}
+
 export class RateLimitedError extends AppError {
   constructor(public readonly retryAfterMs: number) {
     super('RATE_LIMITED', `rate limit exceeded; retry after ${retryAfterMs}ms`);

@@ -60,6 +60,10 @@ const ROUTES: RouteCase[] = [
   { method: 'PATCH', url: '/api/v1/me/agents/cfg-x' },
   { method: 'DELETE', url: '/api/v1/me/agents/cfg-x' },
 
+  // /agents/invites — register is token-authenticated and intentionally public.
+  { method: 'POST', url: '/api/v1/agents/invites' },
+  { method: 'DELETE', url: '/api/v1/agents/invites/inv-x' },
+
   // /simulate
   { method: 'POST', url: '/api/v1/simulate' },
 ];

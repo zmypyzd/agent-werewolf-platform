@@ -1,7 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom/server.js';
 import { describe, expect, it } from 'vitest';
-import { AgentsPageContent, type UserAgentConfigPublic } from '../pages/AgentsPage.js';
+import {
+  AgentsPageContent,
+  buildCodingAgentInvitePrompt,
+  buildHttpAgentInvitePrompt,
+  type AgentInvitePublic,
+  type UserAgentConfigPublic,
+} from '../pages/AgentsPage.js';
 import { AgentEditForm, AgentEndpointContract } from '../pages/AgentEditPage.js';
 
 const agents: UserAgentConfigPublic[] = [
@@ -29,6 +35,29 @@ const agents: UserAgentConfigPublic[] = [
   },
 ];
 
+const invites: AgentInvitePublic[] = [
+  {
+    token: 'invite-ready',
+    displayName: 'Solver seat',
+    notes: 'external evaluator',
+    expiresAt: 1_777_280_900_000,
+    usedAt: null,
+    createdAt: 1_777_280_000_000,
+    registeredAgentConfigId: null,
+    status: 'pending',
+  },
+  {
+    token: 'invite-used',
+    displayName: 'Caller',
+    notes: null,
+    expiresAt: 1_777_280_900_000,
+    usedAt: 1_777_280_100_000,
+    createdAt: 1_777_280_000_000,
+    registeredAgentConfigId: 'agent-local',
+    status: 'used',
+  },
+];
+
 function renderAgentsContent(props: Partial<Parameters<typeof AgentsPageContent>[0]> = {}): string {
   return renderToStaticMarkup(
     <StaticRouter location="/agents">
@@ -39,9 +68,17 @@ function renderAgentsContent(props: Partial<Parameters<typeof AgentsPageContent>
         busyId={null}
         deleteInFlight={false}
         deleteAgent={null}
+        invites={[]}
+        inviteLoading={false}
+        inviteError={null}
+        inviteBusy={false}
+        generatedInvite={null}
         onRequestDelete={() => undefined}
         onCancelDelete={() => undefined}
         onConfirmDelete={() => undefined}
+        onCreateInvite={() => undefined}
+        onRevokeInvite={() => undefined}
+        onCopyInvitePrompt={() => undefined}
         {...props}
       />
     </StaticRouter>,
@@ -64,6 +101,53 @@ describe('AgentsPageContent', () => {
     expect(html).toContain('1200 ms');
     expect(html).toContain('No auth header');
     expect(html).toContain('No description');
+  });
+
+  it('separates saved agents from pending Agent Lab invites', () => {
+    const html = renderAgentsContent({ invites });
+
+    expect(html).toContain('My Agents');
+    expect(html).toContain('2 saved');
+    expect(html).toContain('Pending Invites');
+    expect(html).toContain('Solver seat');
+    expect(html).toContain('external evaluator');
+    expect(html).toContain('invite-ready');
+    expect(html).toContain('Revoke');
+    expect(html).not.toContain('tableId');
+  });
+
+  it('renders the generated invite prompt copy actions in Agent Lab', () => {
+    const html = renderAgentsContent({
+      generatedInvite: {
+        token: 'invite-new',
+        expiresAt: 1_777_280_900_000,
+        registerUrl: 'http://localhost:3000/api/v1/agents/invites/invite-new/register',
+      },
+    });
+
+    expect(html).toContain('Invite External Agent');
+    expect(html).toContain('Copy for Coding Agent');
+    expect(html).toContain('Copy for HTTP Agent');
+    expect(html).toContain('http://localhost:3000/api/v1/agents/invites/invite-new/register');
+    expect(html).toContain('create a small local HTTP server');
+    expect(html).toContain('curl -X POST');
+    expect(html).toContain('Invite token: invite-new');
+  });
+
+  it('builds distinct prompts for coding agents and ordinary HTTP agents', () => {
+    const registerUrl = 'http://localhost:3000/api/v1/agents/invites/invite-new/register';
+
+    const codingPrompt = buildCodingAgentInvitePrompt({ token: 'invite-new', registerUrl });
+    expect(codingPrompt).toContain('create a small local HTTP server');
+    expect(codingPrompt).toContain(registerUrl);
+    expect(codingPrompt).toContain('"displayName"');
+    expect(codingPrompt).toContain('"endpointUrl"');
+
+    const httpPrompt = buildHttpAgentInvitePrompt({ token: 'invite-new', registerUrl });
+    expect(httpPrompt).toContain('Your HTTP decision endpoint');
+    expect(httpPrompt).toContain('curl -X POST');
+    expect(httpPrompt).toContain(registerUrl);
+    expect(httpPrompt).not.toContain('create a small local HTTP server');
   });
 
   it('renders delete confirmation with dialog markup instead of a native confirm surface', () => {

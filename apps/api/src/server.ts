@@ -9,11 +9,13 @@ import {
   SqliteUserStore,
   SqliteSessionStore,
   SqliteUserAgentConfigStore,
+  SqliteAgentInviteStore,
 } from '@agent-poker/persistence';
 import type {
   IUserStore,
   ISessionStore,
   IUserAgentConfigStore,
+  IAgentInviteStore,
   IMatchArtifactStore,
   IDecisionTraceStore,
   SqliteDb,
@@ -28,6 +30,7 @@ import { matchesRoutes } from './routes/matches.js';
 import { authRoutes } from './routes/auth.js';
 import { wsRoutes } from './routes/ws.js';
 import { meAgentsRoutes } from './routes/me-agents.js';
+import { agentInvitesRoutes } from './routes/agent-invites.js';
 import { healthRoutes } from './routes/health.js';
 import { createMatchArtifactStore } from './match-artifact-store-factory.js';
 
@@ -39,6 +42,7 @@ export interface BuildServerOptions {
   userStore?: IUserStore;
   sessionStore?: ISessionStore;
   agentConfigStore?: IUserAgentConfigStore;
+  agentInviteStore?: IAgentInviteStore;
   authDb?: SqliteDb;
   env?: RuntimeEnv;
   hub?: RealtimeHub;
@@ -61,12 +65,13 @@ export function buildServer(opts: BuildServerOptions = {}) {
   const orch = opts.orchestrator ?? new TableOrchestrator(tableStore, hs, hub, decisionTraceStore);
 
   const authDb =
-    opts.userStore && opts.sessionStore && opts.agentConfigStore
+    opts.userStore && opts.sessionStore && opts.agentConfigStore && opts.agentInviteStore
       ? null
       : (opts.authDb ?? openDatabase(':memory:'));
   const userStore = opts.userStore ?? new SqliteUserStore(authDb!);
   const sessionStore = opts.sessionStore ?? new SqliteSessionStore(authDb!);
   const agentConfigStore = opts.agentConfigStore ?? new SqliteUserAgentConfigStore(authDb!);
+  const agentInviteStore = opts.agentInviteStore ?? new SqliteAgentInviteStore(authDb!);
   const env: RuntimeEnv = opts.env ?? (process.env['NODE_ENV'] as RuntimeEnv) ?? 'development';
   const authRateLimiter = opts.authRateLimit ? new RateLimiter(opts.authRateLimit) : undefined;
 
@@ -100,6 +105,8 @@ export function buildServer(opts: BuildServerOptions = {}) {
         NOT_FOUND: 404,
         TABLE_NOT_FOUND: 404,
         AGENT_NOT_FOUND: 404,
+        AGENT_INVITE_NOT_FOUND: 404,
+        AGENT_INVITE_UNAVAILABLE: 410,
         HAND_NOT_FOUND: 404,
         MATCH_NOT_FOUND: 404,
         NOT_ENOUGH_PLAYERS: 400,
@@ -161,6 +168,7 @@ export function buildServer(opts: BuildServerOptions = {}) {
     });
     await scope.register(matchesRoutes, { prefix: '/api/v1', matchArtifactStore });
     await scope.register(meAgentsRoutes, { prefix: '/api/v1', agentConfigStore, orchestrator: orch });
+    await scope.register(agentInvitesRoutes, { prefix: '/api/v1', agentInviteStore, agentConfigStore });
     await scope.register(wsRoutes, { hub });
     await scope.register(healthRoutes);
   });

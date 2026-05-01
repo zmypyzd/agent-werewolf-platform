@@ -5,3 +5,4 @@ export { SqliteHandStore } from './sqlite-hand-store.js';
 export { SqliteUserStore } from './sqlite-user-store.js';
 export { SqliteSessionStore } from './sqlite-session-store.js';
 export { SqliteUserAgentConfigStore } from './sqlite-user-agent-config-store.js';
+export { SqliteAgentInviteStore } from './sqlite-agent-invite-store.js';

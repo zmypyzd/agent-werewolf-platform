@@ -29,6 +29,8 @@ import type {
   SimulateRequestSchema,
   AddAgentRequestSchema,
   CreateTableRequestSchema,
+  CreateAgentInviteRequestSchema,
+  RegisterAgentInviteRequestSchema,
 } from './schemas.js';
 
 export type AgentDecisionRequestZod = z.infer<typeof AgentDecisionRequestSchema>;
@@ -55,6 +57,8 @@ export type HandResultZod = z.infer<typeof HandResultSchema>;
 export type SimulateRequestZod = z.infer<typeof SimulateRequestSchema>;
 export type AddAgentRequestZod = z.infer<typeof AddAgentRequestSchema>;
 export type CreateTableRequestZod = z.infer<typeof CreateTableRequestSchema>;
+export type CreateAgentInviteRequestZod = z.infer<typeof CreateAgentInviteRequestSchema>;
+export type RegisterAgentInviteRequestZod = z.infer<typeof RegisterAgentInviteRequestSchema>;
 export type MatchArtifactFileRefZod = z.infer<typeof MatchArtifactFileRefSchema>;
 export type MatchSummaryZod = z.infer<typeof MatchSummarySchema>;
 export type MatchArtifactManifestZod = z.infer<typeof MatchArtifactManifestSchema>;

@@ -34,6 +34,26 @@ CREATE TABLE IF NOT EXISTS user_agent_configs (
 
 CREATE INDEX IF NOT EXISTS idx_user_agent_configs_user_id ON user_agent_configs(user_id);
 
+-- Legacy table-level invites used a table_id-bound invite_tokens table.
+-- Agent Lab invites intentionally invalidate that internal interface.
+DROP TABLE IF EXISTS invite_tokens;
+
+CREATE TABLE IF NOT EXISTS agent_invites (
+  token                       TEXT PRIMARY KEY,
+  owner_user_id               TEXT NOT NULL,
+  display_name                TEXT,
+  notes                       TEXT,
+  expires_at                  INTEGER NOT NULL,
+  used_at                     INTEGER,
+  revoked_at                  INTEGER,
+  registered_agent_config_id  TEXT,
+  created_at                  INTEGER NOT NULL,
+  FOREIGN KEY (owner_user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+  FOREIGN KEY (registered_agent_config_id) REFERENCES user_agent_configs(agent_config_id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_invites_owner_user_id ON agent_invites(owner_user_id);
+
 CREATE TABLE IF NOT EXISTS tables (
   table_id    TEXT PRIMARY KEY,
   json        TEXT NOT NULL,

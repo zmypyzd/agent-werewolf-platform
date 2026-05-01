@@ -545,6 +545,24 @@ export const CreateUserAgentConfigRequestSchema = z.object({
 export const PatchUserAgentConfigRequestSchema =
   CreateUserAgentConfigRequestSchema.partial();
 
+// ─── Agent Lab Invite Links ──────────────────────────────────────────────────
+
+export const CreateAgentInviteRequestSchema = z.object({
+  displayName: z.string().min(1).max(40).optional(),
+  notes: z.string().max(500).optional(),
+  ttlSec: z.number().int().positive().max(7 * 24 * 60 * 60).default(24 * 60 * 60),
+}).strict();
+
+export const RegisterAgentInviteRequestSchema = z.object({
+  displayName: z.string().min(1).max(40),
+  endpointUrl: z.string().url().refine(isAcceptableEndpoint, {
+    message: 'endpointUrl must be https:// (or http:// for localhost / 127.0.0.1 / ::1)',
+  }),
+  authHeaderName: z.string().min(1).max(80).nullable().optional(),
+  authHeaderValue: z.string().min(1).max(2048).nullable().optional(),
+  timeoutMs: z.number().int().min(100).max(30000).default(5000),
+}).strict();
+
 // ─── Realtime / WebSocket (Phase 2 / M7) ─────────────────────────────────────
 
 export const WsClientMessageSchema = z.object({
