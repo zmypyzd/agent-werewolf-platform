@@ -237,19 +237,19 @@ body {
 .button-primary {
   border: 1px solid var(--accent-primary);
   background: var(--accent-primary);
-  color: #fff;
+  color: var(--surface-panel);
 }
 .button-primary:hover { background: var(--accent-primary-hover); }
 .button-secondary {
   border: 1px solid #b8c2cc;
-  background: #fff;
+  background: var(--surface-panel);
   color: var(--text-primary);
 }
 .button-secondary:hover { background: var(--surface-muted); }
 .button-danger {
   border: 1px solid var(--danger);
   background: var(--danger);
-  color: #fff;
+  color: var(--surface-panel);
 }
 .button-danger:hover { background: var(--danger-hover); }
 .status-chip {
@@ -371,7 +371,7 @@ body {
   align-items: center;
   border: 1px solid #e4e8ee;
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface-panel);
   padding: 14px;
 }
 .lobby-table-row.is-joinable {
@@ -512,7 +512,7 @@ input, select, textarea {
   min-height: 36px;
   border: 1px solid #aeb8c3;
   border-radius: 4px;
-  background: #fff;
+  background: var(--surface-panel);
   color: var(--text-primary);
   padding: 8px 10px;
   font-size: 14px;
@@ -552,9 +552,9 @@ button { padding: 8px 16px; cursor: pointer; }
   list-style: none;
 }
 .agent-empty-checklist li {
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--border-subtle);
   border-radius: 999px;
-  background: #fff;
+  background: var(--surface-panel);
   padding: 5px 9px;
   color: var(--text-secondary);
   font-size: 12px;
@@ -707,9 +707,9 @@ button { padding: 8px 16px; cursor: pointer; }
 .hand-rail,
 .hand-board,
 .action-inspector {
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface-panel);
 }
 
 .match-summary-strip > div {
@@ -772,9 +772,9 @@ button { padding: 8px 16px; cursor: pointer; }
 .replay-controls {
   display: grid;
   gap: 12px;
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface-panel);
   padding: 12px;
 }
 
@@ -797,7 +797,7 @@ button { padding: 8px 16px; cursor: pointer; }
   gap: 10px;
   align-items: center;
   margin-left: auto;
-  color: #526070;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -819,7 +819,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .street-filter-group legend {
   margin-right: 2px;
-  color: #526070;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
@@ -869,9 +869,9 @@ button { padding: 8px 16px; cursor: pointer; }
 .hand-rail-item,
 .timeline-row {
   width: 100%;
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: #fff;
+  background: var(--surface-panel);
   color: #1f2933;
 }
 
@@ -943,7 +943,7 @@ button { padding: 8px 16px; cursor: pointer; }
   border: 1px solid #cbd3dd;
   border-radius: 6px;
   background: #fbfcfd;
-  color: #151b23;
+  color: var(--text-primary);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -960,7 +960,7 @@ button { padding: 8px 16px; cursor: pointer; }
 }
 
 .result-card span {
-  color: #526070;
+  color: var(--text-secondary);
 }
 
 .action-timeline {
@@ -981,7 +981,7 @@ button { padding: 8px 16px; cursor: pointer; }
 .timeline-row span {
   min-width: 0;
   overflow-wrap: anywhere;
-  color: #526070;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -1122,7 +1122,7 @@ button { padding: 8px 16px; cursor: pointer; }
   flex-direction: row;
   gap: 8px;
   align-items: center;
-  color: #526070;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -1678,9 +1678,9 @@ button { padding: 8px 16px; cursor: pointer; }
 .rail-card,
 .player-action-panel,
 .seat-management-panel {
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface-panel);
   padding: 14px;
 }
 
@@ -1744,10 +1744,10 @@ button { padding: 8px 16px; cursor: pointer; }
   min-width: 70px;
   gap: 2px;
   justify-items: end;
-  border: 1px solid #d8dee6;
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
   padding: 6px 8px;
-  background: #fff;
+  background: var(--surface-panel);
   color: #1f2933;
 }
 
@@ -1832,7 +1832,7 @@ button { padding: 8px 16px; cursor: pointer; }
 
 .sized-action-presets button {
   padding: 6px 8px;
-  background: #fff;
+  background: var(--surface-panel);
   font-size: 12px;
 }
 
@@ -2845,7 +2845,7 @@ button { padding: 8px 16px; cursor: pointer; }
   min-height: 74px;
   border: 1px solid rgba(255, 255, 255, .18);
   border-radius: 10px;
-  color: #fff;
+  color: var(--surface-panel);
   font-size: 16px;
   font-weight: 900;
   letter-spacing: .5px;
