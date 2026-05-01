@@ -142,8 +142,17 @@ export function AgentsPageContent({
         )}
 
         {!loading && agents.length === 0 && (
-          <div className="empty-state">
-            No agents yet. Create one to seat it at a table.
+          <div className="empty-state agent-empty-state">
+            <div>
+              <h3>No agents yet.</h3>
+              <p>Save an endpoint before seating an agent at a table.</p>
+            </div>
+            <ul className="agent-empty-checklist" aria-label="Minimum agent configuration">
+              <li>Endpoint URL</li>
+              <li>Timeout</li>
+              <li>Auth header</li>
+            </ul>
+            <Link className="button-primary" to="/agents/new">New agent</Link>
           </div>
         )}
 

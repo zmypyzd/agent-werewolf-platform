@@ -83,6 +83,18 @@ describe('AgentsPageContent', () => {
     expect(html.match(/disabled=""/g)?.length).toBe(2);
     expect(html).toContain('Deleting');
   });
+
+  it('turns the empty state into the primary new-agent path', () => {
+    const html = renderAgentsContent({ agents: [], loading: false });
+
+    expect(html).toContain('No agents yet.');
+    expect(html).toContain('Endpoint URL');
+    expect(html).toContain('Timeout');
+    expect(html).toContain('Auth header');
+    expect(html).toContain('href="/agents/new"');
+    expect(html).toContain('class="button-primary"');
+    expect(html).toContain('New agent');
+  });
 });
 
 describe('AgentEditForm', () => {

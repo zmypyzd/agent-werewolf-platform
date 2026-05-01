@@ -86,6 +86,31 @@ describe('AppShell', () => {
     expect(replaysLink?.className.split(/\s+/)).not.toContain('app-nav-link-active');
   });
 
+  it('adds a poker arena HUD to table routes without showing it on ordinary pages', () => {
+    const tableHtml = renderShell('/tables/table-1');
+    const lobbyHtml = renderShell('/lobby');
+    const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+
+    expect(tableHtml).toContain('class="app-shell app-shell-table-arena"');
+    expect(tableHtml).toContain('aria-label="Arena status"');
+    expect(tableHtml).toContain('arena-topbar-hud');
+    expect(tableHtml).toContain('24ms');
+    expect(tableHtml).toContain('Play chips');
+    expect(tableHtml).toContain('125,880');
+    expect(lobbyHtml).not.toContain('arena-topbar-hud');
+
+    expect(cssRules(css, '.app-shell-table-arena .app-topbar')[0]).toContain('grid-template-columns: minmax(220px, auto) 1fr auto');
+    expect(cssRules(css, '.arena-topbar-hud')[0]).toContain('display: flex');
+  });
+
+  it('keeps the arena topbar out of the game surface after scrolling', () => {
+    const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+    const arenaTopbarRule = cssRules(css, '.app-shell-table-arena .app-topbar')[0] ?? '';
+
+    expect(arenaTopbarRule).toContain('position: static');
+    expect(arenaTopbarRule).toContain('z-index: 1');
+  });
+
   it('offsets sticky replay side panels below the app topbar', () => {
     const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
     const appTopbarRule = cssRules(css, '.app-topbar')[0] ?? '';

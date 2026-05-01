@@ -289,47 +289,61 @@ function CreateTableForm({ onCreated }: { onCreated: (tableId: string) => void }
       className="panel create-table-form"
       onSubmit={onSubmit}
     >
-      <label>
-        Name
-        <input value={name} onChange={e => setName(e.target.value)} required minLength={1} maxLength={40} />
-      </label>
-      <label>
-        Max seats
-        <input type="number" min={2} max={9} value={maxSeats}
-               onChange={e => setMaxSeats(Number(e.target.value))} />
-      </label>
-      <label>
-        Small / Big blind
-        <div className="row">
-          <input type="number" min={1} value={smallBlind}
-                 onChange={e => setSmallBlind(Number(e.target.value))} style={{ width: 80 }} />
-          <span>/</span>
-          <input type="number" min={1} value={bigBlind}
-                 onChange={e => setBigBlind(Number(e.target.value))} style={{ width: 80 }} />
+      <section className="create-table-core" aria-label="Core table">
+        <h2>Core table</h2>
+        <div className="create-table-field-grid">
+          <label>
+            Name
+            <input value={name} onChange={e => setName(e.target.value)} required minLength={1} maxLength={40} />
+          </label>
+          <label>
+            Max seats
+            <input type="number" min={2} max={9} value={maxSeats}
+                   onChange={e => setMaxSeats(Number(e.target.value))} />
+          </label>
+          <label>
+            Small / Big blind
+            <div className="blind-input-row">
+              <input type="number" min={1} value={smallBlind}
+                     onChange={e => setSmallBlind(Number(e.target.value))} />
+              <span>/</span>
+              <input type="number" min={1} value={bigBlind}
+                     onChange={e => setBigBlind(Number(e.target.value))} />
+            </div>
+          </label>
+          <label>
+            Ante
+            <input type="number" min={0} value={ante}
+                   onChange={e => setAnte(Number(e.target.value))} />
+          </label>
         </div>
-      </label>
-      <label>
-        Ante
-        <input type="number" min={0} value={ante}
-               onChange={e => setAnte(Number(e.target.value))} />
-      </label>
-      <label>
-        Seed
-        <input value={seed} onChange={e => setSeed(e.target.value)} placeholder="Optional" />
-      </label>
-      <label>
-        Default timeout (ms)
-        <input type="number" min={1} value={defaultTimeoutMs}
-               onChange={e => setDefaultTimeoutMs(Number(e.target.value))} />
-      </label>
-      <label>
-        Max spectators
-        <input type="number" min={0} max={1000} value={maxSpectators}
-               onChange={e => setMaxSpectators(Number(e.target.value))} />
-      </label>
-      <button className="button-primary" type="submit" disabled={submitting}>
-        {submitting ? 'Creating…' : 'Create table'}
-      </button>
+      </section>
+
+      <section className="create-table-advanced" aria-label="Advanced setup">
+        <h2>Advanced setup</h2>
+        <div className="create-table-field-grid">
+          <label>
+            Seed
+            <input value={seed} onChange={e => setSeed(e.target.value)} placeholder="Optional" />
+          </label>
+          <label>
+            Default timeout (ms)
+            <input type="number" min={1} value={defaultTimeoutMs}
+                   onChange={e => setDefaultTimeoutMs(Number(e.target.value))} />
+          </label>
+          <label>
+            Max spectators
+            <input type="number" min={0} max={1000} value={maxSpectators}
+                   onChange={e => setMaxSpectators(Number(e.target.value))} />
+          </label>
+        </div>
+      </section>
+
+      <div className="create-table-submit-row">
+        <button className="button-primary" type="submit" disabled={submitting}>
+          {submitting ? 'Creating...' : 'Create table'}
+        </button>
+      </div>
       {error && <div className="error create-table-error">{error}</div>}
     </form>
   );

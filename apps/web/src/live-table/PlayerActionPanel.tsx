@@ -67,9 +67,15 @@ export function PlayerActionPanel({
   const presetAmounts = sized ? buildPresetAmounts(sized, potAmount) : [];
   const shownError = localError ?? error;
   const deadlineLabel = formatDeadline(pendingAction.deadlineAt, now);
+  const sizedActionFormId = sized ? `sized-action-${safeDomId(pendingAction.requestId)}` : undefined;
+  const sliderAmountText = sized && sizedValidation?.valid
+    ? String(sizedValidation.amount)
+    : sized
+      ? String(minimumSizedActionAmount(sized))
+      : '';
 
   return (
-    <section className="player-action-panel" aria-label="Player action panel">
+    <section className="player-action-panel arena-action-console" aria-label="Player action panel">
       <div className="player-action-summary">
         <div>
           <h2>Your Turn</h2>
@@ -87,25 +93,37 @@ export function PlayerActionPanel({
                 <PanelCard card={holeCards[1]} />
               </>
             ) : (
-              <span className="card-back">Cards pending</span>
+              <PanelCardBack label="Cards pending" />
             )}
           </div>
         </div>
       </div>
 
-      <div className="action-button-row">
+      <div className="action-button-row arena-direct-actions">
         {pendingAction.legalActions.map(action => (
-          <ActionButton
-            action={action}
-            disabled={submitting}
-            key={action.type}
-            onSubmitAction={onSubmitAction}
-          />
+          isSizedAction(action) ? (
+            <button
+              className={`action-button action-button-${action.type}`}
+              disabled={submitting || sizedValidation?.valid === false}
+              form={sizedActionFormId}
+              key={action.type}
+              type="submit"
+            >
+              {formatActionLabel(action)}
+            </button>
+          ) : (
+            <ActionButton
+              action={action}
+              disabled={submitting}
+              key={action.type}
+              onSubmitAction={onSubmitAction}
+            />
+          )
         ))}
       </div>
 
       {sized ? (
-        <form className="sized-action-form" onSubmit={submitSizedAction}>
+        <form className="sized-action-form arena-raise-control" id={sizedActionFormId} onSubmit={submitSizedAction}>
           <label>
             <span className="sized-action-label">{formatActionLabel(sized)} amount</span>
             <input
@@ -120,6 +138,18 @@ export function PlayerActionPanel({
               onChange={updateAmount}
             />
           </label>
+          {sized.maxAmount !== undefined ? (
+            <input
+              aria-label={`${formatActionLabel(sized)} amount slider`}
+              className="arena-raise-slider"
+              disabled={submitting}
+              max={sized.maxAmount}
+              min={sized.minAmount ?? 1}
+              onChange={updateAmount}
+              type="range"
+              value={sliderAmountText}
+            />
+          ) : null}
           <span className="muted sized-action-range">
             {sized.minAmount ?? 1}
             {sized.maxAmount !== undefined ? `-${sized.maxAmount}` : '+'}
@@ -138,9 +168,6 @@ export function PlayerActionPanel({
               ))}
             </div>
           ) : null}
-          <button disabled={submitting || sizedValidation?.valid === false} type="submit">
-            {formatActionLabel(sized)}
-          </button>
         </form>
       ) : null}
 
@@ -253,6 +280,10 @@ function formatPresetLabel(action: LegalAction, amount: number, potAmount?: numb
   return String(amount);
 }
 
+function safeDomId(value: string): string {
+  return value.replace(/[^A-Za-z0-9_-]/g, '-');
+}
+
 function ActionButton({
   action,
   disabled,
@@ -271,16 +302,45 @@ function ActionButton({
       : undefined;
 
   return (
-    <button disabled={disabled} onClick={() => onSubmitAction(action.type, amount)} type="button">
+    <button
+      className={`action-button action-button-${action.type}`}
+      disabled={disabled}
+      onClick={() => onSubmitAction(action.type, amount)}
+      type="button"
+    >
       {formatActionLabel(action)}
     </button>
   );
 }
 
 function PanelCard({ card }: { card: Card }) {
+  const glyph = SUIT_GLYPH[card.suit];
+
   return (
-    <span className={`playing-card ${RED_SUITS.has(card.suit) ? 'is-red' : 'is-dark'}`}>
-      {card.rank}{SUIT_GLYPH[card.suit]}
+    <span
+      aria-label={`${card.rank}${glyph}`}
+      className={`playing-card ${RED_SUITS.has(card.suit) ? 'is-red' : 'is-dark'}`}
+      role="img"
+    >
+      <span className="playing-card-index playing-card-index-top">
+        <span>{card.rank}</span>
+        <span>{glyph}</span>
+      </span>
+      <span className="playing-card-face" aria-hidden="true">
+        <span className="playing-card-pip">{glyph}</span>
+      </span>
+      <span className="playing-card-index playing-card-index-bottom" aria-hidden="true">
+        <span>{card.rank}</span>
+        <span>{glyph}</span>
+      </span>
+    </span>
+  );
+}
+
+function PanelCardBack({ label }: { label: string }) {
+  return (
+    <span className="card-back" aria-label={label} role="img">
+      <span className="card-back-pattern" aria-hidden="true">{label}</span>
     </span>
   );
 }

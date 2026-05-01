@@ -689,24 +689,15 @@ export function TablePage() {
   const actionSubmitting = isActionRequestLocked(pendingRequestId, submittedRequestId, submittingAction);
 
   return (
-    <div className="page table-page" style={{ maxWidth: 1100 }}>
-      <div className="page-header">
-        <h1>{table.config.name}</h1>
-        <div className="page-actions">
-          <Link to="/lobby">← Lobby</Link>
-        </div>
-      </div>
-      <p className="muted">
-        status <b>{table.status}</b>
-        {' · '}hand {table.currentHandId ?? '—'}
-        {' · '}phase {liveState.phase ?? '—'}
-        {' · '}blinds {table.config.blindConfig.smallBlind}/{table.config.blindConfig.bigBlind}
-        {mySeat && (
-          <> {' · '}you are seat {seatDisplayNumber(mySeat.seatIndex)} ({mySeat.adapterType})</>
-        )}
-      </p>
+    <div className="page table-page table-arena-page" style={{ maxWidth: 1680 }}>
+      <PokerTableSurface
+        model={tableModel}
+        actionError={actionError}
+        submittingAction={actionSubmitting}
+        onSubmitAction={submitAction}
+      />
 
-      <section className="panel table-control-panel" aria-label="Table controls">
+      <section className="panel table-control-panel table-arena-control-panel" aria-label="Table controls">
         <div className="section-heading">
           <div>
             <h2>Controls</h2>
@@ -749,13 +740,6 @@ export function TablePage() {
           )}
         </div>
       </section>
-
-      <PokerTableSurface
-        model={tableModel}
-        actionError={actionError}
-        submittingAction={actionSubmitting}
-        onSubmitAction={submitAction}
-      />
 
       <SeatManagementPanel
         model={tableModel}

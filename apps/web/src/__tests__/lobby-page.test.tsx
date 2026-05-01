@@ -114,6 +114,10 @@ describe('LobbyPageContent', () => {
   it('renders controls for all create table fields', () => {
     const html = renderLobbyContent();
 
+    expect(html).toContain('Core table');
+    expect(html).toContain('Advanced setup');
+    expect(html).toContain('class="create-table-core"');
+    expect(html).toContain('class="create-table-advanced"');
     expect(html).toContain('Name');
     expect(html).toContain('Max seats');
     expect(html).toContain('Small / Big blind');
