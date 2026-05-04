@@ -3,3 +3,14 @@ export { createGame } from './create-game.js';
 export type { CreateGameInput } from './create-game.js';
 export { createSeededRng, shuffle } from './prng.js';
 export { getValidActions, computeWolfKillTarget } from './valid-actions.js';
+export { applyAction } from './apply-action.js';
+export {
+  startFirstNight,
+  advanceToNightWitch,
+  advanceToNightSeer,
+  resolveNightAndAdvance,
+  dayAnnounceAndAdvance,
+  startDayVote,
+  startNextNight,
+} from './phases.js';
+export { checkWinCondition } from './win-condition.js';
