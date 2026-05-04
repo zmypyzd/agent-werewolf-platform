@@ -14,7 +14,7 @@ import {
 } from '@agent-poker/poker-engine';
 import type { PotAward } from '@agent-poker/poker-engine';
 import type { IAgent } from '@agent-poker/agent-runtime';
-import { TimeoutHandler } from '@agent-poker/agent-runtime';
+import { TimeoutHandler, pokerFallback } from '@agent-poker/agent-runtime';
 import type { IDecisionTraceStore, IHandStore } from '@agent-poker/persistence';
 
 export class HandRunner {
@@ -278,7 +278,7 @@ export class HandRunner {
         action = this.getFallback(legalActions, req.requestId, req.agentId);
         fallbackReason = 'missing_agent';
       } else {
-        const handler = new TimeoutHandler(agentInstance, this.timeoutMs);
+        const handler = new TimeoutHandler(agentInstance, this.timeoutMs, pokerFallback);
         const result = await handler.requestDecision(req);
         response = result.response;
         timedOut = result.timedOut;

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TimeoutHandler } from '../timeout-handler.js';
+import { TimeoutHandler, pokerFallback } from '../timeout-handler.js';
 import type { IAgent } from '../agent-interface.js';
 import type { AgentDecisionRequest, AgentDecisionResponse, LegalAction } from '@agent-poker/shared';
 
@@ -43,7 +43,7 @@ describe('TimeoutHandler', () => {
 
   it('agent resolves before timeout → timedOut: false', async () => {
     const agent = makeAgent(100);
-    const handler = new TimeoutHandler(agent, 5000);
+    const handler = new TimeoutHandler(agent, 5000, pokerFallback);
     const req = makeReq([{ type: 'check' }]);
 
     const promise = handler.requestDecision(req);
@@ -56,7 +56,7 @@ describe('TimeoutHandler', () => {
 
   it('agent delays beyond timeout → timedOut: true, fallback returned', async () => {
     const agent = makeAgent(10000);
-    const handler = new TimeoutHandler(agent, 5000);
+    const handler = new TimeoutHandler(agent, 5000, pokerFallback);
     const req = makeReq([{ type: 'check' }, { type: 'bet', minAmount: 50, maxAmount: 1000 }]);
 
     const promise = handler.requestDecision(req);
@@ -68,7 +68,7 @@ describe('TimeoutHandler', () => {
 
   it('fallback is check when check is in legalActions', async () => {
     const agent = makeAgent(10000);
-    const handler = new TimeoutHandler(agent, 1000);
+    const handler = new TimeoutHandler(agent, 1000, pokerFallback);
     const req = makeReq([{ type: 'fold' }, { type: 'check' }]);
 
     const promise = handler.requestDecision(req);
@@ -81,7 +81,7 @@ describe('TimeoutHandler', () => {
 
   it('fallback is fold when check not in legalActions', async () => {
     const agent = makeAgent(10000);
-    const handler = new TimeoutHandler(agent, 1000);
+    const handler = new TimeoutHandler(agent, 1000, pokerFallback);
     const req = makeReq([{ type: 'fold' }, { type: 'call', callAmount: 100 }]);
 
     const promise = handler.requestDecision(req);
@@ -94,7 +94,7 @@ describe('TimeoutHandler', () => {
 
   it('timed-out response has correct requestId', async () => {
     const agent = makeAgent(10000);
-    const handler = new TimeoutHandler(agent, 1000);
+    const handler = new TimeoutHandler(agent, 1000, pokerFallback);
     const req = makeReq([{ type: 'fold' }]);
 
     const promise = handler.requestDecision(req);

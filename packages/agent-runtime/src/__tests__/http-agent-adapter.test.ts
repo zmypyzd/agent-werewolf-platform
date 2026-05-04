@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { AgentDecisionRequest, AgentDecisionResponse } from '@agent-poker/shared';
 import { HttpAgentAdapter } from '../http-agent-adapter.js';
-import { TimeoutHandler } from '../timeout-handler.js';
+import { TimeoutHandler, pokerFallback } from '../timeout-handler.js';
 
 interface ReceivedRequest {
   body: unknown;
@@ -111,7 +111,7 @@ describe('HttpAgentAdapter', () => {
 
     await expect(adapter.requestDecision(baseReq)).rejects.toThrow(/HTTP 500/);
 
-    const wrapped = new TimeoutHandler(adapter, 1000);
+    const wrapped = new TimeoutHandler(adapter, 1000, pokerFallback);
     const { response, timedOut } = await wrapped.requestDecision(baseReq);
     expect(timedOut).toBe(true);
     expect(['check', 'fold']).toContain(response.actionType);
@@ -143,7 +143,7 @@ describe('HttpAgentAdapter', () => {
     });
     await expect(adapter.requestDecision(baseReq)).rejects.toThrow(/aborted/);
 
-    const wrapped = new TimeoutHandler(adapter, 50);
+    const wrapped = new TimeoutHandler(adapter, 50, pokerFallback);
     const result = await wrapped.requestDecision(baseReq);
     expect(result.timedOut).toBe(true);
   });
@@ -212,7 +212,7 @@ describe('HttpAgentAdapter', () => {
     const adapter = new HttpAgentAdapter({
       agentId: 'agent-1', name: 'A', endpointUrl: stub.url, timeoutMs: 1000,
     });
-    const wrapped = new TimeoutHandler(adapter, 1000);
+    const wrapped = new TimeoutHandler(adapter, 1000, pokerFallback);
     const { response, timedOut } = await wrapped.requestDecision(baseReq);
     expect(timedOut).toBe(true);
     expect(response.requestId).toBe('req-1');
