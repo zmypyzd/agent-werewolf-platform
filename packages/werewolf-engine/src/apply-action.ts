@@ -93,8 +93,10 @@ function applyWitch(
       };
     }
     case 'witch-skip-save':
-      // marker only; no state change beyond moving on (pendingNight.witchSaved stays null)
-      return state;
+      // marker only; no state change beyond moving on (pendingNight.witchSaved stays null).
+      // Return a new object (rather than the input reference) so callers using
+      // identity equality to detect transitions still see a change.
+      return { ...state };
     case 'witch-poison': {
       if (!state.witchPotions.hasPoison) throw new InvalidWerewolfActionError('poison potion already used');
       if (state.pendingNight.witchSaved !== null) {
