@@ -221,7 +221,7 @@ function applyDayVote(
   }
   if (tied || banished === null) {
     if (state.pendingDayVote.pkRound >= WEREWOLF_MAX_PK_ROUNDS) {
-      const finalRecord = { votes: updatedVotes, tally, banished: null, pkRound: state.pendingDayVote.pkRound + 1, tied: true };
+      const finalRecord = { votes: updatedVotes, tally, banished: null, pkRound: state.pendingDayVote.pkRound, tied: true };
       next = {
         ...next,
         phase: 'day-resolve',

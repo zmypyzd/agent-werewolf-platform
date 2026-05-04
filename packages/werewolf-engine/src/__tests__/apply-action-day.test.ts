@@ -98,4 +98,32 @@ describe('applyAction — day phase', () => {
     s = startFirstNight(s);
     expect(() => applyAction(s, { type: 'day-vote', voterId: 'p1', targetId: 'p2' })).toThrow(WerewolfPhaseError);
   });
+
+  it('PK ceiling: 4 consecutive all-abstain rounds advance to next night with no banishment', () => {
+    let s = rushToDaySpeeches();
+    for (const p of s.players.filter((x) => x.alive)) {
+      s = applyAction(s, { type: 'speak', playerId: p.id, inner: 'i', performance: 'p', speech: 's' });
+    }
+    expect(s.phase).toBe('day-vote');
+    // Round 0 (initial vote), 1, 2, 3 — 4 rounds total of all abstain
+    for (let round = 0; round <= 3; round++) {
+      for (const p of s.players.filter((x) => x.alive)) {
+        s = applyAction(s, { type: 'day-vote', voterId: p.id, targetId: null });
+      }
+      if (round < 3) {
+        expect(s.phase).toBe('day-vote');
+        expect(s.pendingDayVote!.pkRound).toBe(round + 1);
+      }
+    }
+    // Ceiling reached: advance to next night with no banishment.
+    expect(s.phase).toBe('night-werewolf-vote');
+    expect(s.pendingDayVote).toBeNull();
+    // The last 'vote' history entry records pkRound = 3 (the round at which the ceiling resolved), banished = null.
+    const lastVote = [...s.history].reverse().find((e) => e.type === 'vote');
+    expect(lastVote).toBeDefined();
+    if (lastVote?.type === 'vote') {
+      expect(lastVote.record.pkRound).toBe(3);
+      expect(lastVote.record.banished).toBeNull();
+    }
+  });
 });
