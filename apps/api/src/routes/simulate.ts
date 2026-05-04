@@ -5,7 +5,11 @@ import type { IDecisionTraceStore, IHandStore, IMatchArtifactStore } from '@agen
 import { SchemaValidationError, AppError } from '@agent-poker/shared';
 import type { MatchArtifactManifest } from '@agent-poker/shared';
 import { SimulateRequestSchema } from '@agent-poker/agent-protocol';
-import { RandomMockAgent, AlwaysCallAgent, AlwaysFoldAgent, AggressiveAgent } from '@agent-poker/agent-runtime';
+import {
+  RandomMockAgent, AlwaysCallAgent, AlwaysFoldAgent, AggressiveAgent,
+  TightAggressiveAgent, LoosePassiveAgent, BalancedAgent, ManiacAgent,
+  NpcAgent,
+} from '@agent-poker/agent-runtime';
 import { randomUUID } from 'crypto';
 import { publicHandSummaries } from './public-hand-summary.js';
 
@@ -55,6 +59,10 @@ export async function simulateRoutes(app: FastifyInstance, opts: SimulatePluginO
           case 'always-call': agent = new AlwaysCallAgent(agentId, agentSpec.name); break;
           case 'always-fold': agent = new AlwaysFoldAgent(agentId, agentSpec.name); break;
           case 'aggressive': agent = new AggressiveAgent(agentId, agentSpec.name); break;
+          case 'npc-tight-aggressive': agent = new NpcAgent(agentId, agentSpec.name, new TightAggressiveAgent(agentId, agentSpec.name), { personality: 'tight-aggressive' }); break;
+          case 'npc-loose-passive': agent = new NpcAgent(agentId, agentSpec.name, new LoosePassiveAgent(agentId, agentSpec.name), { personality: 'loose-passive' }); break;
+          case 'npc-balanced': agent = new NpcAgent(agentId, agentSpec.name, new BalancedAgent(agentId, agentSpec.name), { personality: 'balanced' }); break;
+          case 'npc-maniac': agent = new NpcAgent(agentId, agentSpec.name, new ManiacAgent(agentId, agentSpec.name), { personality: 'maniac' }); break;
           default: agent = new RandomMockAgent(agentId, agentSpec.name);
         }
         await orchestrator.addAgent(

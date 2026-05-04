@@ -18,6 +18,8 @@ import {
 } from '@agent-poker/agent-protocol';
 import {
   RandomMockAgent, AlwaysCallAgent, AlwaysFoldAgent, AggressiveAgent,
+  TightAggressiveAgent, LoosePassiveAgent, BalancedAgent, ManiacAgent,
+  NpcAgent,
   HumanAgent, HttpAgentAdapter,
 } from '@agent-poker/agent-runtime';
 import { replayEventToPublic } from '@agent-poker/realtime';
@@ -143,6 +145,10 @@ export async function tablesRoutes(app: FastifyInstance, opts: TablesPluginOptio
         case 'always-call': agent = new AlwaysCallAgent(agentId, body.name); break;
         case 'always-fold': agent = new AlwaysFoldAgent(agentId, body.name); break;
         case 'aggressive': agent = new AggressiveAgent(agentId, body.name); break;
+        case 'npc-tight-aggressive': agent = new NpcAgent(agentId, body.name, new TightAggressiveAgent(agentId, body.name), { personality: 'tight-aggressive' }); break;
+        case 'npc-loose-passive': agent = new NpcAgent(agentId, body.name, new LoosePassiveAgent(agentId, body.name), { personality: 'loose-passive' }); break;
+        case 'npc-balanced': agent = new NpcAgent(agentId, body.name, new BalancedAgent(agentId, body.name), { personality: 'balanced' }); break;
+        case 'npc-maniac': agent = new NpcAgent(agentId, body.name, new ManiacAgent(agentId, body.name), { personality: 'maniac' }); break;
         default: agent = new RandomMockAgent(agentId, body.name);
       }
 

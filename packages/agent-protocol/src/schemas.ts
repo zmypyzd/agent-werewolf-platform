@@ -433,7 +433,7 @@ export const SimulateRequestSchema = z.object({
   defaultTimeoutMs: z.number().int().positive().optional(),
   agents: z.array(z.object({
     name: z.string().min(1),
-    strategy: z.enum(['random','always-call','always-fold','aggressive']),
+    strategy: z.enum(['random','always-call','always-fold','aggressive','npc-tight-aggressive','npc-loose-passive','npc-balanced','npc-maniac']),
     buyIn: z.number().int().positive(),
   })).min(2),
   numHands: z.number().int().positive().max(MAX_SIMULATION_HANDS),
@@ -442,7 +442,7 @@ export const SimulateRequestSchema = z.object({
 export const AddAgentRequestSchema = z.object({
   name: z.string().min(1),
   adapterType: AgentAdapterTypeSchema,
-  strategy: z.enum(['random','always-call','always-fold','aggressive']).optional(),
+  strategy: z.enum(['random','always-call','always-fold','aggressive','npc-tight-aggressive','npc-loose-passive','npc-balanced','npc-maniac']).optional(),
   buyIn: z.number().int().positive(),
   endpoint: z.string().url().optional(),
 });
