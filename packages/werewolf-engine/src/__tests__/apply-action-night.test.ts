@@ -139,4 +139,22 @@ describe('applyAction — night phase', () => {
     const villager = s.players.find((p) => p.role === 'villager')!;
     expect(() => applyAction(s, { type: 'witch-poison', targetId: villager.id })).toThrow(InvalidWerewolfActionError);
   });
+
+  it('rejects witch-save after witch-skip-save (cannot undo skipped save)', () => {
+    let s = setupNight();
+    const wolves = rolePlayers(s, 'werewolf');
+    const target = s.players.find((p) => p.role !== 'werewolf')!;
+    for (const w of wolves) s = applyAction(s, { type: 'werewolf-vote', voterId: w.id, targetId: target.id });
+    s = applyAction(s, { type: 'witch-skip-save' });
+    expect(() => applyAction(s, { type: 'witch-save', targetId: target.id })).toThrow(InvalidWerewolfActionError);
+  });
+
+  it('rejects witch-skip-poison before save decision is made', () => {
+    let s = setupNight();
+    const wolves = rolePlayers(s, 'werewolf');
+    const target = s.players.find((p) => p.role !== 'werewolf')!;
+    for (const w of wolves) s = applyAction(s, { type: 'werewolf-vote', voterId: w.id, targetId: target.id });
+    expect(s.phase).toBe('night-witch');
+    expect(() => applyAction(s, { type: 'witch-skip-poison' })).toThrow(InvalidWerewolfActionError);
+  });
 });

@@ -89,6 +89,9 @@ function applyWitch(
   switch (action.type) {
     case 'witch-save': {
       if (!state.witchPotions.hasSave) throw new InvalidWerewolfActionError('save potion already used');
+      if (state.pendingNight.witchSaveDecisionMade) {
+        throw new InvalidWerewolfActionError('witch save decision already made this night');
+      }
       if (state.pendingNight.witchSaved !== null || state.pendingNight.witchPoisoned !== null) {
         throw new InvalidWerewolfActionError('witch already acted this night');
       }
@@ -130,6 +133,9 @@ function applyWitch(
       });
     }
     case 'witch-skip-poison':
+      if (!state.pendingNight.witchSaveDecisionMade) {
+        throw new InvalidWerewolfActionError('witch must make save decision before skipping poison');
+      }
       return advanceToNightSeer(state);
   }
 }
