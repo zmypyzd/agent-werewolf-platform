@@ -88,7 +88,7 @@ export function resolveNightAndAdvance(state: WerewolfGameState): WerewolfGameSt
     next = {
       ...next,
       phase: 'hunter-shoot',
-      pendingHunterShoot: { hunterId: hunterDeath.id, cause: hunterDeath.cause },
+      pendingHunterShoot: { hunterId: hunterDeath.id, cause: 'wolf-kill' },
     };
   }
 

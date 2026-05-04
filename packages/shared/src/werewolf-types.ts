@@ -82,7 +82,9 @@ export interface PendingNightActions {
 
 export interface PendingHunterShoot {
   readonly hunterId: WerewolfPlayerId;
-  readonly cause: 'wolf-kill' | 'witch-poison' | 'banishment';
+  // v1 house rule: witch-poisoned hunters do not shoot, so 'witch-poison' is intentionally
+  // not a valid cause here. See packages/werewolf-engine/src/phases.ts:resolveNightAndAdvance.
+  readonly cause: 'wolf-kill' | 'banishment';
 }
 
 export interface WerewolfGameState {

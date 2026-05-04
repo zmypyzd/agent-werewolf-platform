@@ -8,6 +8,7 @@ import {
   WEREWOLF_NAME_POOL,
 } from '@agent-poker/shared';
 import { createSeededRng, shuffle } from './prng.js';
+import { emptyPendingNight } from './phases.js';
 
 export interface CreateGameInput {
   readonly gameId: string;
@@ -44,7 +45,7 @@ export function createGame(input: CreateGameInput): WerewolfGameState {
     dayNumber: 0,
     players,
     witchPotions: { hasSave: true, hasPoison: true },
-    pendingNight: { werewolfVotes: {}, witchSaveDecisionMade: false, witchSaved: null, witchPoisoned: null, seerTarget: null, seerResult: null },
+    pendingNight: emptyPendingNight(),
     pendingDaySpeeches: [],
     pendingDayVote: null,
     pendingHunterShoot: null,
