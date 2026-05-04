@@ -70,6 +70,10 @@ export type WerewolfHistoryEntry =
 
 export interface PendingNightActions {
   readonly werewolfVotes: Readonly<Record<WerewolfPlayerId, WerewolfPlayerId>>;
+  // True once the witch has made the save decision (via witch-save or witch-skip-save).
+  // Disambiguates "skipped save" from "haven't decided save yet" so getValidActions
+  // can advance the witch into the poison sub-decision.
+  readonly witchSaveDecisionMade: boolean;
   readonly witchSaved: WerewolfPlayerId | null;
   readonly witchPoisoned: WerewolfPlayerId | null;
   readonly seerTarget: WerewolfPlayerId | null;

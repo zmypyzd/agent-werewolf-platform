@@ -35,7 +35,7 @@ export function startFirstNight(state: WerewolfGameState): WerewolfGameState {
 }
 
 export function emptyPendingNight(): PendingNightActions {
-  return { werewolfVotes: {}, witchSaved: null, witchPoisoned: null, seerTarget: null, seerResult: null };
+  return { werewolfVotes: {}, witchSaveDecisionMade: false, witchSaved: null, witchPoisoned: null, seerTarget: null, seerResult: null };
 }
 
 export function resolveNightAndAdvance(state: WerewolfGameState): WerewolfGameState {

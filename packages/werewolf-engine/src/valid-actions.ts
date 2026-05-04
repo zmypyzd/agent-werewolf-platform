@@ -38,16 +38,20 @@ export function getValidActions(state: WerewolfGameState, playerId: WerewolfPlay
       if (self.role !== 'witch') return [];
       const out: WerewolfAction[] = [];
       const killTarget = computeWolfKillTarget(state.pendingNight.werewolfVotes);
-      if (state.witchPotions.hasSave && killTarget) {
-        out.push({ type: 'witch-save', targetId: killTarget });
-      }
-      out.push({ type: 'witch-skip-save' });
-      if (state.witchPotions.hasPoison) {
-        for (const t of aliveNonSelf(state.players, self.id)) {
-          out.push({ type: 'witch-poison', targetId: t.id });
+      if (!state.pendingNight.witchSaveDecisionMade) {
+        if (state.witchPotions.hasSave && killTarget) {
+          out.push({ type: 'witch-save', targetId: killTarget });
         }
+        out.push({ type: 'witch-skip-save' });
+      } else {
+        // Save decision is made; offer poison only if the witch didn't save this night.
+        if (state.witchPotions.hasPoison && state.pendingNight.witchSaved === null) {
+          for (const t of aliveNonSelf(state.players, self.id)) {
+            out.push({ type: 'witch-poison', targetId: t.id });
+          }
+        }
+        out.push({ type: 'witch-skip-poison' });
       }
-      out.push({ type: 'witch-skip-poison' });
       return out;
     }
 

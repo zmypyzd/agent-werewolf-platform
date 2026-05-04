@@ -44,7 +44,7 @@ export function createGame(input: CreateGameInput): WerewolfGameState {
     dayNumber: 0,
     players,
     witchPotions: { hasSave: true, hasPoison: true },
-    pendingNight: { werewolfVotes: {}, witchSaved: null, witchPoisoned: null, seerTarget: null, seerResult: null },
+    pendingNight: { werewolfVotes: {}, witchSaveDecisionMade: false, witchSaved: null, witchPoisoned: null, seerTarget: null, seerResult: null },
     pendingDaySpeeches: [],
     pendingDayVote: null,
     pendingHunterShoot: null,

@@ -37,7 +37,7 @@ describe('getValidActions', () => {
     }
   });
 
-  it('night-witch with both potions and a kill target: save / skip-save / poison-each-alive / skip-poison', () => {
+  it('night-witch with both potions and a kill target: save / skip-save offered first (save decision not yet made)', () => {
     const base = createGame({ gameId: 'g1', seed: 'seed-A' });
     const witch = find(base, 'witch')[0]!;
     const target = base.players.find((p) => p.role !== 'witch')!;
@@ -45,13 +45,30 @@ describe('getValidActions', () => {
       ...base,
       phase: 'night-witch',
       nightNumber: 1,
-      pendingNight: { ...base.pendingNight, werewolfVotes: { /* unused for legality */ } },
+      pendingNight: { ...base.pendingNight, witchSaveDecisionMade: false, werewolfVotes: { p1: target.id, p2: target.id, p3: target.id } },
     };
-    const s2 = { ...s, pendingNight: { ...s.pendingNight, werewolfVotes: { p1: target.id, p2: target.id, p3: target.id } } };
-    const acts = getValidActions(s2, witch.id);
+    const acts = getValidActions(s, witch.id);
     const types = acts.map((a) => a.type);
     expect(types).toContain('witch-save');
     expect(types).toContain('witch-skip-save');
+    expect(types).not.toContain('witch-poison');
+    expect(types).not.toContain('witch-skip-poison');
+  });
+
+  it('night-witch with both potions: poison / skip-poison offered after save decision made', () => {
+    const base = createGame({ gameId: 'g1', seed: 'seed-A' });
+    const witch = find(base, 'witch')[0]!;
+    const target = base.players.find((p) => p.role !== 'witch')!;
+    const s: WerewolfGameState = {
+      ...base,
+      phase: 'night-witch',
+      nightNumber: 1,
+      pendingNight: { ...base.pendingNight, witchSaveDecisionMade: true, werewolfVotes: { p1: target.id, p2: target.id, p3: target.id } },
+    };
+    const acts = getValidActions(s, witch.id);
+    const types = acts.map((a) => a.type);
+    expect(types).not.toContain('witch-save');
+    expect(types).not.toContain('witch-skip-save');
     expect(types).toContain('witch-poison');
     expect(types).toContain('witch-skip-poison');
   });

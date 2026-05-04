@@ -99,14 +99,16 @@ function applyWitch(
       return {
         ...state,
         witchPotions: { ...state.witchPotions, hasSave: false },
-        pendingNight: { ...state.pendingNight, witchSaved: action.targetId },
+        pendingNight: { ...state.pendingNight, witchSaveDecisionMade: true, witchSaved: action.targetId },
       };
     }
     case 'witch-skip-save':
-      // marker only; no state change beyond moving on (pendingNight.witchSaved stays null).
-      // Return a new object (rather than the input reference) so callers using
-      // identity equality to detect transitions still see a change.
-      return { ...state };
+      // Records that the witch has explicitly skipped the save decision so the next
+      // valid-actions call advances her into the poison sub-decision.
+      return {
+        ...state,
+        pendingNight: { ...state.pendingNight, witchSaveDecisionMade: true },
+      };
     case 'witch-poison': {
       if (!state.witchPotions.hasPoison) throw new InvalidWerewolfActionError('poison potion already used');
       if (state.pendingNight.witchSaved !== null) {
