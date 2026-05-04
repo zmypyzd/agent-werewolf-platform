@@ -14,3 +14,5 @@ export {
   startNextNight,
 } from './phases.js';
 export { checkWinCondition } from './win-condition.js';
+export { getPublicState } from './public-state.js';
+export { getPrivateState } from './private-state.js';
