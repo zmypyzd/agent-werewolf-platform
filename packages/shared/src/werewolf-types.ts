@@ -20,7 +20,7 @@ export type WerewolfPhase =
   | 'hunter-shoot'
   | 'game-over';
 
-export type WerewolfPlayerId = string;
+export type WerewolfPlayerId = string; // canonical "p1".."p9"
 
 export interface WerewolfPlayer {
   readonly id: WerewolfPlayerId;
@@ -46,9 +46,9 @@ export interface NightActionRecord {
 
 export interface SpeechRecord {
   readonly playerId: WerewolfPlayerId;
-  readonly inner: string;
-  readonly performance: string;
-  readonly speech: string;
+  readonly inner: string;       // 心声 — STRIPPED in public state
+  readonly performance: string; // 表现
+  readonly speech: string;      // 发言
 }
 
 export interface DayVoteRecord {
@@ -108,6 +108,13 @@ export type WerewolfAction =
   | { readonly type: 'day-vote'; readonly voterId: WerewolfPlayerId; readonly targetId: WerewolfPlayerId | null }
   | { readonly type: 'hunter-shoot'; readonly targetId: WerewolfPlayerId | null };
 
+export type WerewolfPublicHistoryEntry =
+  | { readonly type: 'death'; readonly day: number; readonly playerId: WerewolfPlayerId; readonly cause: 'wolf-kill' | 'witch-poison' | 'banishment' | 'hunter-shoot' }
+  | { readonly type: 'speech'; readonly day: number; readonly record: Omit<SpeechRecord, 'inner'> }
+  | { readonly type: 'vote'; readonly day: number; readonly record: DayVoteRecord }
+  | { readonly type: 'hunter-shoot'; readonly shooterId: WerewolfPlayerId; readonly targetId: WerewolfPlayerId | null }
+  | { readonly type: 'game-over'; readonly winner: WerewolfSide };
+
 export interface WerewolfPublicState {
   readonly gameId: string;
   readonly phase: WerewolfPhase;
@@ -120,7 +127,7 @@ export interface WerewolfPublicState {
     readonly alive: boolean;
     readonly revealedRole: WerewolfRole | null;
   }>;
-  readonly history: ReadonlyArray<WerewolfHistoryEntry>;
+  readonly history: ReadonlyArray<WerewolfPublicHistoryEntry>;
   readonly winner: WerewolfSide | null;
 }
 
