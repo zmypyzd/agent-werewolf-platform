@@ -25,7 +25,7 @@ const DEFAULT_CONFIG: NpcConfig = {
   personality: 'balanced',
 }
 
-export class NpcAgent implements IAgent {
+export class NpcAgent implements IAgent<AgentDecisionRequest, AgentDecisionResponse> {
   readonly agentId: string
   readonly name: string
   private readonly inner: IAgent

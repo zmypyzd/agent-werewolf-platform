@@ -22,7 +22,7 @@ interface Pending {
 // requestDecision returns a Promise that stays unresolved until somebody calls
 // submit() with a matching handId. Wrapping the agent in TimeoutHandler is what
 // gives us the "default to check/fold after timeoutMs" safety net for free.
-export class HumanAgent implements IAgent {
+export class HumanAgent implements IAgent<AgentDecisionRequest, AgentDecisionResponse> {
   private pending: Pending | null = null;
 
   constructor(public readonly agentId: string, public readonly name: string) {}

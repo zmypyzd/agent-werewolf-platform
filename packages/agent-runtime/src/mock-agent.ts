@@ -1,7 +1,7 @@
 import type { AgentDecisionRequest, AgentDecisionResponse, LegalAction } from '@agent-poker/shared';
 import type { IAgent } from './agent-interface.js';
 
-export abstract class MockAgent implements IAgent {
+export abstract class MockAgent implements IAgent<AgentDecisionRequest, AgentDecisionResponse> {
   constructor(
     public readonly agentId: string,
     public readonly name: string,

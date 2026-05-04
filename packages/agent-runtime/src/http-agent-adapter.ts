@@ -15,7 +15,7 @@ export interface HttpAgentAdapterOptions {
   timeoutMs: number;
 }
 
-export class HttpAgentAdapter implements IAgent {
+export class HttpAgentAdapter implements IAgent<AgentDecisionRequest, AgentDecisionResponse> {
   public readonly agentId: string;
   public readonly name: string;
   public readonly endpointUrl: string;

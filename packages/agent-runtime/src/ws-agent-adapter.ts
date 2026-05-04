@@ -2,7 +2,7 @@ import type { AgentDecisionRequest, AgentDecisionResponse } from '@agent-poker/s
 import { NotImplementedError } from '@agent-poker/shared';
 import type { IAgent } from './agent-interface.js';
 
-export class WsAgentAdapter implements IAgent {
+export class WsAgentAdapter implements IAgent<AgentDecisionRequest, AgentDecisionResponse> {
   constructor(
     public readonly agentId: string,
     public readonly name: string,
