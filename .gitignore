@@ -12,3 +12,7 @@ coverage/
 .worktrees/
 .gstack/
 .productize-mvp/
+.qoder/
+examples/local-simulation/output/**/*.mp4
+examples/local-simulation/output/**/*.png
+examples/local-simulation/output/**/*.webp
