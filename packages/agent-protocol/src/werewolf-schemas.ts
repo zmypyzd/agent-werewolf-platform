@@ -31,14 +31,6 @@ const SpeechRecordPublicSchema = z.object({
   speech: z.string(),
 });
 
-const NightActionRecordSchema = z.object({
-  werewolfTarget: WerewolfPlayerIdSchema.nullable(),
-  witchSaved: WerewolfPlayerIdSchema.nullable(),
-  witchPoisoned: WerewolfPlayerIdSchema.nullable(),
-  seerTarget: WerewolfPlayerIdSchema.nullable(),
-  seerResult: WerewolfSideSchema.nullable(),
-});
-
 const DayVoteRecordSchema = z.object({
   votes: z.array(
     z.object({
