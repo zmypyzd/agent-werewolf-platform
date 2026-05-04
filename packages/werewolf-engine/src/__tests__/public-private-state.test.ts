@@ -12,7 +12,7 @@ describe('getPublicState', () => {
     for (const p of pub.players) {
       expect(p.revealedRole).toBeNull();
     }
-    expect(pub.history.find((e) => e.type === 'role-assigned')).toBeUndefined();
+    expect(pub.history.find((e) => (e as { type: string }).type === 'role-assigned')).toBeUndefined();
   });
 
   it('hides night-action history entries even after a night completes', () => {
@@ -27,7 +27,7 @@ describe('getPublicState', () => {
     const someoneElse = s.players.find((p) => p.id !== seer.id && p.alive)!;
     s = applyAction(s, { type: 'seer-divine', targetId: someoneElse.id });
     const pub = getPublicState(s);
-    expect(pub.history.find((e) => e.type === 'night-action')).toBeUndefined();
+    expect(pub.history.find((e) => (e as { type: string }).type === 'night-action')).toBeUndefined();
     expect(pub.history.some((e) => e.type === 'death' && e.playerId === villager.id)).toBe(true);
   });
 
