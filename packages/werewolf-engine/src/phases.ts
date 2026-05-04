@@ -80,7 +80,7 @@ export function resolveNightAndAdvance(state: WerewolfGameState): WerewolfGameSt
   };
 
   // Hunter detour: hunter killed by wolves shoots BEFORE day-announce.
-  // (T7 will pin: witch-poisoned hunter does NOT shoot.)
+  // v1 house rule: witch-poisoned hunter loses the shot — cause must be 'wolf-kill'.
   const hunterDeath = deaths.find((d) =>
     d.cause === 'wolf-kill' && state.players.find((p) => p.id === d.id)?.role === 'hunter',
   );
