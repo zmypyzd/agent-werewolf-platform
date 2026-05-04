@@ -120,4 +120,23 @@ describe('applyAction — night phase', () => {
     const s = setupNight();
     expect(() => applyAction(s, { type: 'witch-skip-save' })).toThrow(WerewolfPhaseError);
   });
+
+  it('rejects witch-skip-save twice in the same night', () => {
+    let s = setupNight();
+    const wolves = rolePlayers(s, 'werewolf');
+    const target = s.players.find((p) => p.role !== 'werewolf')!;
+    for (const w of wolves) s = applyAction(s, { type: 'werewolf-vote', voterId: w.id, targetId: target.id });
+    s = applyAction(s, { type: 'witch-skip-save' });
+    expect(() => applyAction(s, { type: 'witch-skip-save' })).toThrow(InvalidWerewolfActionError);
+  });
+
+  it('rejects witch-poison before save decision is made', () => {
+    let s = setupNight();
+    const wolves = rolePlayers(s, 'werewolf');
+    const target = s.players.find((p) => p.role !== 'werewolf')!;
+    for (const w of wolves) s = applyAction(s, { type: 'werewolf-vote', voterId: w.id, targetId: target.id });
+    expect(s.phase).toBe('night-witch');
+    const villager = s.players.find((p) => p.role === 'villager')!;
+    expect(() => applyAction(s, { type: 'witch-poison', targetId: villager.id })).toThrow(InvalidWerewolfActionError);
+  });
 });

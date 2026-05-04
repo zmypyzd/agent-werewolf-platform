@@ -102,14 +102,21 @@ function applyWitch(
         pendingNight: { ...state.pendingNight, witchSaveDecisionMade: true, witchSaved: action.targetId },
       };
     }
-    case 'witch-skip-save':
+    case 'witch-skip-save': {
+      if (state.pendingNight.witchSaveDecisionMade) {
+        throw new InvalidWerewolfActionError('witch save decision already made this night');
+      }
       // Records that the witch has explicitly skipped the save decision so the next
       // valid-actions call advances her into the poison sub-decision.
       return {
         ...state,
         pendingNight: { ...state.pendingNight, witchSaveDecisionMade: true },
       };
+    }
     case 'witch-poison': {
+      if (!state.pendingNight.witchSaveDecisionMade) {
+        throw new InvalidWerewolfActionError('witch must make save decision before poisoning');
+      }
       if (!state.witchPotions.hasPoison) throw new InvalidWerewolfActionError('poison potion already used');
       if (state.pendingNight.witchSaved !== null) {
         throw new InvalidWerewolfActionError('cannot save and poison same night');
