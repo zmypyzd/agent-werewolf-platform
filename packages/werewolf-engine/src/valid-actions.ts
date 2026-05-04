@@ -15,7 +15,20 @@ function aliveNonWolves(players: ReadonlyArray<WerewolfPlayer>): WerewolfPlayer[
 
 export function getValidActions(state: WerewolfGameState, playerId: WerewolfPlayerId): WerewolfAction[] {
   const self = state.players.find((p) => p.id === playerId);
-  if (!self || !self.alive) return [];
+  if (!self) return [];
+
+  // hunter-shoot is the only phase where a dead player still acts.
+  if (state.phase === 'hunter-shoot') {
+    if (!state.pendingHunterShoot || state.pendingHunterShoot.hunterId !== self.id) return [];
+    const out: WerewolfAction[] = [{ type: 'hunter-shoot', targetId: null }];
+    for (const t of aliveNonSelf(state.players, self.id)) {
+      out.push({ type: 'hunter-shoot', targetId: t.id });
+    }
+    return out;
+  }
+
+  // For every other phase, dead players have no actions.
+  if (!self.alive) return [];
 
   switch (state.phase) {
     case 'setup':
@@ -63,7 +76,9 @@ export function getValidActions(state: WerewolfGameState, playerId: WerewolfPlay
       }));
     }
 
-    case 'day-speeches':
+    case 'day-speeches': {
+      // Filter already-spoke players to keep getValidActions consistent with applyAction's guard.
+      if (state.pendingDaySpeeches.some((r) => r.playerId === self.id)) return [];
       return [{
         type: 'speak',
         playerId: self.id,
@@ -71,20 +86,14 @@ export function getValidActions(state: WerewolfGameState, playerId: WerewolfPlay
         performance: '',
         speech: '',
       }];
+    }
 
     case 'day-vote': {
+      // Filter already-voted players for the same reason.
+      if (state.pendingDayVote?.votes.some((v) => v.voterId === self.id)) return [];
       const out: WerewolfAction[] = [{ type: 'day-vote', voterId: self.id, targetId: null }];
       for (const t of aliveNonSelf(state.players, self.id)) {
         out.push({ type: 'day-vote', voterId: self.id, targetId: t.id });
-      }
-      return out;
-    }
-
-    case 'hunter-shoot': {
-      if (!state.pendingHunterShoot || state.pendingHunterShoot.hunterId !== self.id) return [];
-      const out: WerewolfAction[] = [{ type: 'hunter-shoot', targetId: null }];
-      for (const t of aliveNonSelf(state.players, self.id)) {
-        out.push({ type: 'hunter-shoot', targetId: t.id });
       }
       return out;
     }

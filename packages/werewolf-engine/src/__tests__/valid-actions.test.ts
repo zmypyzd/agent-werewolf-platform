@@ -122,6 +122,7 @@ describe('getValidActions', () => {
     const s: WerewolfGameState = {
       ...base,
       phase: 'hunter-shoot',
+      players: base.players.map((p) => p.id === hunter.id ? { ...p, alive: false } : p),
       pendingHunterShoot: { hunterId: hunter.id, cause: 'banishment' },
     };
     for (const p of s.players) {

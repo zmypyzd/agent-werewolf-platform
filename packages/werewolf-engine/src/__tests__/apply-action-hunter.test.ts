@@ -67,4 +67,23 @@ describe('hunter-shoot edge cases', () => {
     expect(s.phase).not.toBe('hunter-shoot');
     expect(s.pendingHunterShoot).toBeNull();
   });
+
+  it('getValidActions returns hunter-shoot options for the dead hunter in hunter-shoot phase', async () => {
+    const { getValidActions } = await import('../valid-actions.js');
+    let s = createGame({ gameId: 'g1', seed: 'seed-Hunter-A' });
+    s = startFirstNight(s);
+    const wolves = s.players.filter((p) => p.role === 'werewolf');
+    const hunter = s.players.find((p) => p.role === 'hunter')!;
+    for (const w of wolves) s = applyAction(s, { type: 'werewolf-vote', voterId: w.id, targetId: hunter.id });
+    s = applyAction(s, { type: 'witch-skip-save' });
+    s = applyAction(s, { type: 'witch-skip-poison' });
+    const seer = s.players.find((p) => p.role === 'seer')!;
+    const someoneElse = s.players.find((p) => p.id !== seer.id && p.alive)!;
+    s = applyAction(s, { type: 'seer-divine', targetId: someoneElse.id });
+    expect(s.phase).toBe('hunter-shoot');
+    expect(s.players.find((p) => p.id === hunter.id)!.alive).toBe(false);
+    const acts = getValidActions(s, hunter.id);
+    expect(acts.length).toBeGreaterThan(0);
+    expect(acts.every((a) => a.type === 'hunter-shoot')).toBe(true);
+  });
 });
