@@ -11,7 +11,7 @@
     "test": "vitest run --workspace vitest.workspace.ts",
     "test:watch": "vitest --workspace vitest.workspace.ts",
     "test:coverage": "vitest run --coverage --workspace vitest.workspace.ts",
-    "typecheck": "pnpm -r run build --noEmit 2>&1 | grep -v 'warning\\|info' || true",
+    "typecheck": "pnpm -r exec tsc -p tsconfig.json --noEmit",
     "lint": "pnpm -r exec tsc -p tsconfig.json --noEmit",
     "dev:api": "pnpm --filter api dev",
     "demo": "pnpm --filter local-simulation start",
