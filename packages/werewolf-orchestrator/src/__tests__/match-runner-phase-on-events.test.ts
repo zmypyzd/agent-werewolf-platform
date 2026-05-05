@@ -11,7 +11,7 @@ describe('match-runner emits phase on every action event', () => {
     const agents = new Map(
       initial.players.map((p) => [
         p.id,
-        new WerewolfRandomMockAgent({ agentId: `agent-${p.id}`, name: p.name, seed: `r-${p.id}` }),
+        new WerewolfRandomMockAgent(`agent-${p.id}`, p.name, { seed: `r-${p.id}` }),
       ]),
     );
     const emitter = new EventEmitter();
