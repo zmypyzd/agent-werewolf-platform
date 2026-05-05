@@ -10,7 +10,7 @@ const baseEvent = {
 };
 
 describe('werewolfReplayEventToPublic — werewolf', () => {
-  it('passes match.started through unchanged', () => {
+  it('strips seed from match.started but preserves gameId + players', () => {
     const e: WerewolfReplayEvent = {
       ...baseEvent,
       eventType: 'match.started',
@@ -20,7 +20,22 @@ describe('werewolfReplayEventToPublic — werewolf', () => {
         players: [{ id: 'p1', seatIndex: 0, name: 'Alice' }],
       },
     };
-    expect(werewolfReplayEventToPublic(e)).toEqual(e);
+    const out = werewolfReplayEventToPublic(e)!;
+    expect(out.data['seed']).toBeUndefined();
+    expect(out.data['gameId']).toBe('g-1');
+    expect(out.data['players']).toEqual([{ id: 'p1', seatIndex: 0, name: 'Alice' }]);
+  });
+
+  it('passes match.started through unchanged when no seed is present', () => {
+    const e: WerewolfReplayEvent = {
+      ...baseEvent,
+      eventType: 'match.started',
+      data: {
+        gameId: 'g-1',
+        players: [{ id: 'p1', seatIndex: 0, name: 'Alice' }],
+      },
+    };
+    expect(werewolfReplayEventToPublic(e)).toBe(e);
   });
 
   it('passes match.completed through unchanged', () => {

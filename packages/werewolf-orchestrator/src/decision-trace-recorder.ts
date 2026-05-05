@@ -87,7 +87,12 @@ function toTraceAction(action: WerewolfAction): WerewolfDecisionTraceAction {
     case 'witch-save':
     case 'witch-poison':
     case 'seer-divine':
-      return { type: action.type, targetId: action.targetId };
+      // Drop targetId for the same reason werewolf-vote does: the trace
+      // is a public artifact, and the night-action history entry carrying
+      // the same target was already filtered by toPublicWerewolfHistory.
+      // The WerewolfDecisionTraceAction union enforces the strip at the
+      // type level — no cast needed.
+      return { type: action.type };
     case 'witch-skip-save':
     case 'witch-skip-poison':
       return { type: action.type };

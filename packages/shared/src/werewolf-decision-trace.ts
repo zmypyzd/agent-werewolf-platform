@@ -8,16 +8,25 @@ export type WerewolfDecisionTraceFallbackReason =
   | 'invalid_action'
   | 'missing_agent';
 
-// Action-payload shape stored on a trace. We strip the `inner` field from
-// 'speak' actions before persisting (defense in depth — the runner already
-// drops it via sanitize-action, but the trace path is independent).
+// Action-payload shape stored on a public trace. Every night-phase action
+// drops fields that would identify either the actor's role or the target
+// of a private night decision; the recorder strips these before persistence.
+//
+// Specifically:
+//   - werewolf-vote: drops voterId + targetId (only werewolves vote, and
+//     the chosen target is private to the pack)
+//   - witch-save / witch-poison / seer-divine: drops targetId (the target
+//     reveals who the role acted on, mirroring the night-action history
+//     drop in toPublicWerewolfHistory)
+//   - speak: drops inner (心声 — engine-level private)
+//   - day-vote / hunter-shoot: public actions, all fields preserved
 export type WerewolfDecisionTraceAction =
   | { readonly type: 'werewolf-vote' }
-  | { readonly type: 'witch-save'; readonly targetId: WerewolfPlayerId }
+  | { readonly type: 'witch-save' }
   | { readonly type: 'witch-skip-save' }
-  | { readonly type: 'witch-poison'; readonly targetId: WerewolfPlayerId }
+  | { readonly type: 'witch-poison' }
   | { readonly type: 'witch-skip-poison' }
-  | { readonly type: 'seer-divine'; readonly targetId: WerewolfPlayerId }
+  | { readonly type: 'seer-divine' }
   | {
       readonly type: 'speak';
       readonly playerId: WerewolfPlayerId;

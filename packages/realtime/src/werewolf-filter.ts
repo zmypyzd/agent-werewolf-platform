@@ -26,6 +26,14 @@ export function werewolfReplayEventToPublic(
       next = stripActorFields(next);
     }
   }
+  // match.started carries the full match seed for in-process subscribers.
+  // Spectators / persisted public artifacts must never see it: the seed
+  // plus the engine's reproducibility property would let a viewer derive
+  // every private RNG draw (role assignments, seer pings, etc).
+  if (event.eventType === 'match.started' && 'seed' in next.data) {
+    const { seed: _seed, ...rest } = next.data as Record<string, unknown>;
+    next = { ...next, data: rest };
+  }
   // Defense in depth: even on engine.action_applied (which is public), make
   // sure we never broadcast `inner` from a speak action.
   if (containsSpeakInner(next.data)) {
