@@ -131,11 +131,23 @@ export class WerewolfOrchestrator {
       entry.finalState = runner.getFinalState();
       entry.status = 'completed';
       if (this.artifactStore) {
+        // Persistence errors propagate to the caller. The match itself
+        // already succeeded — entry.summary stays accessible via
+        // getMatchSummary so the in-memory result is not lost. We
+        // deliberately do NOT roll the entry back to 'failed': a save
+        // failure (size cap, transient I/O) is a different fault domain
+        // from a game-loop failure, and conflating them would block a
+        // legitimate completed match from being re-read.
         await this.persistArtifact(matchId, entry, summary);
       }
       return summary;
     } catch (err) {
-      entry.status = 'failed';
+      // Only flip to 'failed' if the game loop itself errored. If the
+      // throw came from persistArtifact above, status is already
+      // 'completed' and we leave it that way (see comment above).
+      if (entry.status !== 'completed') {
+        entry.status = 'failed';
+      }
       throw err;
     }
   }
