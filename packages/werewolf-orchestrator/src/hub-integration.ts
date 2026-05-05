@@ -65,6 +65,14 @@ export function attachWerewolfHub(
       });
     });
 
+    // Wire shape for 'werewolf.private_state' (player:<userId>:<gameId> topic):
+    //   payload.matchId     — the gameId this snapshot belongs to
+    //   payload.playerId    — the in-game player identity (NOT the auth userId);
+    //                         needed because a single user could in future control
+    //                         multiple seats or join from multiple tabs
+    //   payload.privateState — the full WerewolfPrivateState snapshot
+    // Players without an entry in the ownership map receive nothing — a no-op,
+    // not a fallback topic — so mock-only matches stay silent on player:* topics.
     const unsubscribePrivate = orchestrator.subscribePrivate(matchId, (e: WerewolfPrivateStateEvent) => {
       const userId = playerToUser.get(e.playerId);
       if (!userId) return;

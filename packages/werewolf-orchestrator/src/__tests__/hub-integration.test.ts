@@ -125,4 +125,32 @@ describe('attachWerewolfHub', () => {
     attachment.attachMatch(matchId, []);
     expect(() => attachment.attachMatch(matchId, [])).toThrow(/already attached/);
   });
+
+  it('detachAll removes all listeners across every attached match', async () => {
+    const hub = new RealtimeHub();
+    const orch = new WerewolfOrchestrator();
+    const attachment = attachWerewolfHub(orch, hub);
+
+    const a = await runMatch(orch, 'g-all-1', 's-all-1');
+    const b = await runMatch(orch, 'g-all-2', 's-all-2');
+    attachment.attachMatch(a.matchId, []);
+    attachment.attachMatch(b.matchId, []);
+
+    attachment.detachAll();
+
+    const spec1 = fakeConnection('user-1');
+    const spec2 = fakeConnection('user-2');
+    hub.subscribe(spec1.conn, `match:${a.matchId}`);
+    hub.subscribe(spec2.conn, `match:${b.matchId}`);
+
+    await orch.runMatch(a.matchId);
+    await orch.runMatch(b.matchId);
+
+    expect(spec1.frames.length).toBe(0);
+    expect(spec2.frames.length).toBe(0);
+
+    // After detachAll, attachMatch must be valid again — confirms the internal
+    // handle map was cleared, not just emptied of subscriptions.
+    expect(() => attachment.attachMatch(a.matchId, [])).not.toThrow();
+  });
 });
