@@ -171,6 +171,12 @@ export class WerewolfMatchRunner {
       deadlineMs: this.timeoutMs,
     });
 
+    // Non-replay private-state channel. Carries the requesting player's full
+    // private state so per-player WS topic forwarders can push it. Deliberately
+    // uses emitter.emit (not this.emit) so the event neither becomes a
+    // WerewolfReplayEvent nor flows into bufferedEvents / persistence.
+    this.emitter.emit('private-state', { playerId: player.id, privateState });
+
     this.emit('agent.action_requested', {
       requestId: req.requestId,
       agentId: agent.agentId,
