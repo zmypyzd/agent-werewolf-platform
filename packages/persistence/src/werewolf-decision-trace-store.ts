@@ -45,7 +45,8 @@ export class MemoryWerewolfDecisionTraceStore implements IWerewolfDecisionTraceS
   }
 
   async listDecisionTraces(matchId: string): Promise<WerewolfDecisionTrace[]> {
-    return (this.traces.get(safePathSegment(matchId)) ?? []).map(cloneTrace);
+    const safeMatchId = safePathSegment(matchId);
+    return (this.traces.get(safeMatchId) ?? []).map(cloneTrace);
   }
 }
 
@@ -95,11 +96,13 @@ function assertWithinLimits(
       `Werewolf decision trace is ${traceBytes} bytes; limit is ${limits.maxTraceBytes}`,
     );
   }
+
   if (traces.length > limits.maxTracesPerMatch) {
     throw new ArtifactLimitExceededError(
       `Werewolf decision trace count is ${traces.length}; limit is ${limits.maxTracesPerMatch}`,
     );
   }
+
   const matchBytes = Buffer.byteLength(serializeWerewolfDecisionTraces(traces), 'utf-8');
   if (matchBytes > limits.maxMatchTraceBytes) {
     throw new ArtifactLimitExceededError(

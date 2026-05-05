@@ -64,16 +64,15 @@ describe('MemoryWerewolfDecisionTraceStore', () => {
     ).rejects.toThrow(/Invalid matchId path segment/);
   });
 
-  it('publicifies the trace on read (no internal mutation leaks)', async () => {
+  it('returns deep clones — mutating returned data does not leak into the store', async () => {
     const store = new MemoryWerewolfDecisionTraceStore();
-    const trace = sample({ traceId: 't-mut' });
-    await store.appendDecisionTrace(trace);
+    await store.appendDecisionTrace(sample({ traceId: 't-mut' }));
     const list1 = await store.listDecisionTraces('g-1');
-    list1[0]!.validActionTypes; // read
-    // Mutating returned data should not affect store contents.
-    (list1 as unknown as WerewolfDecisionTrace[])[0] = { ...list1[0]!, traceId: 'OVERRIDDEN' };
+    // Mutate a nested array on the returned trace. Without deep cloning,
+    // the store's internal copy would observe this push.
+    (list1[0]!.validActionTypes as unknown as string[]).push('hunter-shoot');
     const list2 = await store.listDecisionTraces('g-1');
-    expect(list2[0]!.traceId).toBe('t-mut');
+    expect(list2[0]!.validActionTypes).toEqual(['day-vote']);
   });
 });
 
