@@ -130,6 +130,10 @@ describe('werewolf E2E: live WS + persisted artifact match', () => {
         sequence: ((m['payload'] as Record<string, unknown>)['sequence'] as number) ?? -1,
       }));
     expect(liveEventTypes.length).toBeGreaterThan(0);
+    // Defensive: confirm sequence extraction is producing real numbers, not the
+    // `?? -1` fallback. If the wire shape changes and `sequence` moves elsewhere,
+    // every entry would be -1 and the monotonicity loop would pass vacuously.
+    expect(liveEventTypes.every((e) => e.sequence >= 0)).toBe(true);
     // Sequence must be monotonically non-decreasing.
     for (let i = 1; i < liveEventTypes.length; i++) {
       expect(liveEventTypes[i]!.sequence).toBeGreaterThanOrEqual(liveEventTypes[i - 1]!.sequence);
@@ -153,6 +157,8 @@ describe('werewolf E2E: live WS + persisted artifact match', () => {
     const traceRes = await fetch(`${baseUrl}/api/v1/werewolf-matches/${gameId}/decision-trace`);
     expect(traceRes.status).toBe(200);
     const traceBody = await traceRes.text();
+    const traceData = JSON.parse(traceBody) as { data: unknown[] };
+    expect(traceData.data.length).toBeGreaterThan(0);
     expect(traceBody).not.toContain('privateStateHash');
     expect(traceBody).not.toContain('reasoningSummary');
 
