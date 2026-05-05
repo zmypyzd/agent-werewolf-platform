@@ -9,7 +9,8 @@
       "@agent-poker/agent-protocol": ["../agent-protocol/src/index.ts"],
       "@agent-poker/werewolf-engine": ["../werewolf-engine/src/index.ts"],
       "@agent-poker/agent-runtime": ["../agent-runtime/src/index.ts"],
-      "@agent-poker/persistence": ["../persistence/src/index.ts"]
+      "@agent-poker/persistence": ["../persistence/src/index.ts"],
+      "@agent-poker/realtime": ["../realtime/src/index.ts"]
     }
   },
   "references": [
@@ -17,7 +18,8 @@
     { "path": "../agent-protocol" },
     { "path": "../werewolf-engine" },
     { "path": "../agent-runtime" },
-    { "path": "../persistence" }
+    { "path": "../persistence" },
+    { "path": "../realtime" }
   ],
   "include": ["src"]
 }

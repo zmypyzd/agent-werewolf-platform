@@ -20,7 +20,8 @@
     "@agent-poker/agent-protocol": "workspace:*",
     "@agent-poker/werewolf-engine": "workspace:*",
     "@agent-poker/agent-runtime": "workspace:*",
-    "@agent-poker/persistence": "workspace:*"
+    "@agent-poker/persistence": "workspace:*",
+    "@agent-poker/realtime": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.5.0",
