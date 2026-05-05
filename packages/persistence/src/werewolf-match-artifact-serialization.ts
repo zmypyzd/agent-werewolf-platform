@@ -130,6 +130,13 @@ export function toPublicWerewolfHistory(
       case 'game-over':
         out.push(entry);
         break;
+      default: {
+        // Exhaustiveness guard — adding a new WerewolfHistoryEntry variant in
+        // packages/shared will break this assignment until the new arm is
+        // explicitly classified as public or private here.
+        const _exhaustive: never = entry;
+        return _exhaustive;
+      }
     }
   }
   return out;
