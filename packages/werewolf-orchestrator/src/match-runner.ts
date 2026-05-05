@@ -8,7 +8,10 @@ import type {
   WerewolfPlayer,
   WerewolfPhase,
   WerewolfPlayerId,
+  WerewolfReasoningSummary,
 } from '@agent-poker/shared';
+import type { IWerewolfDecisionTraceStore } from '@agent-poker/persistence';
+import { recordWerewolfDecisionTrace } from './decision-trace-recorder.js';
 import {
   applyAction,
   getPrivateState,
@@ -35,6 +38,7 @@ export type WerewolfAgent = IAgent<WerewolfDecisionRequest, WerewolfDecisionResp
 
 export interface WerewolfMatchRunnerOptions {
   readonly maxSteps?: number;
+  readonly decisionTraceStore?: IWerewolfDecisionTraceStore;
 }
 
 const DEFAULT_MAX_STEPS = 10_000;
@@ -43,6 +47,7 @@ export class WerewolfMatchRunner {
   private state: WerewolfGameState;
   private readonly initialState: WerewolfGameState;
   private readonly maxSteps: number;
+  private readonly decisionTraceStore: IWerewolfDecisionTraceStore | null;
   private replayEventCount = 0;
   private sequence = 0;
   private stepCount = 0;
@@ -58,6 +63,7 @@ export class WerewolfMatchRunner {
     this.initialState = initialState;
     this.state = initialState;
     this.maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
+    this.decisionTraceStore = options.decisionTraceStore ?? null;
   }
 
   async run(): Promise<WerewolfMatchSummary> {
@@ -152,13 +158,15 @@ export class WerewolfMatchRunner {
   ): Promise<void> {
     const phaseBefore: WerewolfPhase = this.state.phase;
     const agent = this.agents.get(player.id)!;
+    const publicState = getPublicState(this.state);
+    const privateState = getPrivateState(this.state, player.id);
     const req = buildWerewolfDecisionRequest({
       requestId: randomUUID(),
       gameId: this.state.gameId,
       agentId: agent.agentId,
       playerId: player.id,
-      publicState: getPublicState(this.state),
-      privateState: getPrivateState(this.state, player.id),
+      publicState,
+      privateState,
       validActions,
       deadlineMs: this.timeoutMs,
     });
@@ -183,6 +191,8 @@ export class WerewolfMatchRunner {
     let action: WerewolfAction;
     let usedFallback = false;
     let invalidReason: string | null = null;
+    let parsedActionForTrace: WerewolfAction | null = null;
+    let parsedReasoningForTrace: WerewolfReasoningSummary | undefined;
 
     if (timedOut) {
       action = response.action;
@@ -219,7 +229,11 @@ export class WerewolfMatchRunner {
           fallbackAction: sanitizeActionForBroadcast(action),
         });
       } else {
-        const parsedAction = parsed.data.action as WerewolfAction;
+        parsedActionForTrace = parsed.data.action as WerewolfAction;
+        if (parsed.data.reasoningSummary) {
+          parsedReasoningForTrace = parsed.data.reasoningSummary;
+        }
+        const parsedAction = parsedActionForTrace;
         const validation = validateWerewolfAction(parsedAction, validActions);
         if (validation.valid) {
           action = validation.action;
@@ -262,6 +276,36 @@ export class WerewolfMatchRunner {
 
     if (this.state.phase !== phaseBefore) {
       this.emit('phase.changed', { from: phaseBefore, to: this.state.phase });
+    }
+
+    if (this.decisionTraceStore) {
+      await recordWerewolfDecisionTrace({
+        store: this.decisionTraceStore,
+        matchId: this.state.gameId,
+        sequence: this.stepCount,
+        requestId: req.requestId,
+        agentId: agent.agentId,
+        playerId: player.id,
+        phase: phaseBefore,
+        nightNumber: this.state.nightNumber,
+        dayNumber: this.state.dayNumber,
+        publicState,
+        privateState,
+        validActions,
+        responseAction:
+          timedOut || invalidReason !== null ? null : (parsedActionForTrace ?? null),
+        appliedAction: action,
+        latencyMs: elapsedMs,
+        timedOut,
+        invalidReason,
+        fallbackReason: timedOut
+          ? 'timeout'
+          : invalidReason !== null
+            ? 'invalid_action'
+            : null,
+        ...(parsedReasoningForTrace ? { reasoningSummary: parsedReasoningForTrace } : {}),
+        now: Date.now(),
+      });
     }
   }
 
