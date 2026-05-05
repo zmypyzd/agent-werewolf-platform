@@ -102,4 +102,34 @@ describe('ObjectWerewolfMatchArtifactStore (over MemoryObjectStore)', () => {
     });
     await expect(store.saveMatchArtifact(huge)).rejects.toThrow(ArtifactLimitExceededError);
   });
+
+  it('deleteMatchArtifact removes blobs and prunes the index', async () => {
+    const obj = new MemoryObjectStore();
+    const store = new ObjectWerewolfMatchArtifactStore(obj);
+    await store.saveMatchArtifact(baseInput({ matchId: 'g-keep' }));
+    await store.saveMatchArtifact(baseInput({ matchId: 'g-drop' }));
+    await store.deleteMatchArtifact!('g-drop');
+
+    expect(await obj.exists('matches/g-drop/manifest.json')).toBe(false);
+    expect(await obj.exists('matches/g-drop/summary.json')).toBe(false);
+    expect(await obj.exists('matches/g-keep/manifest.json')).toBe(true);
+
+    const list = await store.listMatchArtifacts();
+    expect(list.map((e) => e.matchId)).toEqual(['g-keep']);
+  });
+});
+
+describe('MemoryWerewolfMatchArtifactStore.deleteMatchArtifact', () => {
+  it('removes the saved record', async () => {
+    const store = new MemoryWerewolfMatchArtifactStore();
+    await store.saveMatchArtifact(baseInput());
+    await store.deleteMatchArtifact!('g-1');
+    expect(await store.getMatchArtifact('g-1')).toBeNull();
+    expect(await store.listMatchArtifacts()).toEqual([]);
+  });
+
+  it('rejects path-traversal matchId', async () => {
+    const store = new MemoryWerewolfMatchArtifactStore();
+    await expect(store.deleteMatchArtifact!('../bad')).rejects.toThrow(/Invalid matchId path segment/);
+  });
 });

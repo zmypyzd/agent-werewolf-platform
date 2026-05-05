@@ -65,8 +65,8 @@ export class MemoryWerewolfMatchArtifactStore implements IWerewolfMatchArtifactS
     matchId: string,
     options: GetWerewolfMatchArtifactOptions = {},
   ): Promise<WerewolfMatchArtifactRecord | null> {
-    safePathSegment(matchId);
-    const found = this.records.get(matchId);
+    const safeMatchId = safePathSegment(matchId);
+    const found = this.records.get(safeMatchId);
     if (!found) return null;
     let next: WerewolfMatchArtifactRecord = found.record;
     if (options.includeReplayEvents === false) {
@@ -89,8 +89,8 @@ export class MemoryWerewolfMatchArtifactStore implements IWerewolfMatchArtifactS
   }
 
   async deleteMatchArtifact(matchId: string): Promise<void> {
-    safePathSegment(matchId);
-    this.records.delete(matchId);
+    const safeMatchId = safePathSegment(matchId);
+    this.records.delete(safeMatchId);
   }
 }
 
@@ -178,6 +178,11 @@ export class ObjectWerewolfMatchArtifactStore implements IWerewolfMatchArtifactS
   async deleteMatchArtifact(matchId: string): Promise<void> {
     const safe = safePathSegment(matchId);
     const prefix = `matches/${safe}`;
+    // IObjectStore.delete is optional. When unavailable the index entry is
+    // pruned but the blobs remain — the gap is documented so callers using
+    // a backend without delete (write-once stores, archival modes) understand
+    // the resulting orphans. Existing in-tree backends (MemoryObjectStore,
+    // FileObjectStore) all implement delete, so the typical path is clean.
     if (this.objectStore.delete) {
       await this.objectStore.delete(`${prefix}/summary.json`);
       await this.objectStore.delete(`${prefix}/replay.jsonl`);
