@@ -34,6 +34,14 @@ export function actionsMatchByShape(a: WerewolfAction, b: WerewolfAction): boole
       const bb = b as Extract<WerewolfAction, { type: 'hunter-shoot' }>;
       return a.targetId === bb.targetId;
     }
+    default: {
+      // Exhaustiveness guard. If WerewolfAction gains a new variant and this
+      // switch is not updated, `_exhaustive: never = a` becomes a compile error.
+      const _exhaustive: never = a;
+      throw new Error(
+        `actionsMatchByShape: unhandled action type ${(a as { type: string }).type} (${_exhaustive as never})`,
+      );
+    }
   }
 }
 

@@ -122,6 +122,15 @@ describe('WerewolfMatchRunner', () => {
     await expect(runner.run()).rejects.toThrow(/exceeded.*step/i);
   });
 
+  it('throws when run() is invoked a second time on the same instance', async () => {
+    const initial = createGame({ gameId: 'g-runner-rerun', seed: 'seed-runner-rerun' });
+    const agents = buildAgents(initial);
+    const emitter = new EventEmitter();
+    const runner = new WerewolfMatchRunner(initial, agents, 5_000, emitter);
+    await runner.run();
+    await expect(runner.run()).rejects.toThrow(/already invoked/i);
+  });
+
   it('publicState passed to agents never contains role-assigned or night-action history entries', async () => {
     const initial = createGame({ gameId: 'g-runner-7', seed: 'seed-runner-7' });
     const seenRequests: WerewolfDecisionRequest[] = [];

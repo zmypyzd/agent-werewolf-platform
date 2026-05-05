@@ -45,6 +45,7 @@ export class WerewolfMatchRunner {
   private replayEventCount = 0;
   private sequence = 0;
   private stepCount = 0;
+  private hasRun = false;
 
   constructor(
     initialState: WerewolfGameState,
@@ -59,6 +60,12 @@ export class WerewolfMatchRunner {
   }
 
   async run(): Promise<WerewolfMatchSummary> {
+    if (this.hasRun) {
+      throw new Error(
+        `WerewolfMatchRunner: run() already invoked on this instance for game ${this.state.gameId}`,
+      );
+    }
+    this.hasRun = true;
     for (const p of this.state.players) {
       if (!this.agents.has(p.id)) {
         throw new Error(
@@ -111,7 +118,7 @@ export class WerewolfMatchRunner {
 
     this.emit('match.completed', {
       gameId: this.state.gameId,
-      winner: this.state.winner,
+      winner: summary.winner,
       durationMs: completedAt - startedAt,
       stepCount: this.stepCount,
     });
