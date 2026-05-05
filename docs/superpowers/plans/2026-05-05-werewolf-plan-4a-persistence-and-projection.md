@@ -57,11 +57,11 @@
 ## Plan-wide conventions
 
 - **Per-package commands** (run from the worktree root):
-  - Build: `pnpm --filter @agent-poker/<pkg> run build` (e.g. `@agent-poker/werewolf-orchestrator`, `@agent-poker/persistence`, `@agent-poker/shared`, `@agent-poker/agent-runtime`)
-  - Lint: `pnpm --filter @agent-poker/<pkg> run lint`
+  - Build (also typechecks): `pnpm --filter @agent-poker/<pkg> run build` (= `tsc -b`). Treat this as your typecheck — there is no separate `lint` script in this monorepo.
   - Single-file Vitest: `pnpm --filter @agent-poker/<pkg> exec vitest run src/__tests__/<file>.test.ts`
   - Watch one test by name: `pnpm --filter @agent-poker/<pkg> exec vitest run -t '<test name>'`
-- **Workspace-wide green check** (run before each commit): `pnpm test` then `pnpm lint`. Both must pass; absolutely no `any`, no `// @ts-ignore`, no `Math.random()` in werewolf-engine (that lives in another package, but if you happen to touch it, the reproducibility test will fail).
+- **Workspace-wide green check** (run before each commit): `pnpm test && pnpm build`. Both must pass; absolutely no `any`, no `// @ts-ignore`, no `Math.random()` in werewolf-engine (that lives in another package, but if you happen to touch it, the reproducibility test will fail).
+- **vitest does NOT typecheck.** A test can pass at runtime while `tsc -b` rejects it. Always run `pnpm --filter <pkg> run build` after writing or modifying a test before considering the task done.
 - **TDD shape:** every task that adds behavior writes the failing test first, runs it to confirm failure, then implements. Commit after each green run.
 - **Imports:** relative imports must use `.js` extension on `.ts` source (NodeNext). Cross-package imports use the `@agent-poker/<pkg>` workspace name.
 - **Files use `kebab-case.ts`. Types use `PascalCase`. Functions/vars `camelCase`. Constants `SCREAMING_SNAKE_CASE`.**
@@ -101,7 +101,7 @@ describe('match-runner emits phase on every action event', () => {
     const agents = new Map(
       initial.players.map((p) => [
         p.id,
-        new WerewolfRandomMockAgent({ agentId: `agent-${p.id}`, name: p.name, seed: `r-${p.id}` }),
+        new WerewolfRandomMockAgent(`agent-${p.id}`, p.name, { seed: `r-${p.id}` }),
       ]),
     );
     const emitter = new EventEmitter();
@@ -530,7 +530,7 @@ export * from './werewolf-filter.js';
 
 - [ ] **Step 9: Run lint + full realtime + orchestrator + shared suites**
 
-Run: `pnpm --filter @agent-poker/shared run test && pnpm --filter @agent-poker/realtime run test && pnpm --filter @agent-poker/realtime run lint && pnpm --filter @agent-poker/werewolf-orchestrator run test`
+Run: `pnpm --filter @agent-poker/shared run test && pnpm --filter @agent-poker/realtime run test && pnpm --filter @agent-poker/realtime run build && pnpm --filter @agent-poker/werewolf-orchestrator run test`
 Expected: green. (The orchestrator's existing replay-event consumers continue to work because the orchestrator's `replay-event.ts` re-exports from shared.)
 
 - [ ] **Step 10: Commit**
@@ -1034,7 +1034,7 @@ export * from './werewolf-decision-trace-store.js';
 
 - [ ] **Step 6: Run test, expect PASS**
 
-Run: `pnpm --filter @agent-poker/persistence exec vitest run src/__tests__/werewolf-decision-trace-store.test.ts && pnpm --filter @agent-poker/persistence run lint`
+Run: `pnpm --filter @agent-poker/persistence exec vitest run src/__tests__/werewolf-decision-trace-store.test.ts && pnpm --filter @agent-poker/persistence run build`
 Expected: green.
 
 - [ ] **Step 7: Commit**
@@ -1437,7 +1437,7 @@ export * from './werewolf-match-artifact-serialization.js';
 
 - [ ] **Step 7: Run tests, expect PASS**
 
-Run: `pnpm --filter @agent-poker/persistence exec vitest run src/__tests__/werewolf-match-artifact-serialization.test.ts && pnpm --filter @agent-poker/persistence run lint && pnpm --filter @agent-poker/persistence run build`
+Run: `pnpm --filter @agent-poker/persistence exec vitest run src/__tests__/werewolf-match-artifact-serialization.test.ts && pnpm --filter @agent-poker/persistence run build && pnpm --filter @agent-poker/persistence run build`
 Expected: green.
 
 - [ ] **Step 8: Commit**
@@ -1808,7 +1808,7 @@ export * from './werewolf-match-artifact-store.js';
 
 - [ ] **Step 5: Run tests, expect PASS**
 
-Run: `pnpm --filter @agent-poker/persistence exec vitest run src/__tests__/werewolf-match-artifact-store.test.ts && pnpm --filter @agent-poker/persistence run lint && pnpm --filter @agent-poker/persistence run build`
+Run: `pnpm --filter @agent-poker/persistence exec vitest run src/__tests__/werewolf-match-artifact-store.test.ts && pnpm --filter @agent-poker/persistence run build && pnpm --filter @agent-poker/persistence run build`
 Expected: green.
 
 - [ ] **Step 6: Commit**
@@ -1857,9 +1857,7 @@ describe('WerewolfOrchestrator persistence', () => {
 
     const { matchId, initialState } = orch.createMatch({ gameId: 'g-persist', seed: 's-persist' });
     for (const p of initialState.players) {
-      orch.registerAgent(matchId, p.id, new WerewolfRandomMockAgent({
-        agentId: `agent-${p.id}`, name: p.name, seed: `r-${p.id}`,
-      }));
+      orch.registerAgent(matchId, p.id, new WerewolfRandomMockAgent(`agent-${p.id}`, p.name, { seed: `r-${p.id}` }));
     }
     await orch.runMatch(matchId);
 
@@ -1881,9 +1879,7 @@ describe('WerewolfOrchestrator persistence', () => {
     const orch = new WerewolfOrchestrator();
     const { matchId, initialState } = orch.createMatch({ gameId: 'g-no-store', seed: 's' });
     for (const p of initialState.players) {
-      orch.registerAgent(matchId, p.id, new WerewolfRandomMockAgent({
-        agentId: `a-${p.id}`, name: p.name, seed: `r-${p.id}`,
-      }));
+      orch.registerAgent(matchId, p.id, new WerewolfRandomMockAgent(`a-${p.id}`, p.name, { seed: `r-${p.id}` }));
     }
     await expect(orch.runMatch(matchId)).resolves.toBeDefined();
   });
@@ -1893,9 +1889,7 @@ describe('WerewolfOrchestrator persistence', () => {
     const orch = new WerewolfOrchestrator({ artifactStore });
     const { matchId, initialState } = orch.createMatch({ gameId: 'g-redact', seed: 's' });
     for (const p of initialState.players) {
-      orch.registerAgent(matchId, p.id, new WerewolfRandomMockAgent({
-        agentId: `a-${p.id}`, name: p.name, seed: `r-${p.id}`,
-      }));
+      orch.registerAgent(matchId, p.id, new WerewolfRandomMockAgent(`a-${p.id}`, p.name, { seed: `r-${p.id}` }));
     }
     await orch.runMatch(matchId);
     const rec = (await artifactStore.getMatchArtifact('g-redact'))!;
@@ -2150,7 +2144,7 @@ Expected: PASS.
 
 - [ ] **Step 7: Run the rest of the orchestrator suite (no regressions)**
 
-Run: `pnpm --filter @agent-poker/werewolf-orchestrator run lint && pnpm --filter @agent-poker/werewolf-orchestrator run test`
+Run: `pnpm --filter @agent-poker/werewolf-orchestrator run build && pnpm --filter @agent-poker/werewolf-orchestrator run test`
 Expected: green. The constructor change is non-breaking (default options).
 
 - [ ] **Step 8: Commit**
@@ -2201,7 +2195,7 @@ describe('WerewolfMatchRunner decision-trace recording', () => {
     const agents = new Map(
       initial.players.map((p) => [
         p.id,
-        new WerewolfRandomMockAgent({ agentId: `a-${p.id}`, name: p.name, seed: `r-${p.id}` }),
+        new WerewolfRandomMockAgent(`a-${p.id}`, p.name, { seed: `r-${p.id}` }),
       ]),
     );
     const traceStore = new MemoryWerewolfDecisionTraceStore();
@@ -2484,7 +2478,7 @@ Expected: PASS.
 
 - [ ] **Step 6: Run the orchestrator-persistence test from Task 7 and the full suite**
 
-Run: `pnpm --filter @agent-poker/werewolf-orchestrator run test && pnpm --filter @agent-poker/werewolf-orchestrator run lint`
+Run: `pnpm --filter @agent-poker/werewolf-orchestrator run test && pnpm --filter @agent-poker/werewolf-orchestrator run build`
 Expected: green. (The Task 7 test should now also see decision traces in the artifact when both stores are wired.)
 
 - [ ] **Step 7: Commit**
@@ -2532,9 +2526,7 @@ describe('WerewolfOrchestrator.deleteMatch', () => {
     const orch = new WerewolfOrchestrator({ artifactStore });
     const { matchId, initialState } = orch.createMatch({ gameId: 'g-keep', seed: 's' });
     for (const p of initialState.players) {
-      orch.registerAgent(matchId, p.id, new WerewolfRandomMockAgent({
-        agentId: `a-${p.id}`, name: p.name, seed: `r-${p.id}`,
-      }));
+      orch.registerAgent(matchId, p.id, new WerewolfRandomMockAgent(`a-${p.id}`, p.name, { seed: `r-${p.id}` }));
     }
     await orch.runMatch(matchId);
     expect(orch.deleteMatch(matchId)).toBe(true);
@@ -2712,15 +2704,14 @@ Expected: all packages green. Existing 689 tests + new tests (≈ 25-30 added ac
 Run: `pnpm build`
 Expected: green. No cycle errors from `tsc -b`.
 
-- [ ] **Step 3: Workspace lint**
+- [ ] **Step 3: Skipped — there is no workspace `lint` script**
 
-Run: `pnpm lint`
-Expected: green. No `any`, no unused imports.
+`pnpm build` (Step 2) already runs `tsc -b` for every package; that is the project's typecheck. The original plan referenced `pnpm lint` by mistake.
 
 - [ ] **Step 4: If everything green, no commit needed (each task already committed)**
 
-Run: `git log --oneline 3d13168..HEAD`
-Expected: 10 new commits (one per task plus this final verification has no diff).
+Run: `git log --oneline 8cf5ba9..HEAD`
+Expected: roughly 11–13 new commits (one per task plus the Task 1 fixup).
 
 ---
 
