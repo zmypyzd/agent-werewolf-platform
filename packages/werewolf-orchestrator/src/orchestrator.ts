@@ -112,9 +112,8 @@ export class WerewolfOrchestrator {
     listener: (event: WerewolfPrivateStateEvent) => void,
   ): () => void {
     const entry = this.requireEntry(matchId);
-    const wrapped = (e: WerewolfPrivateStateEvent) => listener(e);
-    entry.emitter.on('private-state', wrapped);
-    return () => entry.emitter.off('private-state', wrapped);
+    entry.emitter.on('private-state', listener);
+    return () => entry.emitter.off('private-state', listener);
   }
 
   async runMatch(

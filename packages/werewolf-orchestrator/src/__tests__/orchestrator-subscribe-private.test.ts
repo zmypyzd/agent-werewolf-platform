@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { WerewolfOrchestrator } from '../orchestrator.js';
 import { WerewolfRandomMockAgent } from '@agent-poker/agent-runtime';
-import type { WerewolfPlayerId, WerewolfPrivateState } from '@agent-poker/shared';
+import type { WerewolfPlayerId } from '@agent-poker/shared';
 
 describe('WerewolfOrchestrator.subscribePrivate', () => {
-  it('streams {playerId, privateState} for the running match and the unsubscriber detaches', async () => {
+  it('streams {playerId, privateState} for the running match', async () => {
     const orch = new WerewolfOrchestrator();
     const { matchId, initialState } = orch.createMatch({ gameId: 'g-sp', seed: 's-sp' });
     for (const p of initialState.players) {
@@ -12,7 +12,7 @@ describe('WerewolfOrchestrator.subscribePrivate', () => {
     }
 
     const calls: Array<{ playerId: WerewolfPlayerId; selfId: WerewolfPlayerId }> = [];
-    const unsubscribe = orch.subscribePrivate(matchId, (event) => {
+    orch.subscribePrivate(matchId, (event) => {
       calls.push({ playerId: event.playerId, selfId: event.privateState.selfId });
     });
 
@@ -22,21 +22,24 @@ describe('WerewolfOrchestrator.subscribePrivate', () => {
     for (const c of calls) {
       expect(c.playerId).toBe(c.selfId);
     }
+  });
 
-    // After unsubscribe, no further calls (run a 2nd match-id to confirm the
-    // returned function actually removes the listener — same orchestrator
-    // instance, fresh match.)
-    const before = calls.length;
-    unsubscribe();
-    const second = orch.createMatch({ gameId: 'g-sp-2', seed: 's-sp-2' });
-    for (const p of second.initialState.players) {
-      orch.registerAgent(second.matchId, p.id, new WerewolfRandomMockAgent(`a-${p.id}`, p.name, { seed: `r-${p.id}` }));
+  it('the unsubscriber detaches the listener before the match runs', async () => {
+    const orch = new WerewolfOrchestrator();
+    const { matchId, initialState } = orch.createMatch({ gameId: 'g-sp-detach', seed: 's-sp-detach' });
+    for (const p of initialState.players) {
+      orch.registerAgent(matchId, p.id, new WerewolfRandomMockAgent(`a-${p.id}`, p.name, { seed: `r-${p.id}` }));
     }
-    await orch.runMatch(second.matchId);
-    // The listener was attached only to matchId 'g-sp'. Unsubscribing it does
-    // not affect g-sp-2 because there was never a listener there to begin
-    // with. The point of this assertion: calls.length must NOT have grown.
-    expect(calls.length).toBe(before);
+
+    // Listener that fails the test if called. We unsubscribe immediately, so
+    // running the match must NOT invoke it. If unsubscribe() were a no-op,
+    // this listener would throw and propagate out of orch.runMatch.
+    const unsubscribe = orch.subscribePrivate(matchId, () => {
+      throw new Error('listener should have been detached before runMatch');
+    });
+    unsubscribe();
+
+    await expect(orch.runMatch(matchId)).resolves.toBeDefined();
   });
 
   it('throws when subscribePrivate is called for an unknown matchId', () => {
