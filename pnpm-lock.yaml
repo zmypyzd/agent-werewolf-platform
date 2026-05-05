@@ -306,6 +306,25 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@20.19.39)
 
+  packages/werewolf-orchestrator:
+    dependencies:
+      '@agent-poker/agent-runtime':
+        specifier: workspace:*
+        version: link:../agent-runtime
+      '@agent-poker/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@agent-poker/werewolf-engine':
+        specifier: workspace:*
+        version: link:../werewolf-engine
+    devDependencies:
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.39)
+
 packages:
 
   '@ampproject/remapping@2.3.0':

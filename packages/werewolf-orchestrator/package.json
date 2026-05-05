@@ -1,0 +1,27 @@
+{
+  "name": "@agent-poker/werewolf-orchestrator",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@agent-poker/shared": "workspace:*",
+    "@agent-poker/werewolf-engine": "workspace:*",
+    "@agent-poker/agent-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

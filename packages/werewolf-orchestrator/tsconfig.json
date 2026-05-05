@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true,
+    "paths": {
+      "@agent-poker/shared": ["../shared/src/index.ts"],
+      "@agent-poker/werewolf-engine": ["../werewolf-engine/src/index.ts"],
+      "@agent-poker/agent-runtime": ["../agent-runtime/src/index.ts"]
+    }
+  },
+  "references": [
+    { "path": "../shared" },
+    { "path": "../werewolf-engine" },
+    { "path": "../agent-runtime" }
+  ],
+  "include": ["src"]
+}
