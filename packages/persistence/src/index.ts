@@ -9,4 +9,5 @@ export * from './werewolf-decision-trace-serialization.js';
 export * from './werewolf-decision-trace-store.js';
 export * from './werewolf-match-artifact-types.js';
 export * from './werewolf-match-artifact-serialization.js';
+export * from './werewolf-match-artifact-store.js';
 export * from './sqlite/index.js';
