@@ -6,7 +6,7 @@ import { WerewolfRandomMockAgent } from '@agent-poker/agent-runtime';
 import type { WerewolfPlayerId, WerewolfPrivateState } from '@agent-poker/shared';
 
 describe('match-runner private-state channel', () => {
-  it('emits {playerId, privateState} before each agent.action_requested', async () => {
+  it('emits {playerId, privateState} immediately before each agent.action_requested', async () => {
     const initial = createGame({ gameId: 'g-priv', seed: 'seed-priv' });
     const agents = new Map(
       initial.players.map((p) => [
@@ -16,23 +16,34 @@ describe('match-runner private-state channel', () => {
     );
     const emitter = new EventEmitter();
 
-    const requestedOrder: WerewolfPlayerId[] = [];
-    const privateOrder: Array<{ playerId: WerewolfPlayerId; privateState: WerewolfPrivateState }> = [];
-    emitter.on('agent.action_requested', (e: { data: { playerId: WerewolfPlayerId } }) => {
-      requestedOrder.push(e.data.playerId);
-    });
+    type LogEntry =
+      | { kind: 'private'; playerId: WerewolfPlayerId; selfId: WerewolfPlayerId }
+      | { kind: 'requested'; playerId: WerewolfPlayerId };
+    const log: LogEntry[] = [];
     emitter.on('private-state', (e: { playerId: WerewolfPlayerId; privateState: WerewolfPrivateState }) => {
-      privateOrder.push({ playerId: e.playerId, privateState: e.privateState });
+      log.push({ kind: 'private', playerId: e.playerId, selfId: e.privateState.selfId });
+    });
+    emitter.on('agent.action_requested', (e: { data: { playerId: WerewolfPlayerId } }) => {
+      log.push({ kind: 'requested', playerId: e.data.playerId });
     });
 
     const runner = new WerewolfMatchRunner(initial, agents, 5_000, emitter);
     await runner.run();
 
-    expect(privateOrder.length).toBe(requestedOrder.length);
-    expect(privateOrder.length).toBeGreaterThan(0);
-    for (let i = 0; i < requestedOrder.length; i++) {
-      expect(privateOrder[i]!.playerId).toBe(requestedOrder[i]);
-      expect(privateOrder[i]!.privateState.selfId).toBe(requestedOrder[i]);
+    // Expect strict pair structure: private-state[i], agent.action_requested[i+1].
+    expect(log.length).toBeGreaterThan(0);
+    expect(log.length % 2).toBe(0);
+    for (let i = 0; i < log.length; i += 2) {
+      const priv = log[i]!;
+      const req = log[i + 1]!;
+      expect(priv.kind).toBe('private');
+      expect(req.kind).toBe('requested');
+      // Same player on both halves of the pair.
+      expect(priv.playerId).toBe(req.playerId);
+      // privateState carries that player's view.
+      if (priv.kind === 'private') {
+        expect(priv.selfId).toBe(priv.playerId);
+      }
     }
   });
 
@@ -49,6 +60,6 @@ describe('match-runner private-state channel', () => {
     emitter.on('replay-event', (e: { eventType: string }) => replay.push(e));
     const runner = new WerewolfMatchRunner(initial, agents, 5_000, emitter);
     await runner.run();
-    expect(replay.some((e) => (e.eventType as string) === 'private-state')).toBe(false);
+    expect(replay.some((e) => e.eventType === 'private-state')).toBe(false);
   });
 });
