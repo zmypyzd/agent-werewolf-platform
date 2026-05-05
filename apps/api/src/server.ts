@@ -5,6 +5,7 @@ import {
   MemoryTableStore,
   MemoryHandStore,
   MemoryDecisionTraceStore,
+  MemoryWerewolfDecisionTraceStore,
   openDatabase,
   SqliteUserStore,
   SqliteSessionStore,
@@ -18,8 +19,15 @@ import type {
   IAgentInviteStore,
   IMatchArtifactStore,
   IDecisionTraceStore,
+  IWerewolfMatchArtifactStore,
+  IWerewolfDecisionTraceStore,
   SqliteDb,
 } from '@agent-poker/persistence';
+import {
+  WerewolfOrchestrator,
+  attachWerewolfHub,
+  type WerewolfHubAttachment,
+} from '@agent-poker/werewolf-orchestrator';
 import { AppError, RateLimitedError } from '@agent-poker/shared';
 import { RateLimiter, authPlugin } from '@agent-poker/auth';
 import type { RateLimiterConfig, RuntimeEnv } from '@agent-poker/auth';
@@ -27,18 +35,28 @@ import { RealtimeHub } from '@agent-poker/realtime';
 import { tablesRoutes } from './routes/tables.js';
 import { simulateRoutes } from './routes/simulate.js';
 import { matchesRoutes } from './routes/matches.js';
+import { werewolfMatchesRoutes } from './routes/werewolf-matches.js';
 import { authRoutes } from './routes/auth.js';
 import { wsRoutes } from './routes/ws.js';
 import { meAgentsRoutes } from './routes/me-agents.js';
 import { agentInvitesRoutes } from './routes/agent-invites.js';
 import { healthRoutes } from './routes/health.js';
 import { createMatchArtifactStore } from './match-artifact-store-factory.js';
+import { createWerewolfMatchArtifactStore } from './werewolf-match-artifact-store-factory.js';
 
 export interface BuildServerOptions {
   orchestrator?: TableOrchestrator;
   handStore?: InstanceType<typeof MemoryHandStore>;
   matchArtifactStore?: IMatchArtifactStore;
   decisionTraceStore?: IDecisionTraceStore;
+  werewolfMatchArtifactStore?: IWerewolfMatchArtifactStore;
+  werewolfDecisionTraceStore?: IWerewolfDecisionTraceStore;
+  werewolfOrchestrator?: WerewolfOrchestrator;
+  // When provided, buildServer assumes the caller has already attached the
+  // werewolf orchestrator to the hub and will skip its own attach call. Used
+  // by tests that need a handle on the WerewolfHubAttachment to drive
+  // attachMatch from outside buildServer.
+  werewolfHubAttachment?: WerewolfHubAttachment;
   userStore?: IUserStore;
   sessionStore?: ISessionStore;
   agentConfigStore?: IUserAgentConfigStore;
@@ -63,6 +81,25 @@ export function buildServer(opts: BuildServerOptions = {}) {
   const decisionTraceStore = opts.decisionTraceStore ?? new MemoryDecisionTraceStore();
   const hub = opts.hub ?? new RealtimeHub();
   const orch = opts.orchestrator ?? new TableOrchestrator(tableStore, hs, hub, decisionTraceStore);
+
+  const werewolfMatchArtifactStore =
+    opts.werewolfMatchArtifactStore ?? createWerewolfMatchArtifactStore();
+  const werewolfDecisionTraceStore =
+    opts.werewolfDecisionTraceStore ?? new MemoryWerewolfDecisionTraceStore();
+
+  const werewolfOrch =
+    opts.werewolfOrchestrator ??
+    new WerewolfOrchestrator({
+      artifactStore: werewolfMatchArtifactStore,
+      decisionTraceStore: werewolfDecisionTraceStore,
+    });
+
+  // If the caller passed a pre-built attachment, trust them. Otherwise create one
+  // and own its lifecycle here. (Tests that need to drive attachMatch externally
+  // pass werewolfHubAttachment.)
+  if (!opts.werewolfHubAttachment) {
+    attachWerewolfHub(werewolfOrch, hub);
+  }
 
   const authDb =
     opts.userStore && opts.sessionStore && opts.agentConfigStore && opts.agentInviteStore
@@ -167,6 +204,10 @@ export function buildServer(opts: BuildServerOptions = {}) {
       decisionTraceStore,
     });
     await scope.register(matchesRoutes, { prefix: '/api/v1', matchArtifactStore });
+    await scope.register(werewolfMatchesRoutes, {
+      prefix: '/api/v1',
+      werewolfMatchArtifactStore,
+    });
     await scope.register(meAgentsRoutes, { prefix: '/api/v1', agentConfigStore, orchestrator: orch });
     await scope.register(agentInvitesRoutes, { prefix: '/api/v1', agentInviteStore, agentConfigStore });
     await scope.register(wsRoutes, { hub });
