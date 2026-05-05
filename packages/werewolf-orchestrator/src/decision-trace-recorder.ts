@@ -79,6 +79,10 @@ function toTraceAction(action: WerewolfAction): WerewolfDecisionTraceAction {
         speech: action.speech,
       };
     case 'werewolf-vote':
+      // Drop voterId + targetId. Persisting them on the public trace would
+      // identify the werewolf (only werewolves emit this action) and reveal
+      // which player the pack chose to kill — both are private to the
+      // werewolf coalition during the game and stay private in the artifact.
       return { type: 'werewolf-vote' };
     case 'witch-save':
     case 'witch-poison':
