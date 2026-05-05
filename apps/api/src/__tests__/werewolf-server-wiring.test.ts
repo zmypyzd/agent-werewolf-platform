@@ -37,4 +37,16 @@ describe('buildServer wires werewolf routes', () => {
     expect(res.statusCode).toBe(404);
     expect(JSON.parse(res.payload).error.code).toBe('MATCH_NOT_FOUND');
   });
+
+  it('default path (no werewolf options) still serves /api/v1/werewolf-matches', async () => {
+    const defaultApp = buildServer();
+    await defaultApp.ready();
+    try {
+      const res = await defaultApp.inject({ method: 'GET', url: '/api/v1/werewolf-matches' });
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.payload).data).toEqual([]);
+    } finally {
+      await defaultApp.close();
+    }
+  });
 });

@@ -94,13 +94,6 @@ export function buildServer(opts: BuildServerOptions = {}) {
       decisionTraceStore: werewolfDecisionTraceStore,
     });
 
-  // If the caller passed a pre-built attachment, trust them. Otherwise create one
-  // and own its lifecycle here. (Tests that need to drive attachMatch externally
-  // pass werewolfHubAttachment.)
-  if (!opts.werewolfHubAttachment) {
-    attachWerewolfHub(werewolfOrch, hub);
-  }
-
   const authDb =
     opts.userStore && opts.sessionStore && opts.agentConfigStore && opts.agentInviteStore
       ? null
@@ -181,6 +174,19 @@ export function buildServer(opts: BuildServerOptions = {}) {
       },
     });
   });
+
+  // If the caller passed a pre-built attachment, trust them. Otherwise create one
+  // and own its lifecycle here. (Tests that need to drive attachMatch externally
+  // pass werewolfHubAttachment.)
+  if (!opts.werewolfHubAttachment) {
+    const attachment = attachWerewolfHub(werewolfOrch, hub);
+    // Cleanly detach werewolf subscribers when Fastify shuts down so
+    // long-lived servers (or test instances that ran matches) don't leak
+    // EventEmitter listeners between buildServer/app.close cycles.
+    app.addHook('onClose', async () => {
+      attachment.detachAll();
+    });
+  }
 
   // Auth plugin + WebSocket plugin must register before any route plugin that
   // needs request.user / requireAuth or the websocket route option.
