@@ -5,3 +5,4 @@ export * from './replay-event.js';
 export * from './match-summary.js';
 export * from './match-runner.js';
 export * from './orchestrator.js';
+export * from './hub-integration.js';
