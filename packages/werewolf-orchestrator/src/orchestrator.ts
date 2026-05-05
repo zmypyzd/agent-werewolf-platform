@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import type {
   WerewolfGameState,
   WerewolfPlayerId,
+  WerewolfPrivateState,
   WerewolfReplayEvent,
 } from '@agent-poker/shared';
 import type {
@@ -26,6 +27,11 @@ export interface WerewolfMatchConfig {
 export interface WerewolfOrchestratorOptions {
   readonly artifactStore?: IWerewolfMatchArtifactStore;
   readonly decisionTraceStore?: IWerewolfDecisionTraceStore;
+}
+
+export interface WerewolfPrivateStateEvent {
+  readonly playerId: WerewolfPlayerId;
+  readonly privateState: WerewolfPrivateState;
 }
 
 type MatchStatus = 'preparing' | 'running' | 'completed' | 'failed';
@@ -99,6 +105,16 @@ export class WerewolfOrchestrator {
     const entry = this.requireEntry(matchId);
     entry.emitter.on('replay-event', listener);
     return () => entry.emitter.off('replay-event', listener);
+  }
+
+  subscribePrivate(
+    matchId: string,
+    listener: (event: WerewolfPrivateStateEvent) => void,
+  ): () => void {
+    const entry = this.requireEntry(matchId);
+    const wrapped = (e: WerewolfPrivateStateEvent) => listener(e);
+    entry.emitter.on('private-state', wrapped);
+    return () => entry.emitter.off('private-state', wrapped);
   }
 
   async runMatch(
