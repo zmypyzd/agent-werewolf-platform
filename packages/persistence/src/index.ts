@@ -7,4 +7,6 @@ export * from './match-analysis-summary.js';
 export * from './decision-trace-store.js';
 export * from './werewolf-decision-trace-serialization.js';
 export * from './werewolf-decision-trace-store.js';
+export * from './werewolf-match-artifact-types.js';
+export * from './werewolf-match-artifact-serialization.js';
 export * from './sqlite/index.js';

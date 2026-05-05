@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@agent-poker/shared": "workspace:*",
+    "@agent-poker/realtime": "workspace:*",
     "better-sqlite3": "^11.3.0"
   },
   "devDependencies": {

@@ -213,6 +213,9 @@ importers:
 
   packages/persistence:
     dependencies:
+      '@agent-poker/realtime':
+        specifier: workspace:*
+        version: link:../realtime
       '@agent-poker/shared':
         specifier: workspace:*
         version: link:../shared
