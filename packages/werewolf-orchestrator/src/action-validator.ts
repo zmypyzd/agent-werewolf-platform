@@ -1,0 +1,56 @@
+import type { WerewolfAction } from '@agent-poker/shared';
+
+export function actionsMatchByShape(a: WerewolfAction, b: WerewolfAction): boolean {
+  if (a.type !== b.type) return false;
+  switch (a.type) {
+    case 'werewolf-vote': {
+      const bb = b as Extract<WerewolfAction, { type: 'werewolf-vote' }>;
+      return a.voterId === bb.voterId && a.targetId === bb.targetId;
+    }
+    case 'witch-save':
+    case 'witch-poison': {
+      const bb = b as Extract<WerewolfAction, { type: 'witch-save' | 'witch-poison' }>;
+      return a.targetId === bb.targetId;
+    }
+    case 'witch-skip-save':
+    case 'witch-skip-poison':
+      return true;
+    case 'seer-divine': {
+      const bb = b as Extract<WerewolfAction, { type: 'seer-divine' }>;
+      return a.targetId === bb.targetId;
+    }
+    case 'speak': {
+      // Free text (inner / performance / speech) intentionally ignored. The
+      // engine accepts whatever the agent produces; we only care that the
+      // speaker is allowed to speak right now.
+      const bb = b as Extract<WerewolfAction, { type: 'speak' }>;
+      return a.playerId === bb.playerId;
+    }
+    case 'day-vote': {
+      const bb = b as Extract<WerewolfAction, { type: 'day-vote' }>;
+      return a.voterId === bb.voterId && a.targetId === bb.targetId;
+    }
+    case 'hunter-shoot': {
+      const bb = b as Extract<WerewolfAction, { type: 'hunter-shoot' }>;
+      return a.targetId === bb.targetId;
+    }
+  }
+}
+
+export type ActionValidationResult =
+  | { readonly valid: true; readonly action: WerewolfAction }
+  | { readonly valid: false; readonly reason: string };
+
+export function validateWerewolfAction(
+  action: WerewolfAction,
+  validActions: ReadonlyArray<WerewolfAction>,
+): ActionValidationResult {
+  const matched = validActions.some((v) => actionsMatchByShape(action, v));
+  if (!matched) {
+    return {
+      valid: false,
+      reason: `Action ${JSON.stringify(action)} not in validActions (${validActions.length} options)`,
+    };
+  }
+  return { valid: true, action };
+}
