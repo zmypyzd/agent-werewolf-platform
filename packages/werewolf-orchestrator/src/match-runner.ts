@@ -23,6 +23,7 @@ import {
 import type { IAgent } from '@agent-poker/agent-runtime';
 import { validateWerewolfAction } from './action-validator.js';
 import { werewolfFallback } from './werewolf-fallback.js';
+import { sanitizeActionForBroadcast } from './sanitize-action.js';
 import type { WerewolfReplayEvent, WerewolfReplayEventType } from './replay-event.js';
 import {
   buildWerewolfMatchSummary,
@@ -173,7 +174,7 @@ export class WerewolfMatchRunner {
         agentId: agent.agentId,
         playerId: player.id,
         elapsedMs,
-        fallbackAction: action,
+        fallbackAction: sanitizeActionForBroadcast(action),
       });
     } else {
       const validation = validateWerewolfAction(response.action, validActions);
@@ -187,9 +188,9 @@ export class WerewolfMatchRunner {
           requestId: req.requestId,
           agentId: agent.agentId,
           playerId: player.id,
-          received: response.action,
+          received: sanitizeActionForBroadcast(response.action),
           reason: invalidReason,
-          fallbackAction: action,
+          fallbackAction: sanitizeActionForBroadcast(action),
         });
       }
     }
@@ -198,7 +199,7 @@ export class WerewolfMatchRunner {
       requestId: req.requestId,
       agentId: agent.agentId,
       playerId: player.id,
-      action,
+      action: sanitizeActionForBroadcast(action),
       usedFallback,
       timedOut,
       elapsedMs,
@@ -209,7 +210,7 @@ export class WerewolfMatchRunner {
 
     this.emit('engine.action_applied', {
       phase: phaseBefore,
-      action,
+      action: sanitizeActionForBroadcast(action),
       newPhase: this.state.phase,
     });
 

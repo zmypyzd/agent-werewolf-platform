@@ -75,6 +75,74 @@ describe('werewolf-orchestrator integration', () => {
     }
   });
 
+  it('events broadcast on replay-event never carry non-empty speak.inner content', async () => {
+    const orch = new WerewolfOrchestrator();
+    const { matchId, initialState } = orch.createMatch({
+      gameId: 'g-int-leak-inner',
+      seed: 'int-leak-inner',
+    });
+    const SECRET = 'PRIVATE_INNER_THOUGHT_DO_NOT_LEAK';
+    const inkyAgent = (id: string, name: string): WerewolfAgent => ({
+      agentId: id,
+      name,
+      async requestDecision(req) {
+        const first = req.validActions[0]!;
+        if (first.type === 'speak') {
+          return {
+            requestId: req.requestId,
+            agentId: id,
+            action: {
+              type: 'speak',
+              playerId: first.playerId,
+              inner: SECRET,
+              performance: 'calm',
+              speech: 'public speech',
+            },
+          };
+        }
+        return { requestId: req.requestId, agentId: id, action: first };
+      },
+    });
+    for (const p of initialState.players) {
+      orch.registerAgent(matchId, p.id, inkyAgent(`agent-${p.id}`, p.name));
+    }
+    const events: WerewolfReplayEvent[] = [];
+    orch.subscribe(matchId, (e) => events.push(e));
+    await orch.runMatch(matchId);
+    for (const e of events) {
+      expect(JSON.stringify(e.data)).not.toContain(SECRET);
+    }
+  });
+
+  it('night-phase action broadcasts strip voterId/targetId fields', async () => {
+    const orch = new WerewolfOrchestrator();
+    const { matchId, initialState } = orch.createMatch({
+      gameId: 'g-int-leak-night',
+      seed: 'int-leak-night',
+    });
+    for (const p of initialState.players) {
+      orch.registerAgent(matchId, p.id, new WerewolfMockAgent(`agent-${p.id}`, p.name));
+    }
+    const events: WerewolfReplayEvent[] = [];
+    orch.subscribe(matchId, (e) => events.push(e));
+    await orch.runMatch(matchId);
+
+    const nightTypes = new Set(['werewolf-vote', 'witch-save', 'witch-poison', 'seer-divine']);
+    let inspected = 0;
+    for (const e of events) {
+      const data = e.data as Record<string, unknown>;
+      for (const key of ['action', 'fallbackAction', 'received']) {
+        const a = data[key] as { type?: string } & Record<string, unknown> | undefined;
+        if (!a || typeof a.type !== 'string' || !nightTypes.has(a.type)) continue;
+        inspected++;
+        expect(a).not.toHaveProperty('voterId');
+        expect(a).not.toHaveProperty('targetId');
+      }
+    }
+    // Sanity: at least one night-phase action was observed in events.
+    expect(inspected).toBeGreaterThan(0);
+  });
+
   it('summary roles are revealed only at game-over (finalPlayers carries roles)', async () => {
     const orch = new WerewolfOrchestrator();
     const { matchId, initialState } = orch.createMatch({
