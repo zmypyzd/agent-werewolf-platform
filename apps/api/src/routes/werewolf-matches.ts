@@ -90,7 +90,9 @@ export async function werewolfMatchesRoutes(
   app.get<{ Params: { matchId: string } }>(
     '/werewolf-matches/:matchId/replay',
     async (req, reply) => {
-      const record = await getRecordOrThrow(store, req.params.matchId);
+      const record = await getRecordOrThrow(store, req.params.matchId, {
+        includeDecisionTraces: false,
+      });
       reply.send({ data: record.replayEvents });
     },
   );
