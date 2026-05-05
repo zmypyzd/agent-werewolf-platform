@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@agent-poker/shared": "workspace:*",
+    "@agent-poker/agent-protocol": "workspace:*",
     "@agent-poker/werewolf-engine": "workspace:*",
     "@agent-poker/agent-runtime": "workspace:*"
   },

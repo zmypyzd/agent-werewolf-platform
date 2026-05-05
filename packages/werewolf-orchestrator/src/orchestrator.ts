@@ -18,12 +18,14 @@ export interface WerewolfMatchConfig {
   readonly defaultTimeoutMs?: number;
 }
 
+type MatchStatus = 'preparing' | 'running' | 'completed' | 'failed';
+
 interface MatchEntry {
   readonly initialState: WerewolfGameState;
   readonly agents: Map<WerewolfPlayerId, WerewolfAgent>;
   readonly emitter: EventEmitter;
   readonly defaultTimeoutMs: number;
-  status: 'preparing' | 'running' | 'completed';
+  status: MatchStatus;
   summary: WerewolfMatchSummary | null;
 }
 
@@ -95,6 +97,11 @@ export class WerewolfOrchestrator {
     if (entry.status === 'completed') {
       throw new Error(`WerewolfOrchestrator: match ${matchId} already completed`);
     }
+    if (entry.status === 'failed') {
+      throw new Error(
+        `WerewolfOrchestrator: match ${matchId} failed previously and cannot be re-run`,
+      );
+    }
     entry.status = 'running';
     try {
       const runner = new WerewolfMatchRunner(
@@ -109,7 +116,12 @@ export class WerewolfOrchestrator {
       entry.status = 'completed';
       return summary;
     } catch (err) {
-      entry.status = 'preparing';
+      // Terminal failed state: any partial event stream that already fired on
+      // entry.emitter stays observable to subscribers, but a retry would replay
+      // 'match.started' etc. on the same emitter and confuse them. Lock the
+      // match into 'failed' so re-runs are explicit (caller must createMatch
+      // again with a fresh gameId or accept the failure).
+      entry.status = 'failed';
       throw err;
     }
   }

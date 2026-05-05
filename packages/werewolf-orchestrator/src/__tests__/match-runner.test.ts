@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { EventEmitter } from 'events';
 import type {
   WerewolfDecisionRequest,
@@ -72,37 +72,82 @@ describe('WerewolfMatchRunner', () => {
     expect(requested.length).toBe(events.filter((e) => e.eventType === 'engine.action_applied').length);
   });
 
-  it('emits agent.timeout + agent.action_received with usedFallback=true when an agent stalls', async () => {
-    const initial = createGame({ gameId: 'g-runner-4', seed: 'seed-runner-4' });
-    const agents = buildAgents(initial);
-    // Replace one agent with a stalling agent — only on the very first request.
-    const stallerId = initial.players[0]!.id;
-    let stalledOnce = false;
-    const realAgent = agents.get(stallerId)!;
-    const stallAgent: WerewolfAgent = {
-      agentId: 'staller',
-      name: 'Staller',
-      requestDecision(req) {
-        if (!stalledOnce) {
-          stalledOnce = true;
-          return new Promise<WerewolfDecisionResponse>(() => {
-            // never resolves
-          });
-        }
-        return realAgent.requestDecision(req);
+  it('emits agent.timeout when an agent stalls (deterministic via fake timers)', async () => {
+    vi.useFakeTimers();
+    try {
+      const initial = createGame({ gameId: 'g-runner-4', seed: 'seed-runner-4' });
+      const agents = buildAgents(initial);
+      // Replace one agent with a stalling agent — only on the very first request.
+      const stallerId = initial.players[0]!.id;
+      let stalledOnce = false;
+      const realAgent = agents.get(stallerId)!;
+      const stallAgent: WerewolfAgent = {
+        agentId: 'staller',
+        name: 'Staller',
+        requestDecision(req) {
+          if (!stalledOnce) {
+            stalledOnce = true;
+            return new Promise<WerewolfDecisionResponse>(() => {
+              // never resolves — only the TimeoutHandler's fake-timer fallback
+              // can settle this request.
+            });
+          }
+          return realAgent.requestDecision(req);
+        },
+      };
+      agents.set(stallerId, stallAgent);
+
+      const emitter = new EventEmitter();
+      const events: WerewolfReplayEvent[] = [];
+      emitter.on('replay-event', (e: WerewolfReplayEvent) => events.push(e));
+      // Long virtual timeout — fake timers control when the fallback fires.
+      const runner = new WerewolfMatchRunner(initial, agents, 30_000, emitter);
+      const runPromise = runner.run();
+
+      // Drain all queued fake timers + microtasks until the run completes.
+      // Subsequent agent calls return synchronously, so their per-call
+      // setTimeouts get cleared before they fire.
+      await vi.runAllTimersAsync();
+      await runPromise;
+
+      const timeouts = events.filter((e) => e.eventType === 'agent.timeout');
+      expect(timeouts.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('routes a Zod-schema-invalid agent response into agent.invalid_action with schemaFailure flag', async () => {
+    const initial = createGame({ gameId: 'g-runner-schema', seed: 'seed-runner-schema' });
+    const agents = new Map<string, WerewolfAgent>();
+    // One leaky agent that returns a malformed action — type missing entirely.
+    const malformedAgent: WerewolfAgent = {
+      agentId: 'malformed',
+      name: 'Malformed',
+      async requestDecision(req) {
+        return {
+          requestId: req.requestId,
+          agentId: 'malformed',
+          // Cast through unknown so TS lets us simulate a runtime-only violation.
+          action: { foo: 'bar' } as unknown as WerewolfDecisionResponse['action'],
+        };
       },
     };
-    agents.set(stallerId, stallAgent);
-
+    for (const p of initial.players) {
+      agents.set(p.id, p.id === initial.players[0]!.id ? malformedAgent : new WerewolfMockAgent(`agent-${p.id}`, p.name));
+    }
     const emitter = new EventEmitter();
     const events: WerewolfReplayEvent[] = [];
     emitter.on('replay-event', (e: WerewolfReplayEvent) => events.push(e));
-    // 50ms timeout so the test runs quickly.
-    const runner = new WerewolfMatchRunner(initial, agents, 50, emitter);
+    const runner = new WerewolfMatchRunner(initial, agents, 5_000, emitter);
     await runner.run();
 
-    const timeouts = events.filter((e) => e.eventType === 'agent.timeout');
-    expect(timeouts.length).toBeGreaterThanOrEqual(1);
+    const invalids = events.filter((e) => e.eventType === 'agent.invalid_action');
+    expect(invalids.length).toBeGreaterThanOrEqual(1);
+    const schemaFailures = invalids.filter((e) => (e.data as { schemaFailure?: boolean }).schemaFailure === true);
+    expect(schemaFailures.length).toBeGreaterThanOrEqual(1);
+    // Reason text mentions schema validation, not just shape mismatch.
+    expect((schemaFailures[0]!.data as { reason: string }).reason).toMatch(/schema validation/);
   });
 
   it('throws when an agent is missing for a player at start', async () => {

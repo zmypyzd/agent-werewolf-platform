@@ -6,12 +6,14 @@
     "composite": true,
     "paths": {
       "@agent-poker/shared": ["../shared/src/index.ts"],
+      "@agent-poker/agent-protocol": ["../agent-protocol/src/index.ts"],
       "@agent-poker/werewolf-engine": ["../werewolf-engine/src/index.ts"],
       "@agent-poker/agent-runtime": ["../agent-runtime/src/index.ts"]
     }
   },
   "references": [
     { "path": "../shared" },
+    { "path": "../agent-protocol" },
     { "path": "../werewolf-engine" },
     { "path": "../agent-runtime" }
   ],

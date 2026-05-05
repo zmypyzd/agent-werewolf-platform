@@ -21,6 +21,7 @@ import {
   buildWerewolfDecisionRequest,
 } from '@agent-poker/agent-runtime';
 import type { IAgent } from '@agent-poker/agent-runtime';
+import { WerewolfDecisionResponseSchema } from '@agent-poker/agent-protocol';
 import { validateWerewolfAction } from './action-validator.js';
 import { werewolfFallback } from './werewolf-fallback.js';
 import { sanitizeActionForBroadcast } from './sanitize-action.js';
@@ -107,23 +108,33 @@ export class WerewolfMatchRunner {
     }
 
     const completedAt = Date.now();
-    const summary = buildWerewolfMatchSummary({
-      initialState: this.initialState,
-      finalState: this.state,
-      startedAt,
-      completedAt,
-      replayEventCount: this.replayEventCount + 1, // +1 for match.completed about to fire
-      stepCount: this.stepCount,
-    });
-
+    const winner = this.state.winner;
+    if (winner === null) {
+      // Defense-in-depth: the loop only exits on phase==='game-over', and the
+      // engine's reducer is responsible for setting winner before that. If this
+      // ever fires, it is an engine invariant violation and we should not pretend
+      // to produce a valid summary.
+      throw new Error(
+        `WerewolfMatchRunner: phase==='game-over' but winner is null for game ${this.state.gameId}`,
+      );
+    }
+    // Emit match.completed FIRST so the post-emit replayEventCount is the true
+    // total broadcast count — no off-by-one workaround needed for the summary.
     this.emit('match.completed', {
       gameId: this.state.gameId,
-      winner: summary.winner,
+      winner,
       durationMs: completedAt - startedAt,
       stepCount: this.stepCount,
     });
 
-    return summary;
+    return buildWerewolfMatchSummary({
+      initialState: this.initialState,
+      finalState: this.state,
+      startedAt,
+      completedAt,
+      replayEventCount: this.replayEventCount,
+      stepCount: this.stepCount,
+    });
   }
 
   private pickNextActor(): { player: WerewolfPlayer; validActions: WerewolfAction[] } | null {
@@ -184,21 +195,45 @@ export class WerewolfMatchRunner {
         fallbackAction: sanitizeActionForBroadcast(action),
       });
     } else {
-      const validation = validateWerewolfAction(response.action, validActions);
-      if (validation.valid) {
-        action = validation.action;
-      } else {
-        invalidReason = validation.reason;
+      // Defense-in-depth: re-parse the response against the wire schema before
+      // trusting it. Mock agents satisfy WerewolfDecisionResponse at compile
+      // time, but Plan 4's HTTP/WS adapters will return deserialised JSON, and
+      // even an in-process agent could violate the schema (oversized speak
+      // content, missing fields, unknown action.type). A schema failure flows
+      // into the same fallback path as an invalid-shape action.
+      const parsed = WerewolfDecisionResponseSchema.safeParse(response);
+      if (!parsed.success) {
+        invalidReason = `agent response failed schema validation: ${parsed.error.issues
+          .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
+          .join('; ')}`;
         action = werewolfFallback(req).action;
         usedFallback = true;
         this.emit('agent.invalid_action', {
           requestId: req.requestId,
           agentId: agent.agentId,
           playerId: player.id,
-          received: sanitizeActionForBroadcast(response.action),
+          schemaFailure: true,
           reason: invalidReason,
           fallbackAction: sanitizeActionForBroadcast(action),
         });
+      } else {
+        const parsedAction = parsed.data.action as WerewolfAction;
+        const validation = validateWerewolfAction(parsedAction, validActions);
+        if (validation.valid) {
+          action = validation.action;
+        } else {
+          invalidReason = validation.reason;
+          action = werewolfFallback(req).action;
+          usedFallback = true;
+          this.emit('agent.invalid_action', {
+            requestId: req.requestId,
+            agentId: agent.agentId,
+            playerId: player.id,
+            received: sanitizeActionForBroadcast(parsedAction),
+            reason: invalidReason,
+            fallbackAction: sanitizeActionForBroadcast(action),
+          });
+        }
       }
     }
 

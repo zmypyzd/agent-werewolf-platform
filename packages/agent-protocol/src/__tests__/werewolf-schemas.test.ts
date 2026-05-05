@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
+  WEREWOLF_SPEAK_INNER_MAX,
+  WEREWOLF_SPEAK_PERFORMANCE_MAX,
+  WEREWOLF_SPEAK_SPEECH_MAX,
   WerewolfDecisionRequestSchema,
   WerewolfDecisionResponseSchema,
 } from '../werewolf-schemas.js';
@@ -130,6 +133,59 @@ describe('WerewolfDecisionResponseSchema', () => {
     const r = WerewolfDecisionResponseSchema.safeParse({
       ...baseResponse,
       action: { type: 'cast-fireball', targetId: 'p2' },
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('accepts speak with inner / performance / speech at the cap', () => {
+    const inner = 'a'.repeat(WEREWOLF_SPEAK_INNER_MAX);
+    const performance = 'b'.repeat(WEREWOLF_SPEAK_PERFORMANCE_MAX);
+    const speech = 'c'.repeat(WEREWOLF_SPEAK_SPEECH_MAX);
+    const r = WerewolfDecisionResponseSchema.safeParse({
+      ...baseResponse,
+      action: { type: 'speak', playerId: 'p1', inner, performance, speech },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects speak.inner above the cap', () => {
+    const r = WerewolfDecisionResponseSchema.safeParse({
+      ...baseResponse,
+      action: {
+        type: 'speak',
+        playerId: 'p1',
+        inner: 'x'.repeat(WEREWOLF_SPEAK_INNER_MAX + 1),
+        performance: '',
+        speech: '',
+      },
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects speak.performance above the cap', () => {
+    const r = WerewolfDecisionResponseSchema.safeParse({
+      ...baseResponse,
+      action: {
+        type: 'speak',
+        playerId: 'p1',
+        inner: '',
+        performance: 'x'.repeat(WEREWOLF_SPEAK_PERFORMANCE_MAX + 1),
+        speech: '',
+      },
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects speak.speech above the cap', () => {
+    const r = WerewolfDecisionResponseSchema.safeParse({
+      ...baseResponse,
+      action: {
+        type: 'speak',
+        playerId: 'p1',
+        inner: '',
+        performance: '',
+        speech: 'x'.repeat(WEREWOLF_SPEAK_SPEECH_MAX + 1),
+      },
     });
     expect(r.success).toBe(false);
   });

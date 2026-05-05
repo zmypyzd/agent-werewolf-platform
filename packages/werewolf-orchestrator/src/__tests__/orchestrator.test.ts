@@ -95,4 +95,21 @@ describe('WerewolfOrchestrator', () => {
     const orch = new WerewolfOrchestrator();
     expect(orch.getMatchSummary('does-not-exist')).toBeNull();
   });
+
+  it('runMatch lands in a terminal failed state after an error and refuses retry', async () => {
+    const orch = new WerewolfOrchestrator();
+    const { matchId, initialState } = orch.createMatch({ gameId: 'g-orch-fail', seed: 'seed-fail' });
+    for (const p of initialState.players) {
+      orch.registerAgent(matchId, p.id, new WerewolfMockAgent(`agent-${p.id}`, p.name));
+    }
+    // Force the runner to throw via maxSteps: 1.
+    await expect(orch.runMatch(matchId, { maxSteps: 1 })).rejects.toThrow(/exceeded.*step/i);
+    // Retry must be refused — terminal state, not silent reset to 'preparing'.
+    await expect(orch.runMatch(matchId)).rejects.toThrow(/failed previously/i);
+    // Agent registration on a failed match is also blocked.
+    expect(() =>
+      orch.registerAgent(matchId, initialState.players[0]!.id, new WerewolfMockAgent('late', 'Late')),
+    ).toThrow(/match .* is failed/i);
+    expect(orch.getMatchSummary(matchId)).toBeNull();
+  });
 });

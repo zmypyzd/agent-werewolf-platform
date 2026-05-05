@@ -308,6 +308,9 @@ importers:
 
   packages/werewolf-orchestrator:
     dependencies:
+      '@agent-poker/agent-protocol':
+        specifier: workspace:*
+        version: link:../agent-protocol
       '@agent-poker/agent-runtime':
         specifier: workspace:*
         version: link:../agent-runtime
