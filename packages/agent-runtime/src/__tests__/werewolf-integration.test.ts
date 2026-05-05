@@ -50,7 +50,7 @@ describe('werewolf engine + agent-runtime integration', () => {
     expect(['good', 'werewolf']).toContain(s.winner);
   });
 
-  it('publicState passed to agents never leaks role-assigned, night-action, or speech.inner', async () => {
+  it('publicState passed to agents never leaks role-assigned or night-action history entries', async () => {
     let s: WerewolfGameState = createGame({ gameId: 'g-int-2', seed: 'seed-leak-1' });
     s = startFirstNight(s);
     const wolves = s.players.filter((p) => p.role === 'werewolf');
