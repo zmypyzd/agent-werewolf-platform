@@ -50,6 +50,9 @@ importers:
       '@agent-poker/table-orchestrator':
         specifier: workspace:*
         version: link:../../packages/table-orchestrator
+      '@agent-poker/werewolf-orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/werewolf-orchestrator
       '@fastify/cookie':
         specifier: ^9.3.1
         version: 9.4.0

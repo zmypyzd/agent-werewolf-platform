@@ -114,5 +114,5 @@ function capReasoning(r: WerewolfReasoningSummary): WerewolfReasoningSummary {
 }
 
 function hashState(state: unknown): string {
-  return `sha256-${createHash('sha256').update(JSON.stringify(state)).digest('hex')}`;
+  return createHash('sha256').update(JSON.stringify(state)).digest('hex');
 }

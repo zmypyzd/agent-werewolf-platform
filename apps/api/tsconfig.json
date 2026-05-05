@@ -11,7 +11,8 @@
       "@agent-poker/table-orchestrator": ["../../packages/table-orchestrator/src/index.ts"],
       "@agent-poker/agent-runtime": ["../../packages/agent-runtime/src/index.ts"],
       "@agent-poker/persistence": ["../../packages/persistence/src/index.ts"],
-      "@agent-poker/realtime": ["../../packages/realtime/src/index.ts"]
+      "@agent-poker/realtime": ["../../packages/realtime/src/index.ts"],
+      "@agent-poker/werewolf-orchestrator": ["../../packages/werewolf-orchestrator/src/index.ts"]
     }
   },
   "references": [
@@ -21,7 +22,8 @@
     { "path": "../../packages/table-orchestrator" },
     { "path": "../../packages/agent-runtime" },
     { "path": "../../packages/persistence" },
-    { "path": "../../packages/realtime" }
+    { "path": "../../packages/realtime" },
+    { "path": "../../packages/werewolf-orchestrator" }
   ],
   "include": ["src"]
 }

@@ -134,12 +134,21 @@ export class WerewolfOrchestrator {
     }
     entry.status = 'running';
     try {
+      // Merge the orchestrator-level decisionTraceStore into the runner options
+      // so traces are recorded automatically when the orchestrator owns a store.
+      // Callers can override by passing their own store in `options`.
+      const runnerOptions: WerewolfMatchRunnerOptions = {
+        ...(this.decisionTraceStore !== null
+          ? { decisionTraceStore: this.decisionTraceStore }
+          : {}),
+        ...options,
+      };
       const runner = new WerewolfMatchRunner(
         entry.initialState,
         entry.agents,
         entry.defaultTimeoutMs,
         entry.emitter,
-        options,
+        runnerOptions,
       );
       const summary = await runner.run();
       entry.summary = summary;
