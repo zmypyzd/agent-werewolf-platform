@@ -40,6 +40,8 @@ export function getValidActions(state: WerewolfGameState, playerId: WerewolfPlay
 
     case 'night-werewolf-vote': {
       if (self.role !== 'werewolf') return [];
+      // Return empty if this werewolf has already cast their vote this night.
+      if (state.pendingNight.werewolfVotes[self.id] !== undefined) return [];
       return aliveNonWolves(state.players).map((t) => ({
         type: 'werewolf-vote',
         voterId: self.id,
