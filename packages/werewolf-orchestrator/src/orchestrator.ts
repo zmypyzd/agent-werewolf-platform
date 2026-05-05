@@ -2,7 +2,13 @@ import { EventEmitter } from 'events';
 import type {
   WerewolfGameState,
   WerewolfPlayerId,
+  WerewolfReplayEvent,
 } from '@agent-poker/shared';
+import type {
+  IWerewolfMatchArtifactStore,
+  IWerewolfDecisionTraceStore,
+  BuildWerewolfArtifactInput,
+} from '@agent-poker/persistence';
 import { createGame } from '@agent-poker/werewolf-engine';
 import {
   WerewolfMatchRunner,
@@ -10,12 +16,16 @@ import {
   type WerewolfMatchRunnerOptions,
 } from './match-runner.js';
 import type { WerewolfMatchSummary } from './match-summary.js';
-import type { WerewolfReplayEvent } from './replay-event.js';
 
 export interface WerewolfMatchConfig {
   readonly gameId: string;
   readonly seed: string;
   readonly defaultTimeoutMs?: number;
+}
+
+export interface WerewolfOrchestratorOptions {
+  readonly artifactStore?: IWerewolfMatchArtifactStore;
+  readonly decisionTraceStore?: IWerewolfDecisionTraceStore;
 }
 
 type MatchStatus = 'preparing' | 'running' | 'completed' | 'failed';
@@ -25,14 +35,23 @@ interface MatchEntry {
   readonly agents: Map<WerewolfPlayerId, WerewolfAgent>;
   readonly emitter: EventEmitter;
   readonly defaultTimeoutMs: number;
+  readonly bufferedEvents: WerewolfReplayEvent[];
   status: MatchStatus;
   summary: WerewolfMatchSummary | null;
+  finalState: WerewolfGameState | null;
 }
 
 const DEFAULT_TIMEOUT_MS = 5_000;
 
 export class WerewolfOrchestrator {
   private readonly matches = new Map<string, MatchEntry>();
+  private readonly artifactStore: IWerewolfMatchArtifactStore | null;
+  private readonly decisionTraceStore: IWerewolfDecisionTraceStore | null;
+
+  constructor(options: WerewolfOrchestratorOptions = {}) {
+    this.artifactStore = options.artifactStore ?? null;
+    this.decisionTraceStore = options.decisionTraceStore ?? null;
+  }
 
   createMatch(
     config: WerewolfMatchConfig,
@@ -41,13 +60,18 @@ export class WerewolfOrchestrator {
       throw new Error(`WerewolfOrchestrator: match ${config.gameId} already exists`);
     }
     const initialState = createGame({ gameId: config.gameId, seed: config.seed });
+    const emitter = new EventEmitter();
+    const bufferedEvents: WerewolfReplayEvent[] = [];
+    emitter.on('replay-event', (e: WerewolfReplayEvent) => bufferedEvents.push(e));
     const entry: MatchEntry = {
       initialState,
       agents: new Map(),
-      emitter: new EventEmitter(),
+      emitter,
       defaultTimeoutMs: config.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS,
+      bufferedEvents,
       status: 'preparing',
       summary: null,
+      finalState: null,
     };
     this.matches.set(config.gameId, entry);
     return { matchId: config.gameId, initialState };
@@ -58,10 +82,7 @@ export class WerewolfOrchestrator {
     playerId: WerewolfPlayerId,
     agent: WerewolfAgent,
   ): void {
-    const entry = this.matches.get(matchId);
-    if (!entry) {
-      throw new Error(`WerewolfOrchestrator: unknown match ${matchId}`);
-    }
+    const entry = this.requireEntry(matchId);
     if (entry.status !== 'preparing') {
       throw new Error(`WerewolfOrchestrator: match ${matchId} is ${entry.status}; cannot register agents`);
     }
@@ -75,10 +96,7 @@ export class WerewolfOrchestrator {
     matchId: string,
     listener: (event: WerewolfReplayEvent) => void,
   ): () => void {
-    const entry = this.matches.get(matchId);
-    if (!entry) {
-      throw new Error(`WerewolfOrchestrator: unknown match ${matchId}`);
-    }
+    const entry = this.requireEntry(matchId);
     entry.emitter.on('replay-event', listener);
     return () => entry.emitter.off('replay-event', listener);
   }
@@ -87,10 +105,7 @@ export class WerewolfOrchestrator {
     matchId: string,
     options: WerewolfMatchRunnerOptions = {},
   ): Promise<WerewolfMatchSummary> {
-    const entry = this.matches.get(matchId);
-    if (!entry) {
-      throw new Error(`WerewolfOrchestrator: unknown match ${matchId}`);
-    }
+    const entry = this.requireEntry(matchId);
     if (entry.status === 'running') {
       throw new Error(`WerewolfOrchestrator: match ${matchId} is already running`);
     }
@@ -113,14 +128,13 @@ export class WerewolfOrchestrator {
       );
       const summary = await runner.run();
       entry.summary = summary;
+      entry.finalState = runner.getFinalState();
       entry.status = 'completed';
+      if (this.artifactStore) {
+        await this.persistArtifact(matchId, entry, summary);
+      }
       return summary;
     } catch (err) {
-      // Terminal failed state: any partial event stream that already fired on
-      // entry.emitter stays observable to subscribers, but a retry would replay
-      // 'match.started' etc. on the same emitter and confuse them. Lock the
-      // match into 'failed' so re-runs are explicit (caller must createMatch
-      // again with a fresh gameId or accept the failure).
       entry.status = 'failed';
       throw err;
     }
@@ -128,5 +142,45 @@ export class WerewolfOrchestrator {
 
   getMatchSummary(matchId: string): WerewolfMatchSummary | null {
     return this.matches.get(matchId)?.summary ?? null;
+  }
+
+  // Lifecycle: explicitly remove a match from in-memory state. Does NOT
+  // delete persisted artifacts (callers can do that by calling the store's
+  // deleteMatchArtifact directly). Idempotent.
+  deleteMatch(matchId: string): boolean {
+    return this.matches.delete(matchId);
+  }
+
+  private requireEntry(matchId: string): MatchEntry {
+    const entry = this.matches.get(matchId);
+    if (!entry) throw new Error(`WerewolfOrchestrator: unknown match ${matchId}`);
+    return entry;
+  }
+
+  private async persistArtifact(
+    matchId: string,
+    entry: MatchEntry,
+    summary: WerewolfMatchSummary,
+  ): Promise<void> {
+    if (!this.artifactStore || !entry.finalState) return;
+    const decisionTraces = this.decisionTraceStore
+      ? await this.decisionTraceStore.listDecisionTraces(matchId)
+      : [];
+    const input: BuildWerewolfArtifactInput = {
+      matchId,
+      seed: summary.seed,
+      startedAt: summary.startedAt,
+      completedAt: summary.completedAt,
+      nightCount: summary.nightCount,
+      dayCount: summary.dayCount,
+      stepCount: summary.stepCount,
+      replayEventCount: summary.replayEventCount,
+      winner: summary.winner,
+      finalPlayers: summary.finalPlayers,
+      fullHistory: entry.finalState.history,
+      replayEvents: entry.bufferedEvents,
+      decisionTraces,
+    };
+    await this.artifactStore.saveMatchArtifact(input);
   }
 }

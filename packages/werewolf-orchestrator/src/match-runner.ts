@@ -265,6 +265,10 @@ export class WerewolfMatchRunner {
     }
   }
 
+  getFinalState(): WerewolfGameState {
+    return this.state;
+  }
+
   private emit(eventType: WerewolfReplayEventType, data: Record<string, unknown>): void {
     const event: WerewolfReplayEvent = {
       eventId: randomUUID(),

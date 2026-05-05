@@ -317,6 +317,9 @@ importers:
       '@agent-poker/agent-runtime':
         specifier: workspace:*
         version: link:../agent-runtime
+      '@agent-poker/persistence':
+        specifier: workspace:*
+        version: link:../persistence
       '@agent-poker/shared':
         specifier: workspace:*
         version: link:../shared
