@@ -52,10 +52,10 @@ export interface BuildServerOptions {
   werewolfMatchArtifactStore?: IWerewolfMatchArtifactStore;
   werewolfDecisionTraceStore?: IWerewolfDecisionTraceStore;
   werewolfOrchestrator?: WerewolfOrchestrator;
-  // When provided, buildServer assumes the caller has already attached the
-  // werewolf orchestrator to the hub and will skip its own attach call. Used
-  // by tests that need a handle on the WerewolfHubAttachment to drive
-  // attachMatch from outside buildServer.
+  // When provided, buildServer uses this attachment instead of creating one.
+  // Used by tests that need a handle on WerewolfHubAttachment to drive
+  // attachMatch from outside buildServer. buildServer always registers an
+  // onClose hook that calls detachAll(), so callers need not do it themselves.
   werewolfHubAttachment?: WerewolfHubAttachment;
   userStore?: IUserStore;
   sessionStore?: ISessionStore;
@@ -175,18 +175,13 @@ export function buildServer(opts: BuildServerOptions = {}) {
     });
   });
 
-  // If the caller passed a pre-built attachment, trust them. Otherwise create one
-  // and own its lifecycle here. (Tests that need to drive attachMatch externally
-  // pass werewolfHubAttachment.)
-  if (!opts.werewolfHubAttachment) {
-    const attachment = attachWerewolfHub(werewolfOrch, hub);
-    // Cleanly detach werewolf subscribers when Fastify shuts down so
-    // long-lived servers (or test instances that ran matches) don't leak
-    // EventEmitter listeners between buildServer/app.close cycles.
-    app.addHook('onClose', async () => {
-      attachment.detachAll();
-    });
-  }
+  const werewolfHubAttachment =
+    opts.werewolfHubAttachment ?? attachWerewolfHub(werewolfOrch, hub);
+  // Always detach on shutdown so neither buildServer-owned nor test-injected
+  // attachments leak EventEmitter listeners between cycles.
+  app.addHook('onClose', async () => {
+    werewolfHubAttachment.detachAll();
+  });
 
   // Auth plugin + WebSocket plugin must register before any route plugin that
   // needs request.user / requireAuth or the websocket route option.

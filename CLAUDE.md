@@ -50,9 +50,10 @@ shared ─┬── agent-protocol ──┐
         │                    ├── table-orchestrator ──┐
         ├── agent-runtime ───┤                        ├── apps/api ── apps/web
         ├── auth ────────────┤                        │
-        ├── persistence ─────┤                        │
-        └── realtime ────────┘                        │
-examples/mock-agents → agent-runtime + poker-engine ──┘
+        ├── realtime ─┬──────┘                        │
+        │             ├── persistence                  │
+        │             └── werewolf-orchestrator ───────┘
+examples/mock-agents → agent-runtime + poker-engine
 examples/local-simulation drives the orchestrator directly (no API).
 ```
 
