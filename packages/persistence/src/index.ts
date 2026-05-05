@@ -5,4 +5,6 @@ export * from './object-store.js';
 export * from './match-artifact-store.js';
 export * from './match-analysis-summary.js';
 export * from './decision-trace-store.js';
+export * from './werewolf-decision-trace-serialization.js';
+export * from './werewolf-decision-trace-store.js';
 export * from './sqlite/index.js';
