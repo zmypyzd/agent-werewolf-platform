@@ -12,6 +12,7 @@ describe('WerewolfLobbyRegistry', () => {
       orchestrator: orch,
       attachMatch: vi.fn(),
       detachMatch: vi.fn(),
+      npcThinkingDelayRange: [0, 0],
     });
   });
 
@@ -82,6 +83,7 @@ describe('WerewolfLobbyRegistry', () => {
       orchestrator: new WerewolfOrchestrator(),
       attachMatch,
       detachMatch: vi.fn(),
+      npcThinkingDelayRange: [0, 0],
     });
     const { gameId } = reg.create({ name: 'demo', seed: 'fixed' });
     reg.fillWithNpcs(gameId);
@@ -109,6 +111,7 @@ describe('WerewolfLobbyRegistry', () => {
       orchestrator: realOrch,
       attachMatch: vi.fn(),
       detachMatch: vi.fn(),
+      npcThinkingDelayRange: [0, 0],
     });
     const { gameId } = reg.create({ name: 'real', seed: 'werewolf-seed-001' });
     reg.fillWithNpcs(gameId);
@@ -119,5 +122,5 @@ describe('WerewolfLobbyRegistry', () => {
     expect(after.winner).toMatch(/good|werewolf/);
     expect(after.finalPlayers).toHaveLength(9);
     expect(after.completedAt).toBeGreaterThan(0);
-  }, 360000);
+  });
 });

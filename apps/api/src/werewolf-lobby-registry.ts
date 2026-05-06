@@ -60,6 +60,7 @@ export interface WerewolfLobbyRegistryOptions {
     ownership: ReadonlyArray<{ playerId: string; userId: string }>,
   ) => void;
   detachMatch: (gameId: string) => void;
+  npcThinkingDelayRange?: [number, number];
 }
 
 interface InternalEntry extends WerewolfLobbyEntry {
@@ -152,7 +153,7 @@ export class WerewolfLobbyRegistry {
     const agent = new WerewolfNpcAgent(agentId, finalDisplayName, inner, {
       seed: entry.seed,
       personality: 'balanced',
-      thinkingDelayRange: [1500, 3500],
+      thinkingDelayRange: this.options.npcThinkingDelayRange ?? [1500, 3500],
     });
     this.options.orchestrator.registerAgent(gameId, playerId, agent);
     entry.seats[seatIndex] = {
