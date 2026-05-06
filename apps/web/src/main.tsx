@@ -4,6 +4,7 @@ import { RouterProvider } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext.js';
 import { router } from './router.js';
 import './styles.css';
+import './styles-werewolf.css';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('#root element missing');
