@@ -14,7 +14,7 @@ describe('werewolf-games routes', () => {
     await app.close();
   });
 
-  function inject(method: string, url: string, body?: unknown) {
+  function inject(method: string, url: string, body?: Record<string, unknown>) {
     return app.inject({
       method: method as 'GET' | 'POST',
       url,
@@ -22,7 +22,7 @@ describe('werewolf-games routes', () => {
         'X-Requested-With': 'fetch',
         'Content-Type': 'application/json',
       },
-      ...(body !== undefined ? { payload: body } : {}),
+      ...(body !== undefined ? { payload: body as object } : {}),
     });
   }
 

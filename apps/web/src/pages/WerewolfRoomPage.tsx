@@ -126,40 +126,47 @@ export function WerewolfRoomPage() {
     }
   }
 
+  const isLive = state.status === 'running' || state.status === 'completed';
+
   return (
-    <div className="werewolf-room">
-      <header className="werewolf-room-header">
-        <h1>狼人杀房间 · {state.gameId.slice(0, 8)}</h1>
-        <button onClick={() => navigate('/werewolf')} className="werewolf-back">
+    <div className="ww-room">
+      <header className="ww-room-header">
+        <h1 className="ww-room-title">
+          狼人杀房间
+          <span>· {state.gameId.slice(0, 8)}</span>
+        </h1>
+        <button onClick={() => navigate('/werewolf')} className="ww-back">
           返回大厅
         </button>
       </header>
-      <WerewolfPhaseIndicator state={state} />
-      {error ? <div className="werewolf-error">{error}</div> : null}
 
-      {state.status === 'waiting' || state.status === 'ready' ? (
-        <>
-          <WerewolfTableSurface state={state} onInvite={inviteNpc} onFillAll={fillAll} />
-          {state.status === 'ready' ? (
-            <button className="werewolf-start" onClick={startMatch}>
-              开始对局
-            </button>
-          ) : null}
-        </>
-      ) : (
-        <div className="werewolf-room-live">
+      <WerewolfPhaseIndicator state={state} />
+
+      {error ? <div className="ww-error">{error}</div> : null}
+
+      {isLive ? (
+        <div className="ww-game-area">
           <WerewolfTableSurface state={state} />
           <WerewolfEventTimeline lines={state.timeline} />
         </div>
+      ) : (
+        <WerewolfTableSurface state={state} onInvite={inviteNpc} onFillAll={fillAll} />
       )}
 
+      {state.status === 'ready' ? (
+        <button className="ww-start" onClick={startMatch}>
+          开始对局
+        </button>
+      ) : null}
+
       {state.status === 'completed' ? (
-        <div className="werewolf-banner">
+        <div className={`ww-banner${state.winner === 'werewolf' ? ' is-wolf-win' : ''}`}>
           🏁 终局：{state.winner === 'good' ? '好人胜' : '狼人胜'}
         </div>
       ) : null}
+
       {state.status === 'failed' ? (
-        <div className="werewolf-banner werewolf-banner-error">
+        <div className="ww-banner is-error">
           异常终止：{state.failureReason ?? '未知错误'}
         </div>
       ) : null}

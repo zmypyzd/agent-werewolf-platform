@@ -102,7 +102,7 @@ describe('WerewolfLobbyRegistry', () => {
     expect(list).toHaveLength(2);
     expect(list[0]!.name).toBe('b');
     expect(list[0]!.seatedCount).toBe(0);
-    expect((list[0] as Record<string, unknown>).seats).toBeUndefined();
+    expect((list[0] as unknown as Record<string, unknown>).seats).toBeUndefined();
   });
 
   it('records winner + finalPlayers when the orchestrator completes', async () => {

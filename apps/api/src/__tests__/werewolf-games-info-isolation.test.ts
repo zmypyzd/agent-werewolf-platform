@@ -14,7 +14,7 @@ describe('werewolf-games info isolation', () => {
     await app.close();
   });
 
-  async function post(url: string, body: unknown) {
+  async function post(url: string, body: Record<string, unknown>) {
     return app.inject({
       method: 'POST',
       url,

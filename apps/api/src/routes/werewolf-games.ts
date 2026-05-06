@@ -44,7 +44,10 @@ export async function werewolfGamesRoutes(
   // POST /werewolf-games — create
   app.post('/werewolf-games', { preHandler: [app.requireCsrf] }, async (req, reply) => {
     const body = parseBody(CreateGameBody, req.body);
-    const entry = registry.create(body);
+    const createInput: { name?: string; seed?: string } = {};
+    if (body.name !== undefined) createInput.name = body.name;
+    if (body.seed !== undefined) createInput.seed = body.seed;
+    const entry = registry.create(createInput);
     reply.status(201).send({ data: entry });
   });
 

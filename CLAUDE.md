@@ -46,6 +46,8 @@ pnpm --filter @agent-poker/poker-engine exec vitest run -t 'evaluates straight f
 
 API match-artifact storage mode is selected by env (`MATCH_ARTIFACT_STORE=memory|file`, plus `MATCH_ARTIFACT_BASE_DIR` for `file`). Default is `memory`.
 
+If `pnpm build` (`tsc -b`) succeeds but `pnpm test` reports `Failed to load url @agent-poker/<pkg>` ("Does the file exist?"), the per-package `node_modules/@agent-poker/<pkg>` symlink is missing — run `pnpm install` to recreate it. Build resolves workspace deps via `paths` in `tsconfig.json` (source-direct), but Vitest/Vite uses Node module resolution and needs the symlink. This bites after pulling commits that add a workspace package or a new workspace dep.
+
 ## Architecture (big picture)
 
 The codebase is a layered monorepo where dependency direction is load-bearing — keep it pointing one way:
@@ -129,3 +131,16 @@ examples/local-simulation drives the orchestrator directly (no API).
 - 遇到用户提出的概念和名词优先到 web 中 search，而非依赖自身记忆——LLM 记忆可能过时或有幻觉，web search 确保信息最新准确，特别是对新术语和概念的理解 [0.95] [预置]
 > 还有 22 条 canonical+ 规则因 token 预算未显示（teamagent compile --dry-run 查看）
 <!-- TEAMAGENT:END -->
+
+## Design System
+Always read `DESIGN.md` before making any visual or UI decisions for the werewolf module.
+All font choices, colors, spacing, border-radius, and aesthetic direction are defined there.
+Do not deviate without explicit user approval.
+In QA mode, flag any code that doesn't match DESIGN.md.
+
+## gstack
+
+Use the `/browse` skill from gstack for all web browsing. Never use `mcp__claude-in-chrome__*` tools.
+
+Available skills:
+`/office-hours`, `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/design-consultation`, `/design-shotgun`, `/design-html`, `/review`, `/ship`, `/land-and-deploy`, `/canary`, `/benchmark`, `/browse`, `/connect-chrome`, `/qa`, `/qa-only`, `/design-review`, `/setup-browser-cookies`, `/setup-deploy`, `/setup-gbrain`, `/retro`, `/investigate`, `/document-release`, `/codex`, `/cso`, `/autoplan`, `/plan-devex-review`, `/devex-review`, `/careful`, `/freeze`, `/guard`, `/unfreeze`, `/gstack-upgrade`, `/learn`

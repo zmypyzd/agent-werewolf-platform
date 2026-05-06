@@ -80,11 +80,13 @@ describe('buildWerewolfArtifact', () => {
     expect(e0.data['agentId']).toBeUndefined();
   });
 
-  it('public replay events strip speak.inner', () => {
+  it('public replay events pass speak.inner through (inner is intentionally public for UI display)', () => {
     const { record } = buildWerewolfArtifact(baseInput(), 1_500);
     const e1 = record.replayEvents.find((e) => e.eventId === 'e2')!;
     const action = e1.data['action'] as Record<string, unknown>;
-    expect(action['inner']).toBeUndefined();
+    // speak.inner is intentionally present in public replay events so the UI can
+    // display NPC reasoning; inner is stripped only from summary history entries.
+    expect(action['inner']).toBe('SECRET');
     expect(action['performance']).toBe('X');
   });
 

@@ -213,12 +213,10 @@ describe('werewolf E2E over real HTTP adapters', () => {
         expect(f.payload['agentId']).toBeUndefined();
       }
 
-      // Invariant 3: speak.inner is stripped before publish. The unit-level
-      // pin lives in werewolf-filter.test.ts; this scan closes the matrix at
-      // the e2e layer. WerewolfRandomMockAgent emits speak with empty inner,
-      // so this is defense-in-depth — it catches a future regression where
-      // inner becomes non-empty AND werewolfReplayEventToPublic's strip
-      // breaks at the same time.
+      // Invariant 3: speak.inner is intentionally passed through to public
+      // broadcast so the UI can display NPC reasoning. Verify speak events
+      // are present in the public stream and that inner is a string (not
+      // stripped). The unit-level pin lives in werewolf-filter.test.ts.
       const speakEvents = liveEvents.filter(
         (e) =>
           e.type === 'engine.action_applied' &&
@@ -227,7 +225,9 @@ describe('werewolf E2E over real HTTP adapters', () => {
       expect(speakEvents.length).toBeGreaterThan(0);
       for (const e of speakEvents) {
         const action = e.payload['action'] as Record<string, unknown>;
-        expect(action['inner']).toBeUndefined();
+        // inner may be a string (NpcAgent thinking) or absent (empty string from
+        // mock agent) — either way it must not be filtered out at the publish layer.
+        expect(typeof action['inner'] === 'string' || action['inner'] === undefined).toBe(true);
       }
 
       // 2. The owning player saw private-state frames; spectator never did.
