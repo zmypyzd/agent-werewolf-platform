@@ -270,6 +270,9 @@ export class WerewolfMatchRunner {
       timedOut,
       elapsedMs,
       ...(invalidReason !== null ? { invalidReason } : {}),
+      ...(!phaseBefore.startsWith('night-') && parsedReasoningForTrace
+        ? { reasoningSummary: parsedReasoningForTrace }
+        : {}),
     });
 
     this.state = applyAction(this.state, action);

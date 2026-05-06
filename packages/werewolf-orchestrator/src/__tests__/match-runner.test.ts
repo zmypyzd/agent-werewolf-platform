@@ -176,6 +176,56 @@ describe('WerewolfMatchRunner', () => {
     await expect(runner.run()).rejects.toThrow(/already invoked/i);
   });
 
+  it('includes reasoningSummary in agent.action_received for day-phase events when agent provides one', async () => {
+    const initial = createGame({ gameId: 'g-reason-1', seed: 'seed-reason-1' });
+    const emitter = new EventEmitter();
+    const events: WerewolfReplayEvent[] = [];
+    emitter.on('replay-event', (e: WerewolfReplayEvent) => events.push(e));
+
+    // Build agents that always return a reasoningSummary
+    const agents = new Map<string, WerewolfAgent>();
+    for (const p of initial.players) {
+      const base = new WerewolfMockAgent(`agent-${p.id}`, p.name);
+      const wrapped: WerewolfAgent = {
+        agentId: base.agentId,
+        name: base.name,
+        async requestDecision(req) {
+          const res = await base.requestDecision(req);
+          return {
+            ...res,
+            reasoningSummary: {
+              intent: 'test-intent',
+              confidence: 0.8,
+              keyObservations: ['obs-1'],
+            },
+          };
+        },
+      };
+      agents.set(p.id, wrapped);
+    }
+
+    const runner = new WerewolfMatchRunner(initial, agents, 5_000, emitter);
+    await runner.run();
+
+    const dayReceivedWithReasoning = events.filter(
+      (e) =>
+        e.eventType === 'agent.action_received' &&
+        typeof e.data['phase'] === 'string' &&
+        !(e.data['phase'] as string).startsWith('night-') &&
+        e.data['reasoningSummary'] !== undefined,
+    );
+    expect(dayReceivedWithReasoning.length).toBeGreaterThan(0);
+
+    const nightReceivedWithReasoning = events.filter(
+      (e) =>
+        e.eventType === 'agent.action_received' &&
+        typeof e.data['phase'] === 'string' &&
+        (e.data['phase'] as string).startsWith('night-') &&
+        e.data['reasoningSummary'] !== undefined,
+    );
+    expect(nightReceivedWithReasoning.length).toBe(0);
+  });
+
   it('publicState passed to agents never contains role-assigned or night-action history entries', async () => {
     const initial = createGame({ gameId: 'g-runner-7', seed: 'seed-runner-7' });
     const seenRequests: WerewolfDecisionRequest[] = [];
