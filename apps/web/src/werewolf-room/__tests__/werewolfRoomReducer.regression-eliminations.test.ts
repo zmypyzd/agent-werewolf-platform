@@ -143,6 +143,69 @@ describe('werewolfRoomReducer — phase.changed eliminations', () => {
     expect(afterVote.seats.find((s) => s.playerId === 'p5')!.alive).toBe(false);
   });
 
+  it('lobby-sync DOES NOT clobber alive=false set by an earlier phase.changed', async () => {
+    // Bug #2 found by /qa on 2026-05-06: REST polling fires lobby-sync
+    // every 2-5s during a running match. The handler used to hardcode
+    // alive:true for every seat, wiping mid-match deaths the moment the
+    // next poll arrived. The seat board flickered briefly red before
+    // resetting — so visually nothing ever showed as dead until match-
+    // completed (which carries finalPlayers[]). Fix: lobby-sync now
+    // preserves alive / revealedRole / revealedSide from the prior seat
+    // for the same playerId, since the server's lobby entry shape doesn't
+    // carry those fields anyway.
+    const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+    const afterDeath = werewolfRoomReducer(seeded, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'phase.changed',
+        data: {
+          phase: 'day-announce',
+          nightNumber: 1,
+          dayNumber: 1,
+          eliminated: [{ playerId: 'p5', cause: 'wolf-kill' }],
+        },
+      }),
+    });
+    expect(afterDeath.seats.find((s) => s.playerId === 'p5')!.alive).toBe(false);
+
+    // A second lobby-sync fires (e.g. from the 5s poll). The lobby entry
+    // shape has no `alive` field, but it must not clobber the prior state.
+    const afterSync = werewolfRoomReducer(afterDeath, SEEDED_LOBBY);
+    expect(afterSync.seats.find((s) => s.playerId === 'p5')!.alive).toBe(false);
+    // And the rest of the players stay alive (the preservation must not
+    // accidentally flip live seats to dead).
+    for (const s of afterSync.seats) {
+      if (s.playerId === 'p5') continue;
+      expect(s.alive).toBe(true);
+    }
+  });
+
+  it('lobby-sync preserves revealedRole / revealedSide once a match completes', async () => {
+    // Same shape as the alive preservation, but for the role-reveal fields
+    // populated by match-completed. Without preservation, a poll that
+    // races match-completed would briefly hide the revealed roles before
+    // the next match-completed dispatch re-applied them. Stable by design.
+    const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+    const afterCompleted = werewolfRoomReducer(seeded, {
+      type: 'match-completed',
+      winner: 'good',
+      finalPlayers: [
+        { id: 'p1', seatIndex: 0, name: 'Bot 1', role: 'werewolf', side: 'werewolf', alive: false },
+        { id: 'p3', seatIndex: 2, name: 'Bot 3', role: 'seer', side: 'good', alive: true },
+      ],
+    });
+    expect(afterCompleted.seats.find((s) => s.playerId === 'p1')!.revealedRole).toBe('werewolf');
+
+    const afterSync = werewolfRoomReducer(afterCompleted, {
+      type: 'lobby-sync',
+      entry: { ...SEEDED_LOBBY.entry, status: 'completed' },
+    });
+    expect(afterSync.seats.find((s) => s.playerId === 'p1')!.revealedRole).toBe('werewolf');
+    expect(afterSync.seats.find((s) => s.playerId === 'p1')!.revealedSide).toBe('werewolf');
+    expect(afterSync.seats.find((s) => s.playerId === 'p1')!.alive).toBe(false);
+    expect(afterSync.seats.find((s) => s.playerId === 'p3')!.revealedRole).toBe('seer');
+  });
+
   it('PK revote phase.changed with pkRound>=1 does NOT touch alive flags', async () => {
     const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
     // Pretend p5 died at night

@@ -76,12 +76,24 @@ export function werewolfRoomReducer(
   action: WerewolfRoomAction,
 ): WerewolfRoomState {
   if (action.type === 'lobby-sync') {
-    const seats: SeatVM[] = action.entry.seats.map((s) => ({
-      seatIndex: s.seatIndex,
-      playerId: s.playerId,
-      occupant: s.occupant,
-      alive: true,
-    }));
+    // The server's lobby entry doesn't carry per-seat alive / revealedRole
+    // — those are populated by replay events (phase.changed.eliminated[])
+    // mid-match and by match-completed at end. Preserve them from the
+    // existing state instead of resetting to alive:true on every 5-second
+    // REST poll, which previously wiped deaths from the seat board the
+    // moment the next poll fired.
+    const previousByPlayerId = new Map(state.seats.map((s) => [s.playerId, s]));
+    const seats: SeatVM[] = action.entry.seats.map((s) => {
+      const prev = previousByPlayerId.get(s.playerId);
+      return {
+        seatIndex: s.seatIndex,
+        playerId: s.playerId,
+        occupant: s.occupant,
+        alive: prev ? prev.alive : true,
+        ...(prev?.revealedRole ? { revealedRole: prev.revealedRole } : {}),
+        ...(prev?.revealedSide ? { revealedSide: prev.revealedSide } : {}),
+      };
+    });
     return {
       ...state,
       gameId: action.entry.gameId,
