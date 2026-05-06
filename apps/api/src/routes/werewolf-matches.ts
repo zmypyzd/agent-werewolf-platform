@@ -28,9 +28,16 @@ function publicManifest(
 function publicIndexEntry(
   entry: WerewolfMatchArtifactIndexEntry,
 ): WerewolfMatchArtifactIndexEntry {
-  // The persisted index entry already lacks `seed` by design — no stripping needed.
-  // Spread to return a plain object (defense-in-depth against reference leakage).
-  return { ...entry };
+  // The persisted index-entry type intentionally omits `seed`. This route still
+  // strips it explicitly as defense-in-depth: if a future PR ever widens the
+  // type to carry a seed (or any private RNG-derived material flows in via
+  // ducktyping), this destructure drops it before serialization. Pinned by the
+  // 'strips seed from index entries even if a future widening surfaces one'
+  // test in werewolf-matches.test.ts.
+  const { seed: _seed, ...rest } = entry as WerewolfMatchArtifactIndexEntry & {
+    seed?: unknown;
+  };
+  return rest;
 }
 
 function publicDecisionTraces(

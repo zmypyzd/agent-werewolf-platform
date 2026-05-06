@@ -3,6 +3,8 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import {
   MemoryWerewolfMatchArtifactStore,
   MemoryWerewolfDecisionTraceStore,
+  type IWerewolfMatchArtifactStore,
+  type WerewolfMatchArtifactIndexEntry,
 } from '@agent-poker/persistence';
 import { WerewolfOrchestrator } from '@agent-poker/werewolf-orchestrator';
 import { WerewolfRandomMockAgent } from '@agent-poker/agent-runtime';
@@ -62,6 +64,67 @@ describe('werewolf match artifact routes', () => {
     expect(body.data.map((e: { matchId: string }) => e.matchId)).toContain('g-list');
     for (const entry of body.data) {
       expect(entry).not.toHaveProperty('seed');
+    }
+  });
+
+  it('strips seed from index entries even if a future widening surfaces one', async () => {
+    // Defense-in-depth: WerewolfMatchArtifactIndexEntry intentionally omits
+    // `seed` today. If a future PR ever widens the type to include one (or any
+    // other private field appears via ducktyping), the route must still drop
+    // it before the response. We simulate that future state by wrapping the
+    // store with a `listMatchArtifacts` that injects a phantom `seed`, and
+    // assert the route never relays it.
+    const baseStore = new MemoryWerewolfMatchArtifactStore();
+    const baseTraceStore = new MemoryWerewolfDecisionTraceStore();
+    const baseOrch = new WerewolfOrchestrator({
+      artifactStore: baseStore,
+      decisionTraceStore: baseTraceStore,
+    });
+    const { matchId, initialState } = baseOrch.createMatch({
+      gameId: 'g-defense-in-depth',
+      seed: 'seed-defense',
+    });
+    for (const p of initialState.players) {
+      baseOrch.registerAgent(
+        matchId,
+        p.id,
+        new WerewolfRandomMockAgent(`a-${p.id}`, p.name, { seed: `r-${p.id}` }),
+      );
+    }
+    await baseOrch.runMatch(matchId);
+
+    const widenedStore: IWerewolfMatchArtifactStore = {
+      saveMatchArtifact: (input) => baseStore.saveMatchArtifact(input),
+      getMatchArtifact: (id, options) => baseStore.getMatchArtifact(id, options),
+      async listMatchArtifacts() {
+        const entries = await baseStore.listMatchArtifacts();
+        return entries.map(
+          (e) =>
+            ({ ...e, seed: 'leaked-seed' }) as unknown as WerewolfMatchArtifactIndexEntry,
+        );
+      },
+    };
+
+    const widenedApp = Fastify({ logger: false });
+    await widenedApp.register(werewolfMatchesRoutes, {
+      prefix: '/api/v1',
+      werewolfMatchArtifactStore: widenedStore,
+    });
+    await widenedApp.ready();
+
+    try {
+      const res = await widenedApp.inject({
+        method: 'GET',
+        url: '/api/v1/werewolf-matches',
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.payload) as { data: Array<Record<string, unknown>> };
+      expect(body.data.length).toBeGreaterThan(0);
+      for (const entry of body.data) {
+        expect(entry).not.toHaveProperty('seed');
+      }
+    } finally {
+      await widenedApp.close();
     }
   });
 
