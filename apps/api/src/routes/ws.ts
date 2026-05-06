@@ -18,6 +18,7 @@ function isOwnPlayerTopic(topic: string, userId: string): boolean {
   const rest = topic.slice(PLAYER_TOPIC_PREFIX.length);
   const colon = rest.indexOf(':');
   if (colon <= 0) return false;
+  if (colon === rest.length - 1) return false; // empty gameId
   return rest.slice(0, colon) === userId;
 }
 
@@ -58,6 +59,7 @@ export async function wsRoutes(app: FastifyInstance, opts: WsRoutesOptions) {
               hub.subscribe(conn, `seat:${userId}:${tableId}`);
             }
           } else if (msg.topic.startsWith('match:')) {
+            if (msg.topic === 'match:') break;
             hub.subscribe(conn, msg.topic);
           } else if (isOwnPlayerTopic(msg.topic, userId)) {
             hub.subscribe(conn, msg.topic);

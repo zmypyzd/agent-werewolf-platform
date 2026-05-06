@@ -156,6 +156,66 @@ describe('werewolf WS topics', () => {
     b.ws.close();
   }, 10_000);
 
+  it('rejects subscribe to bare match: topic (empty gameId)', async () => {
+    const alice = await registerAs('alice-bare-match@x.test');
+    const a = await connectWs(alice.sid);
+
+    // Subscribe to the malformed bare 'match:' topic. The gate must drop it.
+    a.ws.send(JSON.stringify({ topic: 'match:', type: 'subscribe', payload: {} }));
+
+    // Positive control: a follow-up subscribe to a real topic must still work,
+    // proving the bare-'match:' rejection was a clean no-op (no crash, no
+    // socket close, no leaked state).
+    a.ws.send(JSON.stringify({ topic: 'match:g-bare-real', type: 'subscribe', payload: {} }));
+    a.ws.send(JSON.stringify({ topic: 'match:g-bare-real', type: 'ping', payload: {} }));
+    await awaitMessage(a.messages, (m) => m['topic'] === 'match:g-bare-real' && m['type'] === 'pong');
+
+    // Negative-space assertion: publishing on the literal bare 'match:' topic
+    // must not reach the client. (The hub already silently never publishes to
+    // that exact topic in production, but we publish here directly to confirm
+    // the gate refused the subscribe rather than silently accepting it.)
+    hub.publish('match:', { topic: 'match:', type: 'leak.probe', payload: { canary: true } });
+
+    // Run a real match on the positive-control topic so we get genuine
+    // delivery on 'match:g-bare-real' and prove the WS connection is healthy.
+    await setupAndRunMatch('g-bare-real', []);
+    await awaitMessage(a.messages, (m) => m['topic'] === 'match:g-bare-real' && m['type'] === 'match.completed');
+
+    const leak = a.messages.filter((m) => m['topic'] === 'match:' && m['type'] === 'leak.probe');
+    expect(leak).toHaveLength(0);
+
+    a.ws.close();
+  }, 10_000);
+
+  it('rejects subscribe to player:<userId>: with empty gameId', async () => {
+    const alice = await registerAs('alice-empty-game@x.test');
+    const a = await connectWs(alice.sid);
+
+    const emptyGameTopic = `player:${alice.userId}:`;
+    // Subscribe to the malformed empty-gameId topic. The gate must drop it.
+    a.ws.send(JSON.stringify({ topic: emptyGameTopic, type: 'subscribe', payload: {} }));
+
+    // Positive control: subscribe to a real player topic and prove it works.
+    const realTopic = `player:${alice.userId}:g-empty-real`;
+    a.ws.send(JSON.stringify({ topic: realTopic, type: 'subscribe', payload: {} }));
+    a.ws.send(JSON.stringify({ topic: realTopic, type: 'ping', payload: {} }));
+    await awaitMessage(a.messages, (m) => m['topic'] === realTopic && m['type'] === 'pong');
+
+    // Negative-space assertion: publishing on the malformed empty-gameId topic
+    // must not reach the client.
+    hub.publish(emptyGameTopic, { topic: emptyGameTopic, type: 'leak.probe', payload: { canary: true } });
+
+    // Run a match where Alice is a player on g-empty-real so she actually
+    // receives private state on the real topic — proves the WS+gate path works.
+    await setupAndRunMatch('g-empty-real', [{ userId: alice.userId }]);
+    await awaitMessage(a.messages, (m) => m['topic'] === realTopic && m['type'] === 'werewolf.private_state');
+
+    const leak = a.messages.filter((m) => m['topic'] === emptyGameTopic && m['type'] === 'leak.probe');
+    expect(leak).toHaveLength(0);
+
+    a.ws.close();
+  }, 10_000);
+
   it("a client cannot subscribe to another user's player topic — server-side gate drops the subscribe", async () => {
     const alice = await registerAs('alice-gate@x.test');
     const bob = await registerAs('bob-gate@x.test');
