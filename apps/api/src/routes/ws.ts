@@ -8,6 +8,19 @@ interface WsRoutesOptions extends FastifyPluginOptions {
   hub: RealtimeHub;
 }
 
+const PLAYER_TOPIC_PREFIX = 'player:';
+
+function isOwnPlayerTopic(topic: string, userId: string): boolean {
+  // 'player:<userId>:<gameId>' — the userId segment must equal the
+  // authenticated userId. Slice + indexOf instead of split, so a malformed
+  // gameId containing ":" cannot fool the gate.
+  if (!topic.startsWith(PLAYER_TOPIC_PREFIX)) return false;
+  const rest = topic.slice(PLAYER_TOPIC_PREFIX.length);
+  const colon = rest.indexOf(':');
+  if (colon <= 0) return false;
+  return rest.slice(0, colon) === userId;
+}
+
 export async function wsRoutes(app: FastifyInstance, opts: WsRoutesOptions) {
   const { hub } = opts;
 
@@ -38,16 +51,18 @@ export async function wsRoutes(app: FastifyInstance, opts: WsRoutesOptions) {
 
       switch (msg.type) {
         case 'subscribe':
-          // Only allow subscriptions to lobby and table:* topics. seat:<userId>:<tableId>
-          // is auto-managed server-side and rejects client subscription attempts.
           if (msg.topic === LOBBY_TOPIC || msg.topic.startsWith('table:')) {
             hub.subscribe(conn, msg.topic);
-            // Auto-subscribe to the user's seat topic for this table.
             if (msg.topic.startsWith('table:')) {
               const tableId = msg.topic.slice('table:'.length);
               hub.subscribe(conn, `seat:${userId}:${tableId}`);
             }
+          } else if (msg.topic.startsWith('match:')) {
+            hub.subscribe(conn, msg.topic);
+          } else if (isOwnPlayerTopic(msg.topic, userId)) {
+            hub.subscribe(conn, msg.topic);
           }
+          // else: silently drop — same behaviour as before for unknown topics.
           break;
         case 'unsubscribe':
           hub.unsubscribe(conn, msg.topic);

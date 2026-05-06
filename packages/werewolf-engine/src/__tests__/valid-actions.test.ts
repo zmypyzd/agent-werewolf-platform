@@ -37,6 +37,28 @@ describe('getValidActions', () => {
     }
   });
 
+  it('night-werewolf-vote: returns no actions for werewolves who have already cast their vote', () => {
+    const base = createGame({ gameId: 'g-dup', seed: 'seed-dup' });
+    const s = withPhase({ ...base, nightNumber: 1 }, 'night-werewolf-vote');
+    const wolves = find(s, 'werewolf');
+    const target = find(s, 'villager')[0]!;
+    expect(wolves.length).toBeGreaterThan(0);
+    const voter = wolves[0]!;
+    const otherWolf = wolves[1];
+    const afterVote: WerewolfGameState = {
+      ...s,
+      pendingNight: {
+        ...s.pendingNight,
+        werewolfVotes: { ...s.pendingNight.werewolfVotes, [voter.id]: target.id },
+      },
+    };
+    expect(getValidActions(afterVote, voter.id)).toEqual([]);
+    if (otherWolf) {
+      // Other wolves who haven't voted yet still see their full action list.
+      expect(getValidActions(afterVote, otherWolf.id).length).toBeGreaterThan(0);
+    }
+  });
+
   it('night-witch with both potions and a kill target: save / skip-save offered first (save decision not yet made)', () => {
     const base = createGame({ gameId: 'g1', seed: 'seed-A' });
     const witch = find(base, 'witch')[0]!;

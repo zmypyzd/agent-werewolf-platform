@@ -16,3 +16,6 @@ coverage/
 examples/local-simulation/output/**/*.mp4
 examples/local-simulation/output/**/*.png
 examples/local-simulation/output/**/*.webp
+examples/werewolf-local-simulation/output/**/*.jsonl
+examples/werewolf-local-simulation/output/**/*.json
+!examples/werewolf-local-simulation/output/.gitkeep

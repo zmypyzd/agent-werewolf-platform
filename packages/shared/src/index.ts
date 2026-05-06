@@ -5,3 +5,9 @@ export * from './werewolf-types.js';
 export * from './werewolf-constants.js';
 export * from './werewolf-errors.js';
 export * from './werewolf-decision-types.js';
+export type { WerewolfReplayEvent, WerewolfReplayEventType } from './werewolf-replay-event.js';
+export type {
+  WerewolfDecisionTrace,
+  WerewolfDecisionTraceAction,
+  WerewolfDecisionTraceFallbackReason,
+} from './werewolf-decision-trace.js';

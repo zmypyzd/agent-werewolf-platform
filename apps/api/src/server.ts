@@ -5,6 +5,7 @@ import {
   MemoryTableStore,
   MemoryHandStore,
   MemoryDecisionTraceStore,
+  MemoryWerewolfDecisionTraceStore,
   openDatabase,
   SqliteUserStore,
   SqliteSessionStore,
@@ -18,8 +19,15 @@ import type {
   IAgentInviteStore,
   IMatchArtifactStore,
   IDecisionTraceStore,
+  IWerewolfMatchArtifactStore,
+  IWerewolfDecisionTraceStore,
   SqliteDb,
 } from '@agent-poker/persistence';
+import {
+  WerewolfOrchestrator,
+  attachWerewolfHub,
+  type WerewolfHubAttachment,
+} from '@agent-poker/werewolf-orchestrator';
 import { AppError, RateLimitedError } from '@agent-poker/shared';
 import { RateLimiter, authPlugin } from '@agent-poker/auth';
 import type { RateLimiterConfig, RuntimeEnv } from '@agent-poker/auth';
@@ -27,18 +35,28 @@ import { RealtimeHub } from '@agent-poker/realtime';
 import { tablesRoutes } from './routes/tables.js';
 import { simulateRoutes } from './routes/simulate.js';
 import { matchesRoutes } from './routes/matches.js';
+import { werewolfMatchesRoutes } from './routes/werewolf-matches.js';
 import { authRoutes } from './routes/auth.js';
 import { wsRoutes } from './routes/ws.js';
 import { meAgentsRoutes } from './routes/me-agents.js';
 import { agentInvitesRoutes } from './routes/agent-invites.js';
 import { healthRoutes } from './routes/health.js';
 import { createMatchArtifactStore } from './match-artifact-store-factory.js';
+import { createWerewolfMatchArtifactStore } from './werewolf-match-artifact-store-factory.js';
 
 export interface BuildServerOptions {
   orchestrator?: TableOrchestrator;
   handStore?: InstanceType<typeof MemoryHandStore>;
   matchArtifactStore?: IMatchArtifactStore;
   decisionTraceStore?: IDecisionTraceStore;
+  werewolfMatchArtifactStore?: IWerewolfMatchArtifactStore;
+  werewolfDecisionTraceStore?: IWerewolfDecisionTraceStore;
+  werewolfOrchestrator?: WerewolfOrchestrator;
+  // When provided, buildServer uses this attachment instead of creating one.
+  // Used by tests that need a handle on WerewolfHubAttachment to drive
+  // attachMatch from outside buildServer. buildServer always registers an
+  // onClose hook that calls detachAll(), so callers need not do it themselves.
+  werewolfHubAttachment?: WerewolfHubAttachment;
   userStore?: IUserStore;
   sessionStore?: ISessionStore;
   agentConfigStore?: IUserAgentConfigStore;
@@ -63,6 +81,18 @@ export function buildServer(opts: BuildServerOptions = {}) {
   const decisionTraceStore = opts.decisionTraceStore ?? new MemoryDecisionTraceStore();
   const hub = opts.hub ?? new RealtimeHub();
   const orch = opts.orchestrator ?? new TableOrchestrator(tableStore, hs, hub, decisionTraceStore);
+
+  const werewolfMatchArtifactStore =
+    opts.werewolfMatchArtifactStore ?? createWerewolfMatchArtifactStore();
+  const werewolfDecisionTraceStore =
+    opts.werewolfDecisionTraceStore ?? new MemoryWerewolfDecisionTraceStore();
+
+  const werewolfOrch =
+    opts.werewolfOrchestrator ??
+    new WerewolfOrchestrator({
+      artifactStore: werewolfMatchArtifactStore,
+      decisionTraceStore: werewolfDecisionTraceStore,
+    });
 
   const authDb =
     opts.userStore && opts.sessionStore && opts.agentConfigStore && opts.agentInviteStore
@@ -145,6 +175,14 @@ export function buildServer(opts: BuildServerOptions = {}) {
     });
   });
 
+  const werewolfHubAttachment =
+    opts.werewolfHubAttachment ?? attachWerewolfHub(werewolfOrch, hub);
+  // Always detach on shutdown so neither buildServer-owned nor test-injected
+  // attachments leak EventEmitter listeners between cycles.
+  app.addHook('onClose', async () => {
+    werewolfHubAttachment.detachAll();
+  });
+
   // Auth plugin + WebSocket plugin must register before any route plugin that
   // needs request.user / requireAuth or the websocket route option.
   app.register(async (scope) => {
@@ -167,6 +205,10 @@ export function buildServer(opts: BuildServerOptions = {}) {
       decisionTraceStore,
     });
     await scope.register(matchesRoutes, { prefix: '/api/v1', matchArtifactStore });
+    await scope.register(werewolfMatchesRoutes, {
+      prefix: '/api/v1',
+      werewolfMatchArtifactStore,
+    });
     await scope.register(meAgentsRoutes, { prefix: '/api/v1', agentConfigStore, orchestrator: orch });
     await scope.register(agentInvitesRoutes, { prefix: '/api/v1', agentInviteStore, agentConfigStore });
     await scope.register(wsRoutes, { hub });

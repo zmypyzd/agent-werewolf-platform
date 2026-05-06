@@ -6,6 +6,8 @@ export * from './npc-agent.js';
 export * from './timeout-handler.js';
 export * from './http-agent-adapter.js';
 export * from './ws-agent-adapter.js';
+export * from './werewolf-http-agent-adapter.js';
+export * from './werewolf-ws-agent-adapter.js';
 export * from './human-agent.js';
 export * from './bootstrap-script-generator.js';
 export * from './werewolf-decision-request.js';

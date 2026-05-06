@@ -5,7 +5,12 @@ export {
   WsServerMessageSchema,
 } from '@agent-poker/agent-protocol';
 
-export type Topic = 'lobby' | `table:${string}` | `seat:${string}:${string}`;
+export type Topic =
+  | 'lobby'
+  | `table:${string}`
+  | `seat:${string}:${string}`
+  | `match:${string}`
+  | `player:${string}:${string}`;
 
 export interface WsServerMessage {
   topic: string;
@@ -27,4 +32,12 @@ export function tableTopic(tableId: string): string {
 
 export function seatTopic(userId: string, tableId: string): string {
   return `seat:${userId}:${tableId}`;
+}
+
+export function werewolfMatchTopic(gameId: string): string {
+  return `match:${gameId}`;
+}
+
+export function werewolfPlayerTopic(userId: string, gameId: string): string {
+  return `player:${userId}:${gameId}`;
 }

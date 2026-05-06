@@ -1,0 +1,21 @@
+{
+  "name": "werewolf-local-simulation",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx index.ts",
+    "build": "echo 'No build for examples'"
+  },
+  "dependencies": {
+    "@agent-poker/shared": "workspace:*",
+    "@agent-poker/agent-protocol": "workspace:*",
+    "@agent-poker/agent-runtime": "workspace:*",
+    "@agent-poker/persistence": "workspace:*",
+    "@agent-poker/werewolf-orchestrator": "workspace:*",
+    "fastify": "^4.28.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "tsx": "^4.0.0"
+  }
+}

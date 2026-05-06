@@ -5,11 +5,13 @@
     "rootDir": "src",
     "composite": true,
     "paths": {
-      "@agent-poker/shared": ["../shared/src/index.ts"]
+      "@agent-poker/shared": ["../shared/src/index.ts"],
+      "@agent-poker/realtime": ["../realtime/src/index.ts"]
     }
   },
   "references": [
-    { "path": "../shared" }
+    { "path": "../shared" },
+    { "path": "../realtime" }
   ],
   "include": ["src"]
 }

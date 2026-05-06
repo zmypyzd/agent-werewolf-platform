@@ -1,5 +1,12 @@
 import { z } from 'zod';
 
+// Public character caps for the free-text fields on a speak action. Exported so
+// callers (UI, agent SDKs) can surface the limits to humans before submission
+// instead of discovering them through a rejected response.
+export const WEREWOLF_SPEAK_INNER_MAX = 4000;
+export const WEREWOLF_SPEAK_PERFORMANCE_MAX = 500;
+export const WEREWOLF_SPEAK_SPEECH_MAX = 2000;
+
 const WerewolfPlayerIdSchema = z.string().min(1);
 const WerewolfRoleSchema = z.enum(['werewolf', 'villager', 'seer', 'witch', 'hunter']);
 const WerewolfSideSchema = z.enum(['werewolf', 'good']);
@@ -130,9 +137,13 @@ const WerewolfActionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('speak'),
     playerId: WerewolfPlayerIdSchema,
-    inner: z.string(),
-    performance: z.string(),
-    speech: z.string(),
+    // Per-field caps protect the runner / event log / match-summary from
+    // adversarial agents that could otherwise emit unbounded strings and
+    // exhaust memory. Values picked to comfortably fit a thoughtful 9-AI
+    // werewolf game; tighten only with care once Plan 4 measures real usage.
+    inner: z.string().max(WEREWOLF_SPEAK_INNER_MAX),
+    performance: z.string().max(WEREWOLF_SPEAK_PERFORMANCE_MAX),
+    speech: z.string().max(WEREWOLF_SPEAK_SPEECH_MAX),
   }),
   z.object({
     type: z.literal('day-vote'),

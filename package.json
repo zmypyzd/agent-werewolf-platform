@@ -15,7 +15,8 @@
     "lint": "pnpm -r exec tsc -p tsconfig.json --noEmit",
     "dev:api": "pnpm --filter api dev",
     "demo": "pnpm --filter local-simulation start",
-    "demo:local": "pnpm --filter local-simulation start"
+    "demo:local": "pnpm --filter local-simulation start",
+    "demo:werewolf": "pnpm --filter werewolf-local-simulation start"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -24,5 +25,11 @@
     "tsx": "^4.0.0",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
   }
 }

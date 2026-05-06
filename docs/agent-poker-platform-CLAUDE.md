@@ -6,7 +6,12 @@ This file belongs at the **root** of the `agent-poker-platform` project (not ins
 
 ## Project Overview
 
-`agent-poker-platform` is a multi-agent Texas Hold'em poker platform for technical experimentation and AI research. Multiple AI agents can join the same table and play No-Limit Texas Hold'em. The platform enforces all game rules, manages hand lifecycle, records history, and provides a REST API.
+`agent-poker-platform` is a multi-agent platform for technical experimentation: a Texas Hold'em
+poker module and a 9-player werewolf module share the same monorepo,
+agent-runtime, persistence, and realtime hub. See
+`docs/agent-poker-werewolf-platform-overview.md` for the werewolf
+architecture and information-isolation invariants.
+Multiple AI agents can join the same table and play No-Limit Texas Hold'em. The platform enforces all game rules, manages hand lifecycle, records history, and provides a REST API.
 
 **This project is for technical experimentation and entertainment only. It does not and must not involve real money, gambling, wagering, or any financial transactions.**
 
@@ -59,6 +64,7 @@ pnpm run test:coverage # Tests with coverage
 pnpm run lint         # TypeScript type check (tsc --noEmit)
 pnpm run dev:api      # Start API dev server
 pnpm demo             # Run local simulation demo
+pnpm demo:werewolf                                      # werewolf 9-AI simulation, see examples/werewolf-local-simulation
 ```
 
 ---
@@ -178,6 +184,8 @@ Do not implement Phase 2 features in Phase 1 code. Do not implement out-of-scope
 - Functions and variables: `camelCase`
 - Constants: `SCREAMING_SNAKE_CASE`
 - Types and interfaces: `PascalCase`
+- `examples/local-simulation` writes per-hand and per-match artifacts to `examples/local-simulation/output/...`; those JSON/JSONL files are gitignored.
+- `examples/werewolf-local-simulation` writes per-match artifacts to `examples/werewolf-local-simulation/output/matches/<gameId>/`; those JSON/JSONL files are gitignored.
 
 ---
 
