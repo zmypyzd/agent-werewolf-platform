@@ -42,7 +42,7 @@ describe('werewolfRoomReducer', () => {
     expect(after.seats[0]!.occupant.kind).toBe('npc');
   });
 
-  it('phase.changed (night-werewolf-vote) sets currentPhase + nightNumber, leaves currentActor unset', () => {
+  it('phase.changed (night-werewolf-vote) sets currentPhase + nightNumber, leaves thinkingActor unset', () => {
     const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
     const after = werewolfRoomReducer(seeded, {
       type: 'replay-event',
@@ -53,10 +53,10 @@ describe('werewolfRoomReducer', () => {
     });
     expect(after.currentPhase).toBe('night-werewolf-vote');
     expect(after.nightNumber).toBe(1);
-    expect(after.currentActor).toBeUndefined();
+    expect(after.thinkingActor).toBeUndefined();
   });
 
-  it('agent.action_requested in DAY phase populates currentActor', () => {
+  it('agent.action_requested in DAY phase sets thinkingActor', () => {
     const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
     const enteredDay = werewolfRoomReducer(seeded, {
       type: 'replay-event',
@@ -72,10 +72,10 @@ describe('werewolfRoomReducer', () => {
         data: { phase: 'day-vote', playerId: 'p3' },
       }),
     });
-    expect(after.currentActor).toBe('p3');
+    expect(after.thinkingActor).toBe('p3');
   });
 
-  it('agent.action_requested in NIGHT phase NEVER populates currentActor (info isolation)', () => {
+  it('agent.action_requested in NIGHT phase NEVER populates thinkingActor (info isolation)', () => {
     const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
     const enteredNight = werewolfRoomReducer(seeded, {
       type: 'replay-event',
@@ -93,7 +93,7 @@ describe('werewolfRoomReducer', () => {
         data: { phase: 'night-werewolf-vote', playerId: 'p4' },
       }),
     });
-    expect(after.currentActor).toBeUndefined();
+    expect(after.thinkingActor).toBeUndefined();
   });
 
   it('consecutive werewolf-vote events fold into a single system-night-fold line', () => {
@@ -118,6 +118,122 @@ describe('werewolfRoomReducer', () => {
     const fold = state.timeline.filter((l) => l.kind === 'system-night-fold');
     expect(fold).toHaveLength(1);
     expect(fold[0]!.text).toContain('夜 1');
+  });
+
+  it('agent.action_requested (day) sets thinkingActor, leaves speakingActor undefined', () => {
+    const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+    const after = werewolfRoomReducer(seeded, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'agent.action_requested',
+        data: { phase: 'day-speeches', playerId: 'p3' },
+      }),
+    });
+    expect(after.thinkingActor).toBe('p3');
+    expect(after.speakingActor).toBeUndefined();
+  });
+
+  it('agent.action_received (speak) sets speakingActor, clears thinkingActor', () => {
+    const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+    const thinking = werewolfRoomReducer(seeded, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'agent.action_requested',
+        data: { phase: 'day-speeches', playerId: 'p3' },
+      }),
+    });
+    const after = werewolfRoomReducer(thinking, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'agent.action_received',
+        data: {
+          phase: 'day-speeches',
+          playerId: 'p3',
+          action: { type: 'speak', playerId: 'p3', inner: 'x', performance: 'y', speech: 'z' },
+        },
+      }),
+    });
+    expect(after.speakingActor).toBe('p3');
+    expect(after.thinkingActor).toBeUndefined();
+  });
+
+  it('agent.action_received (non-speak) clears both actors', () => {
+    const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+    const thinking = werewolfRoomReducer(seeded, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'agent.action_requested',
+        data: { phase: 'day-vote', playerId: 'p3' },
+      }),
+    });
+    const after = werewolfRoomReducer(thinking, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'agent.action_received',
+        data: { phase: 'day-vote', playerId: 'p3', action: { type: 'day-vote', voterId: 'p3', targetId: 'p2' } },
+      }),
+    });
+    expect(after.thinkingActor).toBeUndefined();
+    expect(after.speakingActor).toBeUndefined();
+  });
+
+  it('phase.changed clears both actors', () => {
+    const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+    const withSpeaking = werewolfRoomReducer(seeded, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'agent.action_received',
+        data: {
+          phase: 'day-speeches',
+          playerId: 'p2',
+          action: { type: 'speak', playerId: 'p2', inner: '', performance: '', speech: '' },
+        },
+      }),
+    });
+    const after = werewolfRoomReducer(withSpeaking, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'phase.changed',
+        data: { phase: 'day-vote', dayNumber: 1 },
+      }),
+    });
+    expect(after.thinkingActor).toBeUndefined();
+    expect(after.speakingActor).toBeUndefined();
+  });
+
+  it('speak action produces two timeline lines (speak + reason)', () => {
+    const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+    const after = werewolfRoomReducer(seeded, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'agent.action_received',
+        data: {
+          phase: 'day-speeches',
+          playerId: 'p1',
+          action: { type: 'speak', playerId: 'p1', inner: 'x', performance: 'nods', speech: 'I suspect Bot 2.' },
+          reasoningSummary: { intent: 'Expose the wolf', confidence: 0.8, keyObservations: [] },
+        },
+      }),
+    });
+    expect(after.timeline.some((l) => l.kind === 'speak')).toBe(true);
+    expect(after.timeline.some((l) => l.kind === 'reason')).toBe(true);
+  });
+
+  it('speak action without reasoningSummary produces one speak line only', () => {
+    const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+    const after = werewolfRoomReducer(seeded, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'agent.action_received',
+        data: {
+          phase: 'day-speeches',
+          playerId: 'p1',
+          action: { type: 'speak', playerId: 'p1', inner: '', performance: '', speech: 'Nothing.' },
+        },
+      }),
+    });
+    expect(after.timeline.some((l) => l.kind === 'speak')).toBe(true);
+    expect(after.timeline.some((l) => l.kind === 'reason')).toBe(false);
   });
 
   it('match-completed populates winner + revealed roles + per-seat alive', () => {

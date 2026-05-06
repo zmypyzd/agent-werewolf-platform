@@ -21,12 +21,12 @@ function phaseOf(event: WerewolfReplayEvent): string | undefined {
 export function normalizeWerewolfReplayEvent(
   event: WerewolfReplayEvent,
   names: NameIndex,
-): WerewolfTimelineLine | null {
+): WerewolfTimelineLine[] {
   const id = event.eventId;
   const ts = event.timestamp;
 
   if (event.eventType === 'match.started') {
-    return { id, timestamp: ts, kind: 'system', text: '对局开始' };
+    return [{ id, timestamp: ts, kind: 'system', text: '对局开始' }];
   }
 
   if (event.eventType === 'phase.changed') {
@@ -34,17 +34,17 @@ export function normalizeWerewolfReplayEvent(
     if (typeof phase === 'string') {
       if (phase.startsWith(NIGHT_PHASE_PREFIX)) {
         const n = Number(event.data['nightNumber'] ?? 0);
-        return { id, timestamp: ts, kind: 'phase-night', text: `🌙 夜 ${n}` };
+        return [{ id, timestamp: ts, kind: 'phase-night', text: `🌙 夜 ${n}` }];
       }
       if (phase.startsWith(DAY_PHASE_PREFIX)) {
         const d = Number(event.data['dayNumber'] ?? 0);
-        return { id, timestamp: ts, kind: 'phase-day', text: `☀️ 天 ${d}` };
+        return [{ id, timestamp: ts, kind: 'phase-day', text: `☀️ 天 ${d}` }];
       }
       if (phase === 'game-over') {
-        return { id, timestamp: ts, kind: 'system', text: '游戏结束' };
+        return [{ id, timestamp: ts, kind: 'system', text: '游戏结束' }];
       }
     }
-    return null;
+    return [];
   }
 
   if (event.eventType === 'agent.action_received') {
@@ -52,34 +52,51 @@ export function normalizeWerewolfReplayEvent(
     if (typeof phase === 'string' && phase.startsWith(NIGHT_PHASE_PREFIX)) {
       // Night actor identity is stripped by werewolfReplayEventToPublic.
       // Reducer folds these into a single system-night-fold line.
-      return null;
+      return [];
     }
     const action = event.data['action'] as
-      | { type?: string; targetId?: string }
+      | { type?: string; targetId?: string; playerId?: string; performance?: string; speech?: string }
       | undefined;
     const playerId = event.data['playerId'];
+    const reasoning = event.data['reasoningSummary'] as
+      | { intent?: string }
+      | undefined;
+
     if (action?.type === 'speak') {
-      return {
+      const speech = action.speech ?? '';
+      const performance = action.performance ?? '';
+      const speakLine: WerewolfTimelineLine = {
         id,
         timestamp: ts,
         kind: 'speak',
-        text: `${nameOf(playerId, names)} 发言`,
+        text: `${nameOf(playerId, names)}: "${speech}"`,
+        ...(performance ? { sub: performance } : {}),
       };
+      const lines: WerewolfTimelineLine[] = [speakLine];
+      if (reasoning?.intent) {
+        lines.push({
+          id: `${id}-reason`,
+          timestamp: ts,
+          kind: 'reason',
+          text: `💭 ${reasoning.intent}`,
+        });
+      }
+      return lines;
     }
-    if (action?.type === 'vote') {
-      return {
+    if (action?.type === 'day-vote') {
+      return [{
         id,
         timestamp: ts,
         kind: 'vote',
         text: `${nameOf(playerId, names)} 投 ${nameOf(action.targetId, names)}`,
-      };
+      }];
     }
-    return {
+    return [{
       id,
       timestamp: ts,
       kind: 'system',
       text: `${nameOf(playerId, names)} 行动`,
-    };
+    }];
   }
 
   if (event.eventType === 'match.completed') {
@@ -90,9 +107,9 @@ export function normalizeWerewolfReplayEvent(
         : winner === 'werewolf'
           ? '🏁 终局：狼人胜'
           : '🏁 终局';
-    return { id, timestamp: ts, kind: 'completion', text };
+    return [{ id, timestamp: ts, kind: 'completion', text }];
   }
 
   // engine.action_applied / agent.action_requested / agent.timeout / agent.invalid_action
-  return { id, timestamp: ts, kind: 'system', text: `[${event.eventType}]` };
+  return [{ id, timestamp: ts, kind: 'system', text: `[${event.eventType}]` }];
 }

@@ -62,13 +62,15 @@ export type WerewolfTimelineLineKind =
   | 'speak'
   | 'vote'
   | 'system-night-fold'
-  | 'completion';
+  | 'completion'
+  | 'reason';   // indented reasoning line, subordinate to the speak entry above it
 
 export interface WerewolfTimelineLine {
   id: string;
   kind: WerewolfTimelineLineKind;
   text: string;
   timestamp: number;
+  sub?: string;   // performance descriptor shown below speech text on 'speak' entries
 }
 
 export interface WerewolfRoomState {
@@ -78,7 +80,8 @@ export interface WerewolfRoomState {
   currentPhase: WerewolfPhase | 'pre-match' | 'completed';
   dayNumber: number;
   nightNumber: number;
-  currentActor?: string | undefined;
+  thinkingActor?: string | undefined;   // set on agent.action_requested, cleared on action_received
+  speakingActor?: string | undefined;   // set on agent.action_received (speak), cleared on phase.changed
   timeline: WerewolfTimelineLine[];
   winner?: WerewolfSide;
   failureReason?: string;

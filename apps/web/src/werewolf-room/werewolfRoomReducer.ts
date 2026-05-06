@@ -108,7 +108,8 @@ export function werewolfRoomReducer(
       status: 'completed',
       winner: action.winner,
       currentPhase: 'completed',
-      currentActor: undefined,
+      thinkingActor: undefined,
+      speakingActor: undefined,
       seats,
     };
   }
@@ -137,7 +138,8 @@ export function werewolfRoomReducer(
           typeof event.data['dayNumber'] === 'number'
             ? (event.data['dayNumber'] as number)
             : next.dayNumber,
-        currentActor: undefined,
+        thinkingActor: undefined,
+        speakingActor: undefined,
       };
     }
   }
@@ -145,7 +147,19 @@ export function werewolfRoomReducer(
   if (event.eventType === 'agent.action_requested') {
     if (!isNightPhase(phase)) {
       const pid = event.data['playerId'];
-      if (typeof pid === 'string') next = { ...next, currentActor: pid };
+      if (typeof pid === 'string') {
+        next = { ...next, thinkingActor: pid, speakingActor: undefined };
+      }
+    }
+  }
+
+  if (event.eventType === 'agent.action_received') {
+    const actionData = event.data['action'] as { type?: string } | undefined;
+    const pid = event.data['playerId'];
+    if (actionData?.type === 'speak' && typeof pid === 'string' && !isNightPhase(phase)) {
+      next = { ...next, thinkingActor: undefined, speakingActor: pid };
+    } else {
+      next = { ...next, thinkingActor: undefined, speakingActor: undefined };
     }
   }
 
@@ -156,15 +170,16 @@ export function werewolfRoomReducer(
         ...next,
         status: 'completed',
         currentPhase: 'completed',
-        currentActor: undefined,
+        thinkingActor: undefined,
+        speakingActor: undefined,
         winner: w,
       };
     }
   }
 
-  const line = normalizeWerewolfReplayEvent(event, names);
+  const lines = normalizeWerewolfReplayEvent(event, names);
 
-  if (line === null) {
+  if (lines.length === 0) {
     if (isNightPhase(phase)) {
       const last = next.timeline[next.timeline.length - 1];
       if (
@@ -185,5 +200,5 @@ export function werewolfRoomReducer(
     return next;
   }
 
-  return { ...next, timeline: [...next.timeline, line] };
+  return { ...next, timeline: [...next.timeline, ...lines] };
 }

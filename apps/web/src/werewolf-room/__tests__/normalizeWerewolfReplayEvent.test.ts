@@ -21,72 +21,72 @@ function makeEvent(partial: Partial<WerewolfReplayEvent>): WerewolfReplayEvent {
 
 describe('normalizeWerewolfReplayEvent', () => {
   it('match.started → "对局开始"', () => {
-    const line = normalizeWerewolfReplayEvent(
+    const lines = normalizeWerewolfReplayEvent(
       makeEvent({ eventType: 'match.started', timestamp: 100 }),
       NAME_INDEX,
     );
-    expect(line?.kind).toBe('system');
-    expect(line?.text).toBe('对局开始');
+    expect(lines[0]?.kind).toBe('system');
+    expect(lines[0]?.text).toBe('对局开始');
   });
 
   it('phase.changed to night-* → "🌙 夜 N"', () => {
-    const line = normalizeWerewolfReplayEvent(
+    const lines = normalizeWerewolfReplayEvent(
       makeEvent({
         eventType: 'phase.changed',
         data: { phase: 'night-werewolf-vote', nightNumber: 2 },
       }),
       NAME_INDEX,
     );
-    expect(line?.kind).toBe('phase-night');
-    expect(line?.text).toContain('夜 2');
+    expect(lines[0]?.kind).toBe('phase-night');
+    expect(lines[0]?.text).toContain('夜 2');
   });
 
   it('phase.changed to day-* → "☀️ 天 N"', () => {
-    const line = normalizeWerewolfReplayEvent(
+    const lines = normalizeWerewolfReplayEvent(
       makeEvent({
         eventType: 'phase.changed',
         data: { phase: 'day-speeches', dayNumber: 1 },
       }),
       NAME_INDEX,
     );
-    expect(line?.kind).toBe('phase-day');
-    expect(line?.text).toContain('天 1');
+    expect(lines[0]?.kind).toBe('phase-day');
+    expect(lines[0]?.text).toContain('天 1');
   });
 
   it('agent.action_received vote → "<name> 投 <target>"', () => {
-    const line = normalizeWerewolfReplayEvent(
+    const lines = normalizeWerewolfReplayEvent(
       makeEvent({
         eventType: 'agent.action_received',
         data: {
           phase: 'day-vote',
           playerId: 'p3',
-          action: { type: 'vote', targetId: 'p7' },
+          action: { type: 'day-vote', voterId: 'p3', targetId: 'p7' },
         },
       }),
       NAME_INDEX,
     );
-    expect(line?.kind).toBe('vote');
-    expect(line?.text).toBe('Bot 3 投 Bot 7');
+    expect(lines[0]?.kind).toBe('vote');
+    expect(lines[0]?.text).toBe('Bot 3 投 Bot 7');
   });
 
-  it('agent.action_received speak → "<name> 发言"', () => {
-    const line = normalizeWerewolfReplayEvent(
+  it('agent.action_received speak → "<name>: \\"speech\\""', () => {
+    const lines = normalizeWerewolfReplayEvent(
       makeEvent({
         eventType: 'agent.action_received',
         data: {
           phase: 'day-speeches',
           playerId: 'p2',
-          action: { type: 'speak', text: 'hi' },
+          action: { type: 'speak', playerId: 'p2', inner: '', performance: '', speech: 'hello' },
         },
       }),
       NAME_INDEX,
     );
-    expect(line?.kind).toBe('speak');
-    expect(line?.text).toBe('Bot 2 发言');
+    expect(lines[0]?.kind).toBe('speak');
+    expect(lines[0]?.text).toBe('Bot 2: "hello"');
   });
 
-  it('agent.action_received in night-* phase returns null (folded by reducer)', () => {
-    const line = normalizeWerewolfReplayEvent(
+  it('agent.action_received in night-* phase returns empty array (folded by reducer)', () => {
+    const lines = normalizeWerewolfReplayEvent(
       makeEvent({
         eventType: 'agent.action_received',
         data: {
@@ -96,29 +96,79 @@ describe('normalizeWerewolfReplayEvent', () => {
       }),
       NAME_INDEX,
     );
-    expect(line).toBeNull();
+    expect(lines).toHaveLength(0);
   });
 
   it('match.completed → completion line with winner', () => {
-    const line = normalizeWerewolfReplayEvent(
+    const lines = normalizeWerewolfReplayEvent(
       makeEvent({
         eventType: 'match.completed',
         data: { winner: 'good' },
       }),
       NAME_INDEX,
     );
-    expect(line?.kind).toBe('completion');
-    expect(line?.text).toContain('好人胜');
+    expect(lines[0]?.kind).toBe('completion');
+    expect(lines[0]?.text).toContain('好人胜');
   });
 
   it('engine.action_applied (non-speak/vote) → "system" line', () => {
-    const line = normalizeWerewolfReplayEvent(
+    const lines = normalizeWerewolfReplayEvent(
       makeEvent({
         eventType: 'engine.action_applied',
         data: { phase: 'day-resolve', action: { type: 'resolve' } },
       }),
       NAME_INDEX,
     );
-    expect(line?.kind).toBe('system');
+    expect(lines[0]?.kind).toBe('system');
+  });
+
+  it('agent.action_received speak → two lines: speak + reason', () => {
+    const lines = normalizeWerewolfReplayEvent(
+      makeEvent({
+        eventType: 'agent.action_received',
+        data: {
+          phase: 'day-speeches',
+          playerId: 'p1',
+          action: { type: 'speak', playerId: 'p1', inner: 'secret', performance: 'nods slowly', speech: 'I suspect Bot 2.' },
+          reasoningSummary: { intent: 'Expose the wolf', confidence: 0.8, keyObservations: ['obs'] },
+        },
+      }),
+      NAME_INDEX,
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[0]!.kind).toBe('speak');
+    expect(lines[0]!.text).toContain('Bot 1');
+    expect(lines[0]!.text).toContain('I suspect Bot 2.');
+    expect(lines[0]!.sub).toBe('nods slowly');
+    expect(lines[1]!.kind).toBe('reason');
+    expect(lines[1]!.text).toContain('Expose the wolf');
+  });
+
+  it('agent.action_received speak without reasoningSummary → one speak line only', () => {
+    const lines = normalizeWerewolfReplayEvent(
+      makeEvent({
+        eventType: 'agent.action_received',
+        data: {
+          phase: 'day-speeches',
+          playerId: 'p1',
+          action: { type: 'speak', playerId: 'p1', inner: '', performance: 'shrugs', speech: 'No comment.' },
+        },
+      }),
+      NAME_INDEX,
+    );
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.kind).toBe('speak');
+    expect(lines[0]!.sub).toBe('shrugs');
+  });
+
+  it('returns empty array for night-phase events', () => {
+    const lines = normalizeWerewolfReplayEvent(
+      makeEvent({
+        eventType: 'agent.action_received',
+        data: { phase: 'night-werewolf-vote', action: { type: 'werewolf-vote' } },
+      }),
+      NAME_INDEX,
+    );
+    expect(lines).toHaveLength(0);
   });
 });
