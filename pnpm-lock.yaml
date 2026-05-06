@@ -148,6 +148,34 @@ importers:
         specifier: ^5.5.0
         version: 5.9.3
 
+  examples/werewolf-local-simulation:
+    dependencies:
+      '@agent-poker/agent-protocol':
+        specifier: workspace:*
+        version: link:../../packages/agent-protocol
+      '@agent-poker/agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/agent-runtime
+      '@agent-poker/persistence':
+        specifier: workspace:*
+        version: link:../../packages/persistence
+      '@agent-poker/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@agent-poker/werewolf-orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/werewolf-orchestrator
+      fastify:
+        specifier: ^4.28.0
+        version: 4.29.1
+    devDependencies:
+      tsx:
+        specifier: ^4.0.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
   packages/agent-protocol:
     dependencies:
       zod:
