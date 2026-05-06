@@ -214,6 +214,12 @@ describe('werewolf E2E over real HTTP adapters', () => {
       }
 
       // 2. The owning player saw private-state frames; spectator never did.
+      // The spectator never *subscribed* to player1Topic, so the assertion
+      // below verifies hub routing isolation, not the server-side
+      // subscribe-time ownership gate. The gate itself (rejecting
+      // cross-user subscribe attempts) is exercised in
+      // werewolf-ws.test.ts ("a client cannot subscribe to another user's
+      // player topic — server-side gate drops the subscribe").
       const playerPrivate = playerClient.messages.filter(
         (m) => m['topic'] === player1Topic && m['type'] === 'werewolf.private_state',
       );
@@ -227,6 +233,12 @@ describe('werewolf E2E over real HTTP adapters', () => {
       const replayBody = await replayRes.json() as {
         data: Array<{ eventType: string; sequence: number; data: Record<string, unknown> }>;
       };
+      // Both paths (WS publish and persistence) apply
+      // werewolfReplayEventToPublic, which currently never returns null.
+      // If a future event type is suppressed by the filter, this count
+      // equality will break — that means the persisted artifact and WS
+      // stream have diverged and the test author should revisit the
+      // public projection contract.
       expect(replayBody.data.length).toBe(liveEvents.length);
       expect(
         replayBody.data.find((e) => e.eventType === 'match.started')?.data['seed'],
