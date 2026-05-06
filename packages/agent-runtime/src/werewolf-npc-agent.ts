@@ -337,6 +337,10 @@ function buildObservations(req: WerewolfDecisionRequest, rng: () => number): str
     candidates.push('Hunter ability is active — any elimination is a calculated risk for opponents');
   }
 
-  const shuffled = [...candidates].sort(() => rng() - 0.5);
+  const shuffled = [...candidates];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+  }
   return shuffled.slice(0, 2 + Math.floor(rng() * 2));
 }
