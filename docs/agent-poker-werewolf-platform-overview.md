@@ -108,6 +108,19 @@ without any external network hop.
 - E2E (in-process agents + WS hub + persisted artifact):
   `apps/api/src/__tests__/werewolf-matches.integration.test.ts`
 
+## Demo UI
+
+A demo-level frontend lives at `/werewolf` (no auth). It lets a user create
+a game, fill it with `WerewolfRandomMockAgent` instances via the new
+`POST /api/v1/werewolf-games/...` lifecycle endpoints, start the match,
+and watch it stream over the existing `match:<gameId>` WS topic. See
+`docs/superpowers/specs/2026-05-06-werewolf-demo-ui-design.md` for the
+spec and `docs/superpowers/plans/2026-05-06-werewolf-demo-ui.md` for the
+implementation plan. Information-isolation invariants (seed never echoed,
+roles only revealed after game-over, night actor never highlighted) are
+pinned by tests in `apps/api/src/__tests__/werewolf-games-info-isolation.test.ts`
+and `apps/web/src/werewolf-room/__tests__/werewolfRoomReducer.test.ts`.
+
 ## Out of scope
 
 The werewolf platform deliberately omits, as of Plan 4c:
@@ -120,5 +133,5 @@ The werewolf platform deliberately omits, as of Plan 4c:
 - A real `WerewolfWsAgentAdapter`. The class exists as a placeholder
   throwing `NotImplementedError`; a real implementation can land later
   without churning callers.
-- Web UI for werewolf matches. `apps/web` currently surfaces the poker
-  flow only; a werewolf live view is future work.
+- A persisted-artifact replay UI at `/werewolf-matches/:id`. The API
+  artifact route already exists; only a viewer is missing.

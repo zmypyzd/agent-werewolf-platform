@@ -12,6 +12,8 @@ import { AgentEditPage } from './pages/AgentEditPage.js';
 import { MatchesPage } from './pages/MatchesPage.js';
 import { MatchReplayPage } from './pages/MatchReplayPage.js';
 import { SimulatePage } from './pages/SimulatePage.js';
+import { WerewolfLobbyPage } from './pages/WerewolfLobbyPage.js';
+import { WerewolfRoomPage } from './pages/WerewolfRoomPage.js';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -40,6 +42,8 @@ const routes: RouteObject[] = [
   { path: '/agents/new', element: <ProtectedRoute><AppShellRoute><AgentEditPage mode="new" /></AppShellRoute></ProtectedRoute> },
   { path: '/agents/:agentId/edit', element: <ProtectedRoute><AppShellRoute><AgentEditPage mode="edit" /></AppShellRoute></ProtectedRoute> },
   { path: '/simulate', element: <ProtectedRoute><AppShellRoute><SimulatePage /></AppShellRoute></ProtectedRoute> },
+  { path: '/werewolf', element: <AppShellRoute><WerewolfLobbyPage /></AppShellRoute> },
+  { path: '/werewolf/:gameId', element: <AppShellRoute><WerewolfRoomPage /></AppShellRoute> },
   { path: '/', element: <Navigate to="/lobby" replace /> },
   { path: '*', element: <Navigate to="/lobby" replace /> },
 ];

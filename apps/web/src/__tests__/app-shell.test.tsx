@@ -45,6 +45,7 @@ describe('AppShell', () => {
       ['Lobby', '/lobby'],
       ['Agents', '/agents'],
       ['Replays', '/matches'],
+      ['Werewolf', '/werewolf'],
     ]);
     expect(html).not.toContain('href="/simulate"');
     expect(html).toContain('class="app-shell"');
