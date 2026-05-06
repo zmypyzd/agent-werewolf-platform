@@ -89,10 +89,12 @@ describe('WerewolfNpcAgent', () => {
 
     const promise = npc.requestDecision(makeSpeakRequest());
 
-    await vi.advanceTimersByTimeAsync(1999);
-    // should not have resolved yet
     let resolved = false;
     void promise.then(() => { resolved = true; });
+    await vi.advanceTimersByTimeAsync(1999);
+    await Promise.resolve(); // flush microtasks
+    expect(resolved).toBe(false);  // must not have resolved yet
+
     await vi.advanceTimersByTimeAsync(1);
     await vi.runAllTimersAsync();
     expect(resolved).toBe(true);
