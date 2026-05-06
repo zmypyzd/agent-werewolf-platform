@@ -17,6 +17,7 @@ const baseNavItems: NavItem[] = [
   { label: 'Lobby', href: '/lobby', match: path => path === '/lobby' || path.startsWith('/tables/') },
   { label: 'Agents', href: '/agents', match: path => path.startsWith('/agents') },
   { label: 'Replays', href: '/matches', match: path => path.startsWith('/matches') },
+  { label: 'Werewolf', href: '/werewolf', match: path => path.startsWith('/werewolf') },
 ];
 
 const simulateNavItem: NavItem = {
