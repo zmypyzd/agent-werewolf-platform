@@ -77,6 +77,11 @@ function SeatCard({ seat, pos, thinking, speaking, revealRoles, onInvite }: Seat
     statusText = 'thinking…';
   } else if (speaking) {
     statusText = 'speaking…';
+  } else if (revealRoles && seat.revealedRole) {
+    // Match ended — survivors should display their role like the dead, not
+    // a stale "waiting" left over from the lobby. Without this branch the
+    // post-match scoreboard read as "Bot 1 waiting" for every survivor.
+    statusText = ROLE_LABELS[seat.revealedRole];
   } else {
     statusText = 'waiting';
   }
