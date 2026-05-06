@@ -213,6 +213,23 @@ describe('werewolf E2E over real HTTP adapters', () => {
         expect(f.payload['agentId']).toBeUndefined();
       }
 
+      // Invariant 3: speak.inner is stripped before publish. The unit-level
+      // pin lives in werewolf-filter.test.ts; this scan closes the matrix at
+      // the e2e layer. WerewolfRandomMockAgent emits speak with empty inner,
+      // so this is defense-in-depth — it catches a future regression where
+      // inner becomes non-empty AND werewolfReplayEventToPublic's strip
+      // breaks at the same time.
+      const speakEvents = liveEvents.filter(
+        (e) =>
+          e.type === 'engine.action_applied' &&
+          (e.payload['action'] as { type?: string } | undefined)?.type === 'speak',
+      );
+      expect(speakEvents.length).toBeGreaterThan(0);
+      for (const e of speakEvents) {
+        const action = e.payload['action'] as Record<string, unknown>;
+        expect(action['inner']).toBeUndefined();
+      }
+
       // 2. The owning player saw private-state frames; spectator never did.
       // The spectator never *subscribed* to player1Topic, so the assertion
       // below verifies hub routing isolation, not the server-side
