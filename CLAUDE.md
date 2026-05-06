@@ -4,7 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Multi-agent Texas Hold'em poker platform for technical experimentation. **Not** a real-money product — no wagering, deposits, withdrawals, odds markets, or financial transactions. Do not add any such features.
+Multi-agent platform for technical experimentation: a Texas Hold'em
+poker module and a 9-player werewolf module share the same monorepo,
+agent-runtime, persistence, and realtime hub. See
+`docs/agent-poker-werewolf-platform-overview.md` for the werewolf
+architecture and information-isolation invariants.
+**Not** a real-money product — no wagering, deposits, withdrawals, odds markets, or financial transactions. Do not add any such features.
 
 Stack: TypeScript 5.5 (strict), Node 20, pnpm 10.33.2 workspaces, Vitest 2, Fastify 4 + Zod, React 18 + Vite 5. Modules use NodeNext resolution and `"type": "module"`; relative imports must use `.js` extensions even for `.ts` sources.
 
@@ -20,6 +25,7 @@ pnpm typecheck                                          # build-mode tsc, filter
 pnpm dev:api                                            # Fastify on :3000, /api/v1 prefix
 pnpm --filter web dev                                   # Vite on :5173, proxies /api and /ws to :3000
 pnpm demo                                               # local simulation, see examples/local-simulation
+pnpm demo:werewolf                                      # werewolf 9-AI simulation, see examples/werewolf-local-simulation
 ```
 
 Filter to a single package while iterating, e.g.:
@@ -86,6 +92,7 @@ examples/local-simulation drives the orchestrator directly (no API).
 - TypeScript is strict with `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`. No `any`, no `// @ts-ignore` — fix the root cause.
 - Files: `kebab-case.ts`. Classes/types: `PascalCase`. Functions/vars: `camelCase`. Constants: `SCREAMING_SNAKE_CASE`.
 - `examples/local-simulation` writes per-hand and per-match artifacts to `examples/local-simulation/output/...`; those JSON/JSONL files are gitignored.
+- `examples/werewolf-local-simulation` writes per-match artifacts to `examples/werewolf-local-simulation/output/matches/<gameId>/`; those JSON/JSONL files are gitignored.
 
 ## Documentation
 
