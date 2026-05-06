@@ -284,7 +284,14 @@ export class WerewolfMatchRunner {
     });
 
     if (this.state.phase !== phaseBefore) {
-      this.emit('phase.changed', { from: phaseBefore, to: this.state.phase });
+      // Spectator UI consumes `phase`, `nightNumber`, `dayNumber` (see
+      // apps/web/src/werewolf-room/werewolfRoomReducer.ts). `from` is omitted
+      // because the previous phase is already implied by the prior event stream.
+      this.emit('phase.changed', {
+        phase: this.state.phase,
+        nightNumber: this.state.nightNumber,
+        dayNumber: this.state.dayNumber,
+      });
     }
 
     if (this.decisionTraceStore) {
