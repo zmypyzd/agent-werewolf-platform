@@ -91,10 +91,49 @@ async function subscribeAndWaitForPong(
 }
 
 describe('WS /ws', () => {
-  it('rejects unauthenticated upgrade', async () => {
+  it('permits unauthenticated upgrade (public topics gated per-subscribe, not at upgrade time)', async () => {
+    // Anonymous spectators must be able to open WS and subscribe to public
+    // topics — match data and lobby data are already public via REST, so
+    // requiring auth at upgrade time would block spectator UIs without
+    // protecting any private data. Private topics (player:*, seat:*) are
+    // gated per-subscribe — see the dedicated tests below.
     const { ws } = await connectWs(null);
     await new Promise(r => setTimeout(r, 100));
-    expect([WebSocket.CLOSED, WebSocket.CLOSING]).toContain(ws.readyState);
+    expect([WebSocket.CONNECTING, WebSocket.OPEN]).toContain(ws.readyState);
+    ws.close();
+  });
+
+  it('anonymous client subscribed to lobby receives table_created broadcasts', async () => {
+    // Lobby is public — any visitor can see the same table list at
+    // GET /api/v1/tables, so the WS lobby topic must match.
+    const aliceSid = await registerAs('alice-pub-lobby@x.test');
+    const anon = await connectWs(null);
+
+    anon.ws.send(JSON.stringify({ topic: 'lobby', type: 'subscribe', payload: {} }));
+    await new Promise(r => setTimeout(r, 50));
+    await createTable(aliceSid);
+
+    const msg = await awaitMessage(anon.messages, m => m['type'] === 'lobby.table_created');
+    const payload = msg['payload'] as Record<string, unknown>;
+    expect(payload['tableId']).toEqual(expect.stringMatching(/^tbl-/));
+    anon.ws.close();
+  });
+
+  it('anonymous client cannot subscribe to a player:<otherUserId>:<gameId> topic (silently dropped)', async () => {
+    // Private channels stay private. Subscribe is silently dropped with no
+    // close, no error frame — same shape as for unknown topics, so probing
+    // returns no information.
+    const anon = await connectWs(null);
+    anon.ws.send(JSON.stringify({ topic: 'player:user-XYZ:g1', type: 'subscribe', payload: {} }));
+    anon.ws.send(JSON.stringify({ topic: 'player:user-XYZ:g1', type: 'ping', payload: {} }));
+    // Ping is echoed back regardless of subscribe — the absence of any
+    // payload-bearing frame on this topic is the contract we test.
+    await awaitMessage(anon.messages, m => m['topic'] === 'player:user-XYZ:g1' && m['type'] === 'pong');
+    const subscribed = anon.messages.filter(
+      m => m['topic'] === 'player:user-XYZ:g1' && m['type'] !== 'pong',
+    );
+    expect(subscribed).toHaveLength(0);
+    anon.ws.close();
   });
 
   it('two clients on the same table topic both receive the lobby + table_created broadcast', async () => {

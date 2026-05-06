@@ -63,9 +63,10 @@ async function registerAs(email: string): Promise<{ sid: string; userId: string 
   return { sid, userId: meBody.data.user.userId };
 }
 
-function connectWs(sid: string): Promise<{ ws: WebSocket; messages: Array<Record<string, unknown>> }> {
+function connectWs(sid: string | null): Promise<{ ws: WebSocket; messages: Array<Record<string, unknown>> }> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${wsBaseUrl}/ws`, { headers: { cookie: `apk_sid=${sid}` } });
+    const headers: Record<string, string> = sid ? { cookie: `apk_sid=${sid}` } : {};
+    const ws = new WebSocket(`${wsBaseUrl}/ws`, { headers });
     const messages: Array<Record<string, unknown>> = [];
     ws.on('message', (data) => {
       try { messages.push(JSON.parse(data.toString())); } catch { /* ignore */ }
@@ -124,6 +125,78 @@ describe('werewolf WS topics', () => {
     }
 
     a.ws.close();
+  }, 10_000);
+
+  it('regression: anonymous spectator (no auth) can subscribe to match:<gameId> and receive replay events', async () => {
+    // Bug found by /qa on 2026-05-06: WS upgrade rejected ALL anonymous
+    // connections with code 1008 'unauthenticated', so the spectator UI
+    // (apps/web/src/pages/WerewolfRoomPage.tsx) saw zero phase events,
+    // leaving the page stuck at "等待开局" indefinitely. Fix: allow
+    // anonymous WS upgrade; gate auth per-topic on subscribe instead.
+    // Match data is already public via REST (GET /werewolf-games/:id) and
+    // already filtered to public form via werewolfReplayEventToPublic, so
+    // there is no information disclosure from this change.
+    // Report: .gstack/qa-reports/qa-report-werewolf-stuck-2026-05-06.md
+    const anon = await connectWs(null);
+    anon.ws.send(JSON.stringify({ topic: 'match:g-anon-spec', type: 'subscribe', payload: {} }));
+    anon.ws.send(JSON.stringify({ topic: 'match:g-anon-spec', type: 'ping', payload: {} }));
+    await awaitMessage(anon.messages, (m) => m['topic'] === 'match:g-anon-spec' && m['type'] === 'pong');
+
+    await setupAndRunMatch('g-anon-spec', []);
+
+    // Anonymous client must receive match.completed → proves the public
+    // event stream actually flowed end-to-end without auth.
+    await awaitMessage(anon.messages, (m) => m['topic'] === 'match:g-anon-spec' && m['type'] === 'match.completed');
+
+    // It must also see phase.changed events (the actual symptom from the
+    // bug report — phase indicator stayed at "等待开局" because no
+    // phase.changed ever arrived).
+    const phaseFrames = anon.messages.filter(
+      (m) => m['topic'] === 'match:g-anon-spec' && m['type'] === 'phase.changed',
+    );
+    expect(phaseFrames.length).toBeGreaterThan(0);
+
+    // Defense in depth: night actor identity must still be redacted on the
+    // anonymous stream — same as authed (existing test above).
+    const nightFrames = anon.messages.filter(
+      (m) =>
+        ['agent.action_requested', 'agent.action_received'].includes(m['type'] as string) &&
+        ['night-werewolf-vote', 'night-witch', 'night-seer'].includes(
+          (m['payload'] as Record<string, unknown>)['phase'] as string,
+        ),
+    );
+    for (const f of nightFrames) {
+      expect((f['payload'] as Record<string, unknown>)['playerId']).toBeUndefined();
+      expect((f['payload'] as Record<string, unknown>)['agentId']).toBeUndefined();
+    }
+
+    anon.ws.close();
+  }, 10_000);
+
+  it('regression: anonymous spectator cannot subscribe to player:<otherUserId>:<gameId> (silent drop)', async () => {
+    // Inverse contract test for the regression above: the per-topic gate
+    // must still reject private topic subscribes from anonymous clients.
+    // Verified by sending a player:* subscribe and confirming no payload
+    // frames ever arrive on that topic. Ping is echoed regardless of
+    // subscribe state, which serves as a positive control that the socket
+    // is alive and processing messages.
+    const owner = await registerAs('owner-priv@x.test');
+    const anon = await connectWs(null);
+    const ownerTopic = `player:${owner.userId}:g-anon-priv`;
+
+    anon.ws.send(JSON.stringify({ topic: ownerTopic, type: 'subscribe', payload: {} }));
+    anon.ws.send(JSON.stringify({ topic: ownerTopic, type: 'ping', payload: {} }));
+    await awaitMessage(anon.messages, (m) => m['topic'] === ownerTopic && m['type'] === 'pong');
+
+    await setupAndRunMatch('g-anon-priv', [{ userId: owner.userId }]);
+    await new Promise(r => setTimeout(r, 200));
+
+    const privateFramesLeaked = anon.messages.filter(
+      (m) => m['topic'] === ownerTopic && m['type'] === 'werewolf.private_state',
+    );
+    expect(privateFramesLeaked).toHaveLength(0);
+
+    anon.ws.close();
   }, 10_000);
 
   it('player:<userId>:<gameId> is delivered only to the owning user', async () => {
