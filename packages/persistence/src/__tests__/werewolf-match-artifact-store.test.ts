@@ -9,7 +9,6 @@ import type { BuildWerewolfArtifactInput } from '../werewolf-match-artifact-seri
 
 const baseInput = (overrides: Partial<BuildWerewolfArtifactInput> = {}): BuildWerewolfArtifactInput => ({
   matchId: 'g-1',
-  seed: 'seed-1',
   startedAt: 1_000,
   completedAt: 2_000,
   nightCount: 1,

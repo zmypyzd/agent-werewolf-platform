@@ -32,7 +32,6 @@ describe('WerewolfMatchTtlCleaner', () => {
     if (!oldRecord) throw new Error('g-old artifact not found');
     await artifactStore.saveMatchArtifact({
       matchId: 'g-old',
-      seed: 'seed-g-old',
       startedAt: 0,
       completedAt: OLD_COMPLETED_AT,
       nightCount: oldRecord.summary.nightCount,

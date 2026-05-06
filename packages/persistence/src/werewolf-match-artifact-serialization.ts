@@ -25,7 +25,6 @@ import { werewolfReplayEventToPublic } from '@agent-poker/realtime';
 
 export interface BuildWerewolfArtifactInput {
   readonly matchId: string;
-  readonly seed: string;
   readonly startedAt: number;
   readonly completedAt: number;
   readonly nightCount: number;

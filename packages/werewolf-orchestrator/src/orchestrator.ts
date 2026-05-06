@@ -204,7 +204,6 @@ export class WerewolfOrchestrator {
       : [];
     const input: BuildWerewolfArtifactInput = {
       matchId,
-      seed: summary.seed,
       startedAt: summary.startedAt,
       completedAt: summary.completedAt,
       nightCount: summary.nightCount,

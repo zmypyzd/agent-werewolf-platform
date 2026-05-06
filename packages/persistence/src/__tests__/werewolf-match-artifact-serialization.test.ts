@@ -5,7 +5,6 @@ import { buildWerewolfArtifact } from '../werewolf-match-artifact-serialization.
 describe('buildWerewolfArtifact', () => {
   const baseInput = () => ({
     matchId: 'g-1',
-    seed: 'seed-1',
     startedAt: 1_000,
     completedAt: 2_000,
     nightCount: 1,
@@ -92,5 +91,24 @@ describe('buildWerewolfArtifact', () => {
   it('rejects matchId with path separators', () => {
     const input = { ...baseInput(), matchId: 'a/b' };
     expect(() => buildWerewolfArtifact(input, 1_500)).toThrow(/Invalid matchId path segment/);
+  });
+
+  it('summary JSON does not contain match seed', () => {
+    const out = buildWerewolfArtifact({
+      matchId: 'm-seed-redaction',
+      startedAt: 1_000,
+      completedAt: 2_000,
+      nightCount: 1,
+      dayCount: 1,
+      stepCount: 10,
+      replayEventCount: 12,
+      winner: 'good',
+      finalPlayers: [],
+      fullHistory: [],
+      replayEvents: [],
+      decisionTraces: [],
+    });
+    expect(out.summaryRaw).not.toContain('"seed"');
+    expect(out.record.summary as unknown as Record<string, unknown>).not.toHaveProperty('seed');
   });
 });
