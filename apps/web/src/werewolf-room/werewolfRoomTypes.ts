@@ -78,7 +78,7 @@ export interface WerewolfRoomState {
   currentPhase: WerewolfPhase | 'pre-match' | 'completed';
   dayNumber: number;
   nightNumber: number;
-  currentActor?: string;
+  currentActor?: string | undefined;
   timeline: WerewolfTimelineLine[];
   winner?: WerewolfSide;
   failureReason?: string;
