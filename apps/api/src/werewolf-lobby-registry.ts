@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { WerewolfRandomMockAgent } from '@agent-poker/agent-runtime';
+import { WerewolfNpcAgent, WerewolfRandomMockAgent } from '@agent-poker/agent-runtime';
 import {
   WerewolfGameNotFoundError,
   WerewolfSeatOccupiedError,
@@ -146,8 +146,13 @@ export class WerewolfLobbyRegistry {
     const playerId = seat.playerId;
     const agentId = `agent-${playerId}`;
     const finalDisplayName = displayName?.trim() || `Bot ${seatIndex + 1}`;
-    const agent = new WerewolfRandomMockAgent(agentId, finalDisplayName, {
+    const inner = new WerewolfRandomMockAgent(agentId, finalDisplayName, {
       seed: entry.seed,
+    });
+    const agent = new WerewolfNpcAgent(agentId, finalDisplayName, inner, {
+      seed: entry.seed,
+      personality: 'balanced',
+      thinkingDelayRange: [1500, 3500],
     });
     this.options.orchestrator.registerAgent(gameId, playerId, agent);
     entry.seats[seatIndex] = {

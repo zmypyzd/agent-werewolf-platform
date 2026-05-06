@@ -119,5 +119,5 @@ describe('WerewolfLobbyRegistry', () => {
     expect(after.winner).toMatch(/good|werewolf/);
     expect(after.finalPlayers).toHaveLength(9);
     expect(after.completedAt).toBeGreaterThan(0);
-  });
+  }, 360000);
 });
