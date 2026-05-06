@@ -111,7 +111,10 @@ describe('normalizeWerewolfReplayEvent', () => {
     expect(lines[0]?.text).toContain('好人胜');
   });
 
-  it('engine.action_applied (non-speak/vote) → "system" line', () => {
+  it('engine.action_applied → no timeline line (effects surface via phase.changed and agent.action_received)', () => {
+    // Updated for ISSUE-003 — surfacing engine.action_applied verbatim flooded
+    // the timeline with "[engine.action_applied]" entries and also blocked the
+    // reducer's night-fold dedupe (which only fires when the normalizer returns []).
     const lines = normalizeWerewolfReplayEvent(
       makeEvent({
         eventType: 'engine.action_applied',
@@ -119,7 +122,7 @@ describe('normalizeWerewolfReplayEvent', () => {
       }),
       NAME_INDEX,
     );
-    expect(lines[0]?.kind).toBe('system');
+    expect(lines).toEqual([]);
   });
 
   it('agent.action_received speak → two lines: speak + reason', () => {

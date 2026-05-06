@@ -110,6 +110,38 @@ export function normalizeWerewolfReplayEvent(
     return [{ id, timestamp: ts, kind: 'completion', text }];
   }
 
-  // engine.action_applied / agent.action_requested / agent.timeout / agent.invalid_action
-  return [{ id, timestamp: ts, kind: 'system', text: `[${event.eventType}]` }];
+  // engine.action_applied / agent.action_requested are pure transport noise
+  // for the spectator timeline — their effects surface through phase.changed,
+  // agent.action_received (speak/vote), and the night-fold collapse. Emitting
+  // a raw "[engine.action_applied]" line here would flood the timeline and
+  // also block the night-fold dedupe in the reducer (which only fires when
+  // the normalizer returns []).
+  if (
+    event.eventType === 'engine.action_applied' ||
+    event.eventType === 'agent.action_requested'
+  ) {
+    return [];
+  }
+
+  if (event.eventType === 'agent.timeout') {
+    const playerId = event.data['playerId'];
+    return [{
+      id,
+      timestamp: ts,
+      kind: 'system',
+      text: `${nameOf(playerId, names)} 超时`,
+    }];
+  }
+
+  if (event.eventType === 'agent.invalid_action') {
+    const playerId = event.data['playerId'];
+    return [{
+      id,
+      timestamp: ts,
+      kind: 'system',
+      text: `${nameOf(playerId, names)} 动作无效`,
+    }];
+  }
+
+  return [];
 }
