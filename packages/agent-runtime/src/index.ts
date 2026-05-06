@@ -13,4 +13,5 @@ export * from './bootstrap-script-generator.js';
 export * from './werewolf-decision-request.js';
 export * from './werewolf-mock-agent.js';
 export * from './werewolf-random-mock-agent.js';
+export * from './werewolf-npc-agent.js';
 export * from './werewolf-prng.js';
