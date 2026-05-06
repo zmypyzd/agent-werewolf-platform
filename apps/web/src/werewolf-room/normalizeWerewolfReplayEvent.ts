@@ -13,6 +13,21 @@ function nameOf(playerId: unknown, names: NameIndex): string {
   return names[playerId] ?? playerId;
 }
 
+function causeLabel(cause: string): string {
+  switch (cause) {
+    case 'wolf-kill':
+      return '夜里被狼刀';
+    case 'witch-poison':
+      return '女巫毒杀';
+    case 'banishment':
+      return '白天投票放逐';
+    case 'hunter-shoot':
+      return '猎人开枪';
+    default:
+      return cause;
+  }
+}
+
 function phaseOf(event: WerewolfReplayEvent): string | undefined {
   const v = event.data['phase'];
   return typeof v === 'string' ? v : undefined;
@@ -31,20 +46,66 @@ export function normalizeWerewolfReplayEvent(
 
   if (event.eventType === 'phase.changed') {
     const phase = phaseOf(event);
+    const lines: WerewolfTimelineLine[] = [];
+
+    // Eliminations announced by this transition. Wolf-kill / witch-poison
+    // surface on day-announce; banishment after day-resolve; hunter-shoot
+    // immediately. Each death gets its own timeline line so spectators see
+    // the cause, not just the body count.
+    const eliminatedRaw = event.data['eliminated'];
+    const eliminated = Array.isArray(eliminatedRaw)
+      ? eliminatedRaw.filter(
+          (e): e is { playerId: string; cause: string } =>
+            typeof e === 'object' &&
+            e !== null &&
+            typeof (e as Record<string, unknown>)['playerId'] === 'string' &&
+            typeof (e as Record<string, unknown>)['cause'] === 'string',
+        )
+      : [];
+    for (let i = 0; i < eliminated.length; i++) {
+      const d = eliminated[i]!;
+      lines.push({
+        id: `${id}-death-${i}`,
+        timestamp: ts,
+        kind: 'system',
+        text: `💀 ${nameOf(d.playerId, names)} 出局（${causeLabel(d.cause)}）`,
+      });
+    }
+
+    // PK round indicator. The engine loops back into day-vote on a tie or no
+    // strict majority, up to WEREWOLF_MAX_PK_ROUNDS. Surface this so the
+    // user understands the second round of vote events is a re-vote, not
+    // duplicate/stuck events.
+    const pkRound =
+      typeof event.data['pkRound'] === 'number'
+        ? (event.data['pkRound'] as number)
+        : 0;
+    if (phase === 'day-vote' && pkRound > 0) {
+      lines.push({
+        id: `${id}-pk`,
+        timestamp: ts,
+        kind: 'system',
+        text: `⚖️ 票数相同，进入第 ${pkRound + 1} 轮决战投票`,
+      });
+    }
+
     if (typeof phase === 'string') {
       if (phase.startsWith(NIGHT_PHASE_PREFIX)) {
         const n = Number(event.data['nightNumber'] ?? 0);
-        return [{ id, timestamp: ts, kind: 'phase-night', text: `🌙 夜 ${n}` }];
-      }
-      if (phase.startsWith(DAY_PHASE_PREFIX)) {
+        lines.push({ id, timestamp: ts, kind: 'phase-night', text: `🌙 夜 ${n}` });
+      } else if (phase.startsWith(DAY_PHASE_PREFIX)) {
         const d = Number(event.data['dayNumber'] ?? 0);
-        return [{ id, timestamp: ts, kind: 'phase-day', text: `☀️ 天 ${d}` }];
-      }
-      if (phase === 'game-over') {
-        return [{ id, timestamp: ts, kind: 'system', text: '游戏结束' }];
+        // Don't double-emit a phase-day banner on the PK revote — pkRound is
+        // a re-emitted day-vote event, not a fresh day. The PK line above
+        // already explains what's happening.
+        if (pkRound === 0) {
+          lines.push({ id, timestamp: ts, kind: 'phase-day', text: `☀️ 天 ${d}` });
+        }
+      } else if (phase === 'game-over') {
+        lines.push({ id, timestamp: ts, kind: 'system', text: '游戏结束' });
       }
     }
-    return [];
+    return lines;
   }
 
   if (event.eventType === 'agent.action_received') {

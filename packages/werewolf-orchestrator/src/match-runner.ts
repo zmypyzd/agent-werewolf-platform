@@ -275,6 +275,16 @@ export class WerewolfMatchRunner {
         : {}),
     });
 
+    // Snapshot the bits we need to diff after applyAction:
+    //   - history length: lets us read back the entries appended by THIS
+    //     action (death rows in particular) without scanning the whole
+    //     match.
+    //   - pkRound: the engine loops back into day-vote on tied votes WITHOUT
+    //     changing phase (apply-action.ts:248). The reducer can't infer the
+    //     PK round from the event stream alone, so we surface it here.
+    const historyLenBefore = this.state.history.length;
+    const pkRoundBefore = this.state.pendingDayVote?.pkRound ?? 0;
+
     this.state = applyAction(this.state, action);
 
     this.emit('engine.action_applied', {
@@ -283,14 +293,37 @@ export class WerewolfMatchRunner {
       newPhase: this.state.phase,
     });
 
-    if (this.state.phase !== phaseBefore) {
+    // Deaths that landed during this action — read straight off the history
+    // tail. Multiple can land in one tick (wolf-kill + witch-poison resolved
+    // together at night-resolve). The engine already redacts night-actor
+    // identity; deaths surface only at day-announce / day-resolve / hunter-
+    // shoot transitions, which are public moments.
+    const eliminated = this.state.history
+      .slice(historyLenBefore)
+      .filter((entry): entry is Extract<typeof entry, { type: 'death' }> => entry.type === 'death')
+      .map((d) => ({ playerId: d.playerId, cause: d.cause }));
+
+    const pkRoundAfter = this.state.pendingDayVote?.pkRound ?? 0;
+    const phaseChanged = this.state.phase !== phaseBefore;
+    // PK revote loop: phase stays day-vote but pkRound increments. Surface
+    // this as a phase.changed event with pkRound so spectators see the new
+    // round explicitly instead of mistaking 9 more vote events for "the same
+    // round, slower".
+    const pkRoundIncreased =
+      this.state.phase === 'day-vote' && pkRoundAfter > pkRoundBefore;
+
+    if (phaseChanged || pkRoundIncreased) {
       // Spectator UI consumes `phase`, `nightNumber`, `dayNumber` (see
       // apps/web/src/werewolf-room/werewolfRoomReducer.ts). `from` is omitted
       // because the previous phase is already implied by the prior event stream.
+      // `eliminated` and `pkRound` are present only when meaningful, so old
+      // consumers that ignore them keep working.
       this.emit('phase.changed', {
         phase: this.state.phase,
         nightNumber: this.state.nightNumber,
         dayNumber: this.state.dayNumber,
+        ...(eliminated.length > 0 ? { eliminated } : {}),
+        ...(pkRoundAfter > 0 ? { pkRound: pkRoundAfter } : {}),
       });
     }
 

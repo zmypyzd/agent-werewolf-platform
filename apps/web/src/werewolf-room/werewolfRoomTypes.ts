@@ -73,6 +73,17 @@ export interface WerewolfTimelineLine {
   sub?: string;   // performance descriptor shown below speech text on 'speak' entries
 }
 
+// The most recent day-phase speech, surfaced as a "broadcast booth" panel in
+// the center of the table. Persists across the brief gap between speakers
+// (when speakingActor is briefly unset while the next agent is being
+// requested) so spectators can finish reading. Cleared on phase change.
+export interface CurrentSpeech {
+  actorId: string;
+  text: string;
+  performance?: string;
+  intent?: string;
+}
+
 export interface WerewolfRoomState {
   gameId: string;
   status: 'waiting' | 'ready' | 'running' | 'completed' | 'failed';
@@ -82,6 +93,7 @@ export interface WerewolfRoomState {
   nightNumber: number;
   thinkingActor?: string | undefined;   // set on agent.action_requested, cleared on action_received
   speakingActor?: string | undefined;   // set on agent.action_received (speak), cleared on phase.changed
+  currentSpeech?: CurrentSpeech | undefined;
   timeline: WerewolfTimelineLine[];
   winner?: WerewolfSide;
   failureReason?: string;

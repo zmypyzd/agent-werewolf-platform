@@ -1,4 +1,5 @@
 import {
+  type CurrentSpeech,
   type SeatVM,
   type WerewolfPhase,
   type WerewolfReplayEvent,
@@ -110,6 +111,7 @@ export function werewolfRoomReducer(
       currentPhase: 'completed',
       thinkingActor: undefined,
       speakingActor: undefined,
+      currentSpeech: undefined,
       seats,
     };
   }
@@ -127,9 +129,35 @@ export function werewolfRoomReducer(
   if (event.eventType === 'phase.changed') {
     const newPhase = event.data['phase'] as WerewolfPhase | undefined;
     if (newPhase) {
+      // Apply eliminations carried by this phase transition: night deaths
+      // land on the day-announce transition, banishments land on whatever
+      // phase follows day-resolve, hunter shots land on whatever follows
+      // hunter-shoot. The orchestrator surfaces them as event.data.eliminated
+      // (see packages/werewolf-orchestrator/src/match-runner.ts).
+      const eliminatedRaw = event.data['eliminated'];
+      const eliminated: ReadonlyArray<{ playerId: string; cause: string }> =
+        Array.isArray(eliminatedRaw)
+          ? eliminatedRaw.filter(
+              (e): e is { playerId: string; cause: string } =>
+                typeof e === 'object' &&
+                e !== null &&
+                typeof (e as Record<string, unknown>)['playerId'] === 'string' &&
+                typeof (e as Record<string, unknown>)['cause'] === 'string',
+            )
+          : [];
+      const seatsAfterDeaths =
+        eliminated.length > 0
+          ? next.seats.map((s) =>
+              eliminated.some((e) => e.playerId === s.playerId)
+                ? { ...s, alive: false }
+                : s,
+            )
+          : next.seats;
+
       next = {
         ...next,
         currentPhase: newPhase,
+        seats: seatsAfterDeaths,
         nightNumber:
           typeof event.data['nightNumber'] === 'number'
             ? (event.data['nightNumber'] as number)
@@ -140,6 +168,7 @@ export function werewolfRoomReducer(
             : next.dayNumber,
         thinkingActor: undefined,
         speakingActor: undefined,
+        currentSpeech: undefined,
       };
     }
   }
@@ -154,11 +183,30 @@ export function werewolfRoomReducer(
   }
 
   if (event.eventType === 'agent.action_received') {
-    const actionData = event.data['action'] as { type?: string } | undefined;
+    const actionData = event.data['action'] as
+      | { type?: string; speech?: string; performance?: string }
+      | undefined;
     const pid = event.data['playerId'];
+    const reasoning = event.data['reasoningSummary'] as
+      | { intent?: string }
+      | undefined;
     if (actionData?.type === 'speak' && typeof pid === 'string' && !isNightPhase(phase)) {
-      next = { ...next, thinkingActor: undefined, speakingActor: pid };
+      const speech: CurrentSpeech = {
+        actorId: pid,
+        text: actionData.speech ?? '',
+        ...(actionData.performance ? { performance: actionData.performance } : {}),
+        ...(reasoning?.intent ? { intent: reasoning.intent } : {}),
+      };
+      next = {
+        ...next,
+        thinkingActor: undefined,
+        speakingActor: pid,
+        currentSpeech: speech,
+      };
     } else {
+      // Non-speak action (vote, etc.) — clear speakingActor but KEEP currentSpeech
+      // so spectators can finish reading the last speech while voting starts.
+      // currentSpeech is cleared on phase.changed.
       next = { ...next, thinkingActor: undefined, speakingActor: undefined };
     }
   }
@@ -172,6 +220,7 @@ export function werewolfRoomReducer(
         currentPhase: 'completed',
         thinkingActor: undefined,
         speakingActor: undefined,
+        currentSpeech: undefined,
         winner: w,
       };
     }

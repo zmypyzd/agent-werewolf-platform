@@ -1,4 +1,5 @@
 import type { WerewolfRoomState, SeatVM, WerewolfRole } from './werewolfRoomTypes.js';
+import { WerewolfSpeechBoard } from './WerewolfSpeechBoard.js';
 
 export interface WerewolfTableSurfaceProps {
   state: WerewolfRoomState;
@@ -39,13 +40,21 @@ const ROLE_LABELS: Record<WerewolfRole, string> = {
 interface SeatCardProps {
   seat: SeatVM;
   pos: { left: string; top: string };
-  thinking: boolean;
   speaking: boolean;
+  // True when this seat is the subject of state.currentSpeech but
+  // speakingActor has cleared (the gap window between speakers). Keeps the
+  // seat highlight in sync with the center speech panel so the user always
+  // sees the same person highlighted in both places. The thinking state
+  // (next agent being requested) is intentionally NOT rendered on the
+  // surface — only the active speaker (LIVE) and the most-recent speaker
+  // (SPOKE) are shown, so the table only ever highlights one seat and the
+  // user's eye doesn't get pulled to a non-speaking seat.
+  replaying: boolean;
   revealRoles: boolean;
   onInvite?: (seatIndex: number) => void;
 }
 
-function SeatCard({ seat, pos, thinking, speaking, revealRoles, onInvite }: SeatCardProps) {
+function SeatCard({ seat, pos, speaking, replaying, revealRoles, onInvite }: SeatCardProps) {
   const isEmpty = seat.occupant.kind === 'empty';
   const dead = !seat.alive && !isEmpty;
   const isWolf = seat.revealedRole === 'werewolf';
@@ -54,8 +63,8 @@ function SeatCard({ seat, pos, thinking, speaking, revealRoles, onInvite }: Seat
     'ww-seat',
     isEmpty ? 'is-empty' : '',
     dead ? 'is-dead' : '',
-    thinking ? 'is-thinking' : '',
     speaking ? 'is-speaking' : '',
+    replaying ? 'is-replay' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -73,10 +82,10 @@ function SeatCard({ seat, pos, thinking, speaking, revealRoles, onInvite }: Seat
     statusText = revealRoles && seat.revealedRole
       ? `✝ ${ROLE_LABELS[seat.revealedRole]}`
       : '✝ 已淘汰';
-  } else if (thinking) {
-    statusText = 'thinking…';
   } else if (speaking) {
     statusText = 'speaking…';
+  } else if (replaying) {
+    statusText = 'just spoke';
   } else if (revealRoles && seat.revealedRole) {
     // Match ended — survivors should display their role like the dead, not
     // a stale "waiting" left over from the lobby. Without this branch the
@@ -89,8 +98,8 @@ function SeatCard({ seat, pos, thinking, speaking, revealRoles, onInvite }: Seat
   const statusClass = [
     'ww-seat-status',
     dead ? 'is-dead' : '',
-    thinking ? 'is-thinking' : '',
     speaking ? 'is-speaking' : '',
+    replaying ? 'is-replay' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -151,18 +160,28 @@ export function WerewolfTableSurface({
       <div className="ww-seat-arc">
         {state.seats.map((seat, i) => {
           const pos = SEAT_POSITIONS[i] ?? { left: '50%', top: '50%' };
+          const isLive = state.speakingActor === seat.playerId;
+          // Replay: center panel still shows this seat's last speech, but
+          // speakingActor has already cleared (next agent is being requested).
+          // The amber glow used to live on the next thinker — we moved it
+          // here so the seat-glow always points at the same person the
+          // center panel is showing.
+          const isReplay =
+            !state.speakingActor &&
+            state.currentSpeech?.actorId === seat.playerId;
           return (
             <SeatCard
               key={seat.seatIndex}
               seat={seat}
               pos={pos}
-              thinking={state.thinkingActor === seat.playerId}
-              speaking={state.speakingActor === seat.playerId}
+              speaking={isLive}
+              replaying={isReplay}
               revealRoles={revealRoles}
               {...(onInvite ? { onInvite } : {})}
             />
           );
         })}
+        <WerewolfSpeechBoard state={state} />
       </div>
     </div>
   );
