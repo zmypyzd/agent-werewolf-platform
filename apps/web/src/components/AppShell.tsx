@@ -28,9 +28,14 @@ const simulateNavItem: NavItem = {
 
 export function AppShell({ children, currentPath = '', showSimulate = false }: AppShellProps) {
   const navItems = showSimulate ? [...baseNavItems, simulateNavItem] : baseNavItems;
+  // The werewolf module owns its own dark "industrial/mysterious" theme
+  // (DESIGN.md). Without this hook, the white poker AppShell sat on top of a
+  // dark werewolf room and broke the surveillance-room aesthetic.
+  const isWerewolf = currentPath.startsWith('/werewolf');
+  const shellClass = isWerewolf ? 'app-shell is-werewolf' : 'app-shell';
 
   return (
-    <div className="app-shell">
+    <div className={shellClass}>
       <header className="app-topbar">
         <Link to="/lobby" className="app-brand">
           <span className="app-brand-mark" aria-hidden="true">AP</span>

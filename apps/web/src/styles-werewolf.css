@@ -35,6 +35,40 @@
   min-height: 100vh;
 }
 
+/* ── AppShell theme override on werewolf routes ─────────── */
+/* DESIGN.md mandates a dark "industrial/mysterious" surveillance-room
+   aesthetic for the werewolf module. The default AppShell is white-on-light
+   from the poker theme; without this override the werewolf room sat under
+   a glaring white nav bar. */
+.app-shell.is-werewolf {
+  background: var(--ww-bg);
+}
+
+.app-shell.is-werewolf .app-topbar {
+  background: var(--ww-surface);
+  border-bottom-color: var(--ww-border);
+}
+
+.app-shell.is-werewolf .app-brand {
+  color: var(--ww-text);
+  font-family: 'Syne', sans-serif;
+}
+
+.app-shell.is-werewolf .app-nav-link {
+  color: var(--ww-text-muted);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.app-shell.is-werewolf .app-nav-link:hover {
+  background: var(--ww-surface-hover);
+  color: var(--ww-text);
+}
+
+.app-shell.is-werewolf .app-nav-link-active {
+  color: var(--ww-night);
+  text-decoration-color: var(--ww-night);
+}
+
 /* ══════════════════════════════════════════════════════════
    ROOM PAGE
    ══════════════════════════════════════════════════════════ */
