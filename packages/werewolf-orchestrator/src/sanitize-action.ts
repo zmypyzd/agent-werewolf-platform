@@ -3,7 +3,7 @@ import type { WerewolfAction } from '@agent-poker/shared';
 // Strip private fields from a WerewolfAction before embedding it in a broadcast
 // event payload.
 //
-// - speak: drop `inner` (心声) — explicitly private per WerewolfPublicHistoryEntry.
+// - speak: include `inner` (心声) — intentionally public for NPC thinking display.
 // - night-phase actions (werewolf-vote / witch-save / witch-poison / seer-divine):
 //   strip all ID fields. The act of taking these actions still leaks the actor's
 //   role via the surrounding event envelope (playerId / agentId / phase) — that

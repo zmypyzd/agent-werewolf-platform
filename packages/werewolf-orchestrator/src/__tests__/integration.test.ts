@@ -75,13 +75,13 @@ describe('werewolf-orchestrator integration', () => {
     }
   });
 
-  it('events broadcast on replay-event never carry non-empty speak.inner content', async () => {
+  it('events broadcast on replay-event include speak.inner (inner is intentionally public)', async () => {
     const orch = new WerewolfOrchestrator();
     const { matchId, initialState } = orch.createMatch({
-      gameId: 'g-int-leak-inner',
-      seed: 'int-leak-inner',
+      gameId: 'g-int-inner-public',
+      seed: 'int-inner-public',
     });
-    const SECRET = 'PRIVATE_INNER_THOUGHT_DO_NOT_LEAK';
+    const INNER_TEXT = 'INNER_THOUGHT_NOW_PUBLIC';
     const inkyAgent = (id: string, name: string): WerewolfAgent => ({
       agentId: id,
       name,
@@ -94,7 +94,7 @@ describe('werewolf-orchestrator integration', () => {
             action: {
               type: 'speak',
               playerId: first.playerId,
-              inner: SECRET,
+              inner: INNER_TEXT,
               performance: 'calm',
               speech: 'public speech',
             },
@@ -109,9 +109,9 @@ describe('werewolf-orchestrator integration', () => {
     const events: WerewolfReplayEvent[] = [];
     orch.subscribe(matchId, (e) => events.push(e));
     await orch.runMatch(matchId);
-    for (const e of events) {
-      expect(JSON.stringify(e.data)).not.toContain(SECRET);
-    }
+    // inner is now intentionally public — it must appear in at least one broadcast event
+    const hasInner = events.some((e) => JSON.stringify(e.data).includes(INNER_TEXT));
+    expect(hasInner).toBe(true);
   });
 
   it('night-phase action broadcasts strip voterId/targetId fields', async () => {
