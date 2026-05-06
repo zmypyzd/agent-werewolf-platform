@@ -19,3 +19,7 @@ examples/local-simulation/output/**/*.webp
 examples/werewolf-local-simulation/output/**/*.jsonl
 examples/werewolf-local-simulation/output/**/*.json
 !examples/werewolf-local-simulation/output/.gitkeep
+
+# Local reference material — third-party werewolf project mirrors used as
+# inspiration during scoping. Not part of the build.
+参考代码/
