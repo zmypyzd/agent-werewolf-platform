@@ -36,6 +36,8 @@ import { tablesRoutes } from './routes/tables.js';
 import { simulateRoutes } from './routes/simulate.js';
 import { matchesRoutes } from './routes/matches.js';
 import { werewolfMatchesRoutes } from './routes/werewolf-matches.js';
+import { werewolfGamesRoutes } from './routes/werewolf-games.js';
+import { WerewolfLobbyRegistry } from './werewolf-lobby-registry.js';
 import { authRoutes } from './routes/auth.js';
 import { wsRoutes } from './routes/ws.js';
 import { meAgentsRoutes } from './routes/me-agents.js';
@@ -57,6 +59,7 @@ export interface BuildServerOptions {
   // attachMatch from outside buildServer. buildServer always registers an
   // onClose hook that calls detachAll(), so callers need not do it themselves.
   werewolfHubAttachment?: WerewolfHubAttachment;
+  werewolfLobbyRegistry?: WerewolfLobbyRegistry;
   userStore?: IUserStore;
   sessionStore?: ISessionStore;
   agentConfigStore?: IUserAgentConfigStore;
@@ -187,6 +190,15 @@ export function buildServer(opts: BuildServerOptions = {}) {
     werewolfHubAttachment.detachAll();
   });
 
+  const werewolfLobbyRegistry =
+    opts.werewolfLobbyRegistry ??
+    new WerewolfLobbyRegistry({
+      orchestrator: werewolfOrch,
+      attachMatch: (gameId, ownership) =>
+        werewolfHubAttachment.attachMatch(gameId, ownership),
+      detachMatch: (gameId) => werewolfHubAttachment.detachMatch(gameId),
+    });
+
   // Auth plugin + WebSocket plugin must register before any route plugin that
   // needs request.user / requireAuth or the websocket route option.
   app.register(async (scope) => {
@@ -212,6 +224,10 @@ export function buildServer(opts: BuildServerOptions = {}) {
     await scope.register(werewolfMatchesRoutes, {
       prefix: '/api/v1',
       werewolfMatchArtifactStore,
+    });
+    await scope.register(werewolfGamesRoutes, {
+      prefix: '/api/v1',
+      registry: werewolfLobbyRegistry,
     });
     await scope.register(meAgentsRoutes, { prefix: '/api/v1', agentConfigStore, orchestrator: orch });
     await scope.register(agentInvitesRoutes, { prefix: '/api/v1', agentInviteStore, agentConfigStore });
