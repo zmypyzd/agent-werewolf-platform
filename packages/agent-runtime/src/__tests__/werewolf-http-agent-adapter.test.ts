@@ -163,6 +163,22 @@ describe('WerewolfHttpAgentAdapter', () => {
     expect(result.timedOut).toBe(true);
   });
 
+  it('omits the auth header when not configured (no empty header sent)', async () => {
+    stub = await startStub(() => ({
+      body: {
+        requestId: 'req-1',
+        agentId: 'agent-1',
+        action: { type: 'werewolf-vote', voterId: 'p1', targetId: 'p2' },
+      },
+    }));
+    const adapter = new WerewolfHttpAgentAdapter({
+      agentId: 'agent-1', name: 'A', endpointUrl: stub.url, timeoutMs: 1000,
+    });
+    await adapter.requestDecision(baseReq);
+    const headers = stub.received[0]!.headers;
+    expect(headers['authorization']).toBeUndefined();
+  });
+
   it('sends the auth header when configured, and does not write the value to stdout/stderr', async () => {
     stub = await startStub(() => ({
       body: {
