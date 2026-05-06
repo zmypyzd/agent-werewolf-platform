@@ -42,7 +42,13 @@
 .ww-room {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  /* Pin to the viewport minus the AppShell topbar so .ww-game-area's
+     `flex: 1; min-height: 0` actually constrains the timeline. With
+     min-height: 100vh the room could grow with the timeline contents,
+     producing a multi-thousand-pixel page that never engaged the
+     timeline's internal scroll. */
+  height: calc(100vh - var(--app-topbar-height));
+  overflow: hidden;
   background: var(--ww-bg);
   color: var(--ww-text);
   font-family: 'DM Sans', sans-serif;
