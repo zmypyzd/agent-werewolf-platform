@@ -6,7 +6,18 @@ import type {
 } from '@agent-poker/shared';
 import { WerewolfHttpAgentAdapter } from '../werewolf-http-agent-adapter.js';
 import { TimeoutHandler } from '../timeout-handler.js';
-import { werewolfFallback } from '@agent-poker/werewolf-orchestrator';
+
+// Synthetic fallback mirroring werewolf-orchestrator's werewolfFallback
+// (returns the first valid action). Inlined here so this test does not
+// import from werewolf-orchestrator — that would create a typecheck-time
+// cycle, since agent-runtime sits upstream of werewolf-orchestrator in
+// the workspace DAG. The orchestrator's real fallback is exercised by
+// werewolf-orchestrator's own match-runner tests.
+const werewolfFallback = (req: WerewolfDecisionRequest): WerewolfDecisionResponse => ({
+  requestId: req.requestId,
+  agentId: req.agentId,
+  action: req.validActions[0]!,
+});
 
 interface ReceivedRequest {
   body: unknown;
