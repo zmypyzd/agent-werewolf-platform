@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { RealtimeHub, type HubConnection } from '@agent-poker/realtime';
 import { WerewolfRandomMockAgent } from '@agent-poker/agent-runtime';
+import type { WerewolfReplayEvent } from '@agent-poker/shared';
 import { WerewolfOrchestrator } from '../orchestrator.js';
-import { attachWerewolfHub } from '../hub-integration.js';
+import { attachWerewolfHub, buildPublicMatchPayload } from '../hub-integration.js';
 
 interface CapturedFrame {
   topic: string;
@@ -152,5 +153,33 @@ describe('attachWerewolfHub', () => {
     // After detachAll, attachMatch must be valid again — confirms the internal
     // handle map was cleared, not just emptied of subscriptions.
     expect(() => attachment.attachMatch(a.matchId, [])).not.toThrow();
+  });
+
+  it('buildPublicMatchPayload: publish-time metadata wins over event.data fields with shadowing names', () => {
+    // Construct a synthetic public event whose `data` carries shadow metadata.
+    // If the spread order ever flips, these assertions catch it: the spoofed
+    // values inside `data` would leak past the publish-time wrappers and
+    // silently break sequence-based ordering downstream.
+    const synthetic: WerewolfReplayEvent = {
+      eventId: 'real-event-id',
+      gameId: 'g-precedence',
+      sequence: 42,
+      timestamp: 1_000_000,
+      eventType: 'phase.changed',
+      data: {
+        eventId: 'spoofed-event-id',
+        sequence: -1,
+        timestamp: 0,
+        phase: 'day-vote',
+      },
+    };
+
+    const payload = buildPublicMatchPayload(synthetic);
+
+    expect(payload['eventId']).toBe('real-event-id');
+    expect(payload['sequence']).toBe(42);
+    expect(payload['timestamp']).toBe(1_000_000);
+    // Non-shadow data field still flows through.
+    expect(payload['phase']).toBe('day-vote');
   });
 });

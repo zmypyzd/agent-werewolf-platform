@@ -4,7 +4,24 @@ import {
   werewolfPlayerTopic,
   werewolfReplayEventToPublic,
 } from '@agent-poker/realtime';
+import type { WerewolfReplayEvent } from '@agent-poker/shared';
 import type { WerewolfOrchestrator, WerewolfPrivateStateEvent } from './orchestrator.js';
+
+// Build the publish-time payload for a public match event. The spread order
+// is load-bearing: publish-time metadata (eventId, sequence, timestamp) MUST
+// win over any same-named field smuggled inside `event.data`. Inverse order
+// would let a future event whose data carries a stale `sequence` silently
+// break sequence-based ordering downstream.
+export function buildPublicMatchPayload(
+  publicEvent: WerewolfReplayEvent,
+): Record<string, unknown> {
+  return {
+    ...publicEvent.data,
+    eventId: publicEvent.eventId,
+    sequence: publicEvent.sequence,
+    timestamp: publicEvent.timestamp,
+  };
+}
 
 export interface WerewolfPlayerOwnership {
   readonly playerId: string;
@@ -56,12 +73,7 @@ export function attachWerewolfHub(
       hub.publish(matchTopic, {
         topic: matchTopic,
         type: publicEvent.eventType,
-        payload: {
-          ...publicEvent.data,
-          eventId: publicEvent.eventId,
-          sequence: publicEvent.sequence,
-          timestamp: publicEvent.timestamp,
-        },
+        payload: buildPublicMatchPayload(publicEvent),
       });
     });
 
