@@ -142,21 +142,19 @@ describe('werewolfReplayEventToPublic — werewolf', () => {
     expect(out.data['reason']).toBe('bad target');
   });
 
-  it('strips inner from speak action even if it slipped past sanitize-action', () => {
-    // Defense in depth — sanitize-action.ts already drops `inner`, but if a
-    // future event ever embeds a raw action, this filter catches it.
+  it('passes inner through on speak action (inner is intentionally public)', () => {
     const e: WerewolfReplayEvent = {
       ...baseEvent,
       eventType: 'engine.action_applied',
       data: {
         phase: 'day-speeches',
-        action: { type: 'speak', playerId: 'p1', inner: 'SECRET', performance: 'X', speech: 'Y' },
+        action: { type: 'speak', playerId: 'p1', inner: 'my thoughts', performance: 'X', speech: 'Y' },
         newPhase: 'day-speeches',
       },
     };
     const out = werewolfReplayEventToPublic(e)!;
     const action = out.data['action'] as Record<string, unknown>;
-    expect(action['inner']).toBeUndefined();
+    expect(action['inner']).toBe('my thoughts');
     expect(action['performance']).toBe('X');
   });
 

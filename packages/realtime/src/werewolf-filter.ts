@@ -34,11 +34,6 @@ export function werewolfReplayEventToPublic(
     const { seed: _seed, ...rest } = next.data as Record<string, unknown>;
     next = { ...next, data: rest };
   }
-  // Defense in depth: even on engine.action_applied (which is public), make
-  // sure we never broadcast `inner` from a speak action.
-  if (containsSpeakInner(next.data)) {
-    next = { ...next, data: stripSpeakInner(next.data) as Record<string, unknown> };
-  }
   return next;
 }
 
@@ -59,27 +54,3 @@ function stripActorFields(event: WerewolfReplayEvent): WerewolfReplayEvent {
   return { ...event, data: next };
 }
 
-function containsSpeakInner(value: unknown): boolean {
-  if (value === null || typeof value !== 'object') return false;
-  if (Array.isArray(value)) return value.some(containsSpeakInner);
-  const obj = value as Record<string, unknown>;
-  if (obj['type'] === 'speak' && Object.prototype.hasOwnProperty.call(obj, 'inner')) {
-    return true;
-  }
-  for (const v of Object.values(obj)) {
-    if (containsSpeakInner(v)) return true;
-  }
-  return false;
-}
-
-function stripSpeakInner(value: unknown): unknown {
-  if (value === null || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map(stripSpeakInner);
-  const obj = value as Record<string, unknown>;
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (obj['type'] === 'speak' && k === 'inner') continue;
-    out[k] = stripSpeakInner(v);
-  }
-  return out;
-}

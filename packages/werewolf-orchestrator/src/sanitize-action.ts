@@ -23,6 +23,7 @@ export function sanitizeActionForBroadcast(
       return {
         type: 'speak',
         playerId: action.playerId,
+        inner: action.inner,
         performance: action.performance,
         speech: action.speech,
       };
