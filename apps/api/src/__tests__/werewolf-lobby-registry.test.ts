@@ -123,4 +123,47 @@ describe('WerewolfLobbyRegistry', () => {
     expect(after.finalPlayers).toHaveLength(9);
     expect(after.completedAt).toBeGreaterThan(0);
   });
+
+  it('ISSUE-005: seats carry alive/causeOfDeath for running and completed games', async () => {
+    // Pre-start: alive and causeOfDeath must be absent (info-isolation invariant)
+    const { gameId } = registry.create({ name: 'iso' });
+    registry.fillWithNpcs(gameId);
+    const ready = registry.get(gameId)!;
+    expect(ready.status).toBe('ready');
+    for (const s of ready.seats) {
+      expect(s).not.toHaveProperty('alive');
+      expect(s).not.toHaveProperty('causeOfDeath');
+    }
+
+    // Running game: all players alive immediately after start (no deaths yet)
+    const realOrch = new WerewolfOrchestrator();
+    const reg = new WerewolfLobbyRegistry({
+      orchestrator: realOrch,
+      attachMatch: vi.fn(),
+      detachMatch: vi.fn(),
+      npcThinkingDelayRange: [0, 0],
+    });
+    const { gameId: gid } = reg.create({ name: 'iso2', seed: 'werewolf-seed-001' });
+    reg.fillWithNpcs(gid);
+    const runPromise = reg.start(gid);
+    runPromise.catch(() => { /* ignore in-test */ });
+    const running = reg.get(gid)!;
+    expect(running.status).toBe('running');
+    for (const s of running.seats) {
+      expect(s.alive).toBe(true);
+    }
+
+    // Completed game: seats reflect final alive state from tracked deaths
+    await runPromise;
+    const completed = reg.get(gid)!;
+    expect(completed.status).toBe('completed');
+    const deadSeats = completed.seats.filter((s) => s.alive === false);
+    expect(deadSeats.length).toBeGreaterThan(0);
+    for (const s of deadSeats) {
+      expect(['wolf-kill', 'witch-poison', 'banishment', 'hunter-shoot']).toContain(s.causeOfDeath);
+    }
+    // Cross-check: seats alive:false must match finalPlayers alive:false count
+    const finalDead = completed.finalPlayers?.filter((p) => !p.alive) ?? [];
+    expect(deadSeats.length).toBe(finalDead.length);
+  });
 });

@@ -27,6 +27,11 @@ interface ServerLobbyEntry {
     // 'running' or 'completed'. Pre-start the fields are absent.
     role?: string;
     side?: WerewolfSide;
+    // ISSUE-005 follow-up: alive/causeOfDeath tracked from phase.changed
+    // events on the server. Present for running/completed games; absent
+    // pre-start. Lets reloading spectators restore the dead-player board.
+    alive?: boolean;
+    causeOfDeath?: 'wolf-kill' | 'witch-poison' | 'banishment' | 'hunter-shoot';
   }>;
   createdAt: number;
   startedAt?: number;
@@ -118,12 +123,20 @@ export function werewolfRoomReducer(
       const incomingSide = isKnownSide(s.side) ? s.side : undefined;
       const role = incomingRole ?? prev?.revealedRole;
       const side = incomingSide ?? prev?.revealedSide;
+      // ISSUE-005 fix: server now carries alive/causeOfDeath for running and
+      // completed games. Prefer the server value (authoritative after reload);
+      // fall back to local state accumulated from WS events; default true for
+      // pre-start games where the field is absent.
+      const incomingAlive = typeof s.alive === 'boolean' ? s.alive : undefined;
+      const incomingCause = isKnownCause(s.causeOfDeath ?? '') ? s.causeOfDeath : undefined;
+      const alive = incomingAlive !== undefined ? incomingAlive : (prev ? prev.alive : true);
+      const causeOfDeath = incomingCause ?? prev?.causeOfDeath;
       return {
         seatIndex: s.seatIndex,
         playerId: s.playerId,
         occupant: s.occupant,
-        alive: prev ? prev.alive : true,
-        ...(prev?.causeOfDeath ? { causeOfDeath: prev.causeOfDeath } : {}),
+        alive,
+        ...(causeOfDeath ? { causeOfDeath } : {}),
         ...(role ? { revealedRole: role } : {}),
         ...(side ? { revealedSide: side } : {}),
       };

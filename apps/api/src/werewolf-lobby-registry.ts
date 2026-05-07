@@ -15,6 +15,19 @@ export type WerewolfLobbyStatus =
   | 'completed'
   | 'failed';
 
+type CauseOfDeath = 'wolf-kill' | 'witch-poison' | 'banishment' | 'hunter-shoot';
+
+const KNOWN_CAUSES: ReadonlySet<string> = new Set([
+  'wolf-kill',
+  'witch-poison',
+  'banishment',
+  'hunter-shoot',
+]);
+
+function isKnownCause(v: unknown): v is CauseOfDeath {
+  return typeof v === 'string' && KNOWN_CAUSES.has(v);
+}
+
 export interface WerewolfSeatInfo {
   seatIndex: number;
   playerId: string;
@@ -30,6 +43,13 @@ export interface WerewolfSeatInfo {
   // werewolf-games-info-isolation.test.ts.
   role?: string;
   side?: 'good' | 'werewolf';
+  // ISSUE-005 follow-up — alive state tracked from phase.changed.eliminated
+  // events as the match progresses. Absent pre-start; present for running and
+  // completed games. Lets a late-joining or reloading spectator restore the
+  // dead-player visual from the polling loop rather than requiring the WS
+  // stream (which only delivers future events, not history).
+  alive?: boolean;
+  causeOfDeath?: CauseOfDeath;
 }
 
 export interface WerewolfFinalPlayerView {
@@ -78,6 +98,10 @@ interface InternalEntry extends WerewolfLobbyEntry {
   // from the seed at that point). Used to enrich the public seats when the
   // match has started — see publicEntry.
   rosterByPlayerId: ReadonlyMap<string, { role: string; side: 'good' | 'werewolf' }>;
+  // ISSUE-005 — populated by phase.changed.eliminated events in start().
+  // Empty until the match starts; used in publicEntry to expose per-seat
+  // alive/causeOfDeath so late-joining spectators can restore the board.
+  deathsByPlayerId: Map<string, { cause: CauseOfDeath }>;
 }
 
 const TOTAL_SEATS = 9;
@@ -92,16 +116,22 @@ function emptySeats(): WerewolfSeatInfo[] {
 
 function publicEntry(entry: InternalEntry): WerewolfLobbyEntry {
   // Defense-in-depth: explicit destructure-and-omit prevents future fields like
-  // `seed` (and now `rosterByPlayerId`) from leaking via spread.
-  const { seed: _seed, rosterByPlayerId, ...rest } = entry;
-  // Reveal role/side only once the match has started. Pre-start statuses
+  // `seed`, `rosterByPlayerId`, and `deathsByPlayerId` from leaking via spread.
+  const { seed: _seed, rosterByPlayerId, deathsByPlayerId, ...rest } = entry;
+  // Reveal role/side/alive only once the match has started. Pre-start statuses
   // (waiting / ready) keep the existing isolation invariant — a viewer of
   // the lobby endpoint cannot derive the roster before the game begins.
   const reveal = rest.status === 'running' || rest.status === 'completed';
   if (!reveal) return rest;
   const seats = rest.seats.map((s) => {
     const r = rosterByPlayerId.get(s.playerId);
-    return r ? { ...s, role: r.role, side: r.side } : s;
+    const d = deathsByPlayerId.get(s.playerId);
+    return {
+      ...s,
+      ...(r ? { role: r.role, side: r.side } : {}),
+      alive: d === undefined,
+      ...(d ? { causeOfDeath: d.cause } : {}),
+    };
   });
   return { ...rest, seats };
 }
@@ -135,6 +165,7 @@ export class WerewolfLobbyRegistry {
       createdAt: Date.now(),
       seed,
       rosterByPlayerId,
+      deathsByPlayerId: new Map(),
     };
     this.entries.set(gameId, entry);
     return publicEntry(entry);
@@ -222,8 +253,23 @@ export class WerewolfLobbyRegistry {
     entry.status = 'running';
     entry.startedAt = Date.now();
     this.options.attachMatch(gameId, []);
+    // ISSUE-005 — track per-seat deaths as they happen so the lobby endpoint
+    // can expose alive/causeOfDeath for late-joining or reloading spectators.
+    const unsubscribe = this.options.orchestrator.subscribe(gameId, (event) => {
+      if (event.eventType !== 'phase.changed') return;
+      const eliminated = event.data['eliminated'];
+      if (!Array.isArray(eliminated)) return;
+      for (const e of eliminated as Array<Record<string, unknown>>) {
+        const playerId = e['playerId'];
+        const cause = e['cause'];
+        if (typeof playerId === 'string' && isKnownCause(cause)) {
+          entry.deathsByPlayerId.set(playerId, { cause });
+        }
+      }
+    });
     const promise = this.options.orchestrator.runMatch(gameId).then(
       (summary) => {
+        unsubscribe();
         entry.status = 'completed';
         entry.completedAt = summary.completedAt;
         entry.winner = summary.winner;
@@ -238,6 +284,7 @@ export class WerewolfLobbyRegistry {
         this.options.detachMatch(gameId);
       },
       (err: unknown) => {
+        unsubscribe();
         entry.status = 'failed';
         entry.completedAt = Date.now();
         entry.failureReason = err instanceof Error ? err.message : String(err);
