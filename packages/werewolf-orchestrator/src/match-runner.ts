@@ -298,10 +298,24 @@ export class WerewolfMatchRunner {
     // together at night-resolve). The engine already redacts night-actor
     // identity; deaths surface only at day-announce / day-resolve / hunter-
     // shoot transitions, which are public moments.
-    const eliminated = this.state.history
-      .slice(historyLenBefore)
+    const newHistory = this.state.history.slice(historyLenBefore);
+    const eliminated = newHistory
       .filter((entry): entry is Extract<typeof entry, { type: 'death' }> => entry.type === 'death')
       .map((d) => ({ playerId: d.playerId, cause: d.cause }));
+
+    // No-banishment outcome: the engine exhausts every PK round without a
+    // strict majority and finalizes a vote with banished===null && tied===true.
+    // The transition out of day-vote then carries no death — without this
+    // signal the spectator UI silently skips from "PK 投票" into the next
+    // night with nothing said about the flopped vote.
+    const noBanishmentVote = newHistory.some(
+      (entry) =>
+        entry.type === 'vote' &&
+        entry.record.banished === null &&
+        entry.record.tied === true,
+    );
+    const dayVoteFlopped =
+      noBanishmentVote && this.state.phase !== 'day-vote';
 
     const pkRoundAfter = this.state.pendingDayVote?.pkRound ?? 0;
     const phaseChanged = this.state.phase !== phaseBefore;
@@ -316,14 +330,15 @@ export class WerewolfMatchRunner {
       // Spectator UI consumes `phase`, `nightNumber`, `dayNumber` (see
       // apps/web/src/werewolf-room/werewolfRoomReducer.ts). `from` is omitted
       // because the previous phase is already implied by the prior event stream.
-      // `eliminated` and `pkRound` are present only when meaningful, so old
-      // consumers that ignore them keep working.
+      // `eliminated`, `pkRound` and `dayVoteOutcome` are present only when
+      // meaningful, so old consumers that ignore them keep working.
       this.emit('phase.changed', {
         phase: this.state.phase,
         nightNumber: this.state.nightNumber,
         dayNumber: this.state.dayNumber,
         ...(eliminated.length > 0 ? { eliminated } : {}),
         ...(pkRoundAfter > 0 ? { pkRound: pkRoundAfter } : {}),
+        ...(dayVoteFlopped ? { dayVoteOutcome: 'no-banishment' as const } : {}),
       });
     }
 

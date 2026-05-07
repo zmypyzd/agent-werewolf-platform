@@ -89,6 +89,22 @@ export function normalizeWerewolfReplayEvent(
       });
     }
 
+    // No-banishment outcome: orchestrator stamps dayVoteOutcome:'no-banishment'
+    // on the phase.changed that exits day-vote with no body (every PK round
+    // tied / no strict majority). Surface a single explanation line BEFORE
+    // the night banner so spectators understand why the match jumped from
+    // voting straight into the next night. Mutually exclusive with the PK
+    // line above (which only fires while phase==='day-vote').
+    if (event.data['dayVoteOutcome'] === 'no-banishment') {
+      const dayN = Number(event.data['dayNumber'] ?? 0);
+      lines.push({
+        id: `${id}-no-banishment`,
+        timestamp: ts,
+        kind: 'system',
+        text: `🕊️ 第 ${dayN} 天投票流产，今日无人被放逐`,
+      });
+    }
+
     if (typeof phase === 'string') {
       if (phase.startsWith(NIGHT_PHASE_PREFIX)) {
         const n = Number(event.data['nightNumber'] ?? 0);
