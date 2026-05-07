@@ -1,3 +1,4 @@
+import type { WerewolfBriefing } from './werewolf-briefing.js';
 import type {
   WerewolfAction,
   WerewolfPhase,
@@ -27,6 +28,11 @@ export interface WerewolfDecisionRequest {
   readonly privateState: WerewolfPrivateState;
   readonly validActions: ReadonlyArray<WerewolfAction>;
   readonly deadlineMs: number;
+  // Optional protocol briefing for external HTTP agents (rules summary +
+  // output format). Present when the API server has briefing enabled via
+  // env (WEREWOLF_BRIEFING_ENABLED). Absent otherwise — local mocks and
+  // tests run without it. See packages/shared/src/werewolf-briefing.ts.
+  readonly briefing?: WerewolfBriefing;
 }
 
 export interface WerewolfDecisionResponse {

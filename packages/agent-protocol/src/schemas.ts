@@ -538,7 +538,11 @@ export const CreateUserAgentConfigRequestSchema = z.object({
   }),
   authHeaderName: z.string().min(1).max(80).nullable(),
   authHeaderValue: z.string().min(1).max(2048).nullable(),
-  timeoutMs: z.number().int().min(100).max(30000),
+  // Up to 60s — bounded so a misconfigured agent can't park a connection
+  // indefinitely. The werewolf orchestrator's per-call budget defaults to
+  // 60s as well, so an agent configured at the cap exhausts the budget at
+  // (or just before) the orchestrator's TimeoutHandler fires the fallback.
+  timeoutMs: z.number().int().min(100).max(60000),
   description: z.string().max(500).nullable(),
 });
 
@@ -560,7 +564,7 @@ export const RegisterAgentInviteRequestSchema = z.object({
   }),
   authHeaderName: z.string().min(1).max(80).nullable().optional(),
   authHeaderValue: z.string().min(1).max(2048).nullable().optional(),
-  timeoutMs: z.number().int().min(100).max(30000).default(5000),
+  timeoutMs: z.number().int().min(100).max(60000).default(5000),
 }).strict();
 
 // ─── Realtime / WebSocket (Phase 2 / M7) ─────────────────────────────────────

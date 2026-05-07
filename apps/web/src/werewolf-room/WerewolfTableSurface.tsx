@@ -250,6 +250,7 @@ export function WerewolfTableSurface({
             seatIndex={pickerAnchor.seatIndex}
             anchorRect={{
               left: pickerAnchor.rect.left,
+              top: pickerAnchor.rect.top,
               bottom: pickerAnchor.rect.bottom,
               width: pickerAnchor.rect.width,
             }}

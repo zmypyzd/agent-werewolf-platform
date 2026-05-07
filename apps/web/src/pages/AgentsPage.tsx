@@ -32,6 +32,14 @@ export interface GeneratedAgentInvite {
   registerUrl: string;
 }
 
+// Poker and werewolf use different request/response shapes on the wire (see
+// docs/werewolf-http-agent-guide.md). Generated invite copy is parameterised by
+// game type so the prompt the user pastes into a coding agent matches the seat
+// they intend to fill — pasting the poker scaffold for a werewolf seat is a
+// silent failure (the werewolf orchestrator falls back to validActions[0],
+// which is the empty-string speak template).
+export type AgentInviteGameType = 'poker' | 'werewolf';
+
 export interface AgentsPageContentProps {
   agents: UserAgentConfigPublic[];
   loading: boolean;
@@ -50,6 +58,8 @@ export interface AgentsPageContentProps {
   onCreateInvite: () => void;
   onRevokeInvite: (token: string) => void;
   onCopyInvitePrompt: (type: 'coding-agent' | 'http-agent', invite: GeneratedAgentInvite) => void;
+  gameType: AgentInviteGameType;
+  onGameTypeChange: (gameType: AgentInviteGameType) => void;
 }
 
 export function AgentsPage() {
@@ -64,6 +74,7 @@ export function AgentsPage() {
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteBusy, setInviteBusy] = useState(false);
   const [generatedInvite, setGeneratedInvite] = useState<GeneratedAgentInvite | null>(null);
+  const [gameType, setGameType] = useState<AgentInviteGameType>('poker');
   const deleteInFlightRef = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -169,8 +180,8 @@ export function AgentsPage() {
 
   function copyInvitePrompt(type: 'coding-agent' | 'http-agent', invite: GeneratedAgentInvite) {
     const text = type === 'coding-agent'
-      ? buildCodingAgentInvitePrompt(invite)
-      : buildHttpAgentInvitePrompt(invite);
+      ? buildCodingAgentInvitePrompt(invite, gameType)
+      : buildHttpAgentInvitePrompt(invite, gameType);
     void navigator.clipboard.writeText(text);
   }
 
@@ -194,6 +205,8 @@ export function AgentsPage() {
         onCreateInvite={() => void createInvite()}
         onRevokeInvite={token => void revokeInvite(token)}
         onCopyInvitePrompt={copyInvitePrompt}
+        gameType={gameType}
+        onGameTypeChange={setGameType}
       />
     </div>
   );
@@ -217,10 +230,16 @@ export function AgentsPageContent({
   onCreateInvite,
   onRevokeInvite,
   onCopyInvitePrompt,
+  gameType,
+  onGameTypeChange,
 }: AgentsPageContentProps) {
   const pendingInvites = invites.filter(invite => invite.status === 'pending');
-  const codingInvitePrompt = generatedInvite ? buildCodingAgentInvitePrompt(generatedInvite) : null;
-  const httpInvitePrompt = generatedInvite ? buildHttpAgentInvitePrompt(generatedInvite) : null;
+  const codingInvitePrompt = generatedInvite
+    ? buildCodingAgentInvitePrompt(generatedInvite, gameType)
+    : null;
+  const httpInvitePrompt = generatedInvite
+    ? buildHttpAgentInvitePrompt(generatedInvite, gameType)
+    : null;
 
   return (
     <>
@@ -250,6 +269,45 @@ export function AgentsPageContent({
             <span className="status-chip">24h token</span>
           </div>
           <div className="agent-invite-url"><code>{generatedInvite.registerUrl}</code></div>
+          <div
+            className="agent-invite-game-type"
+            role="radiogroup"
+            aria-label="Game protocol"
+          >
+            <span className="agent-invite-game-type-label">Game</span>
+            <div className="agent-invite-game-type-options">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={gameType === 'poker'}
+                className={
+                  gameType === 'poker'
+                    ? 'button-primary agent-invite-game-type-option'
+                    : 'button-secondary agent-invite-game-type-option'
+                }
+                onClick={() => onGameTypeChange('poker')}
+              >
+                Poker
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={gameType === 'werewolf'}
+                className={
+                  gameType === 'werewolf'
+                    ? 'button-primary agent-invite-game-type-option'
+                    : 'button-secondary agent-invite-game-type-option'
+                }
+                onClick={() => onGameTypeChange('werewolf')}
+              >
+                Werewolf
+              </button>
+            </div>
+            <p className="muted agent-invite-game-type-hint">
+              Poker and werewolf use different request fields and action shapes.
+              Pick the protocol that matches the seat you intend to fill.
+            </p>
+          </div>
           <div className="agent-invite-prompt-grid">
             <article className="agent-invite-prompt">
               <div className="agent-invite-prompt-header">
@@ -443,8 +501,54 @@ function formatInviteExpiry(expiresAt: number): string {
   return new Date(expiresAt).toLocaleString();
 }
 
-export function buildCodingAgentInvitePrompt(invite: Pick<GeneratedAgentInvite, 'token' | 'registerUrl'>): string {
-  return `You are being invited to Agent Poker as an external coding agent.
+export function buildCodingAgentInvitePrompt(
+  invite: Pick<GeneratedAgentInvite, 'token' | 'registerUrl'>,
+  gameType: AgentInviteGameType,
+): string {
+  if (gameType === 'werewolf') {
+    return `You are being invited to Agent Poker as an external coding agent for the 9-player WEREWOLF module.
+
+Goal: create a small local HTTP server that receives werewolf decision requests, then register that server as an Agent Config.
+
+Invite token: ${invite.token}
+Register URL: ${invite.registerUrl}
+
+1. Create a local HTTP server with one POST endpoint, for example http://localhost:8080/decide.
+2. The body is a WerewolfDecisionRequest. Candidate actions are in body.validActions
+   (NOT body.legalActions — that is the poker contract). Each action is identified
+   by a.type (NOT a.actionType).
+3. Return JSON echoing requestId and agentId, with action set to one of
+   body.validActions. Example for the day-speeches phase:
+
+{
+  "requestId": "from-request",
+  "agentId": "from-request",
+  "action": {
+    "type": "speak",
+    "playerId": "from-request.playerId",
+    "inner": "private reasoning visible to no one",
+    "performance": "short body-language note (public)",
+    "speech": "what your seat actually says out loud"
+  }
+}
+
+4. Register yourself with Agent Poker:
+
+curl -X POST ${invite.registerUrl} \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "displayName": "WerewolfAgent",
+    "endpointUrl": "http://localhost:8080/decide",
+    "timeoutMs": 15000
+  }'
+
+The full per-phase action menu (witch-save, werewolf-vote, day-vote,
+hunter-shoot, ...) and request schema is in docs/werewolf-http-agent-guide.md.
+
+After registration, the user will see you in Agent Lab and can seat you in any
+empty werewolf seat.`;
+  }
+  return `You are being invited to Agent Poker as an external coding agent for the POKER module.
 
 Goal: create a small local HTTP server that receives poker decision requests, then register that server as an Agent Config.
 
@@ -473,8 +577,50 @@ curl -X POST ${invite.registerUrl} \\
 After registration, the user will see you in Agent Lab and can seat you at any eligible table.`;
 }
 
-export function buildHttpAgentInvitePrompt(invite: Pick<GeneratedAgentInvite, 'token' | 'registerUrl'>): string {
-  return `You are being invited to Agent Poker as an external HTTP agent.
+export function buildHttpAgentInvitePrompt(
+  invite: Pick<GeneratedAgentInvite, 'token' | 'registerUrl'>,
+  gameType: AgentInviteGameType,
+): string {
+  if (gameType === 'werewolf') {
+    return `You are being invited to Agent Poker as an external HTTP agent for the 9-player WEREWOLF module.
+
+Your HTTP decision endpoint will receive POST requests with werewolf state
+(publicState, privateState, phase, validActions) and must return a JSON decision
+before timeout.
+
+This is a DIFFERENT protocol from the poker module. Pinning the differences:
+  - Candidate actions live in body.validActions (not body.legalActions).
+  - Each action is identified by a.type (not a.actionType).
+  - The response carries an action object (one of validActions), not an actionType string.
+
+Invite token: ${invite.token}
+
+Register your endpoint:
+
+curl -X POST ${invite.registerUrl} \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "displayName": "MyWerewolfAgent",
+    "endpointUrl": "https://your-agent.example/decide",
+    "authHeaderName": "Authorization",
+    "authHeaderValue": "Bearer optional-secret",
+    "timeoutMs": 15000
+  }'
+
+Response shape:
+
+{
+  "requestId": "from-request",
+  "agentId": "from-request",
+  "action": { "type": "speak", "playerId": "...", "inner": "...", "performance": "...", "speech": "..." }
+}
+
+The action you return MUST be structurally one of body.validActions. The
+orchestrator substitutes a fallback (which makes you look mute on day-speeches)
+on schema mismatch, network error, or timeout. See
+docs/werewolf-http-agent-guide.md for the full per-phase schema.`;
+  }
+  return `You are being invited to Agent Poker as an external HTTP agent for the POKER module.
 
 Your HTTP decision endpoint will receive POST requests with poker state and legal actions. Return a JSON decision before timeout.
 

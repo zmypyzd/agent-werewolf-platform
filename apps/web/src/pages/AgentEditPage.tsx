@@ -230,7 +230,7 @@ export function AgentEditForm({
           Timeout (ms)
           <input
             type="number"
-            min={100} max={30000}
+            min={100} max={60000}
             value={timeoutMs}
             onChange={e => onTimeoutMsChange(Number(e.target.value))}
             required

@@ -596,6 +596,27 @@ button { padding: 8px 16px; cursor: pointer; }
   font-family: var(--font-mono);
   font-size: var(--font-sm);
 }
+.agent-invite-game-type {
+  display: grid;
+  gap: var(--space-2);
+}
+.agent-invite-game-type-label {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.agent-invite-game-type-options {
+  display: inline-flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.agent-invite-game-type-option {
+  min-width: 96px;
+}
+.agent-invite-game-type-hint {
+  margin: 0;
+  font-size: var(--font-xs);
+}
 .agent-invite-prompt-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

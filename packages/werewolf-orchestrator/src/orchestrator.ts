@@ -27,6 +27,10 @@ export interface WerewolfMatchConfig {
 export interface WerewolfOrchestratorOptions {
   readonly artifactStore?: IWerewolfMatchArtifactStore;
   readonly decisionTraceStore?: IWerewolfDecisionTraceStore;
+  // Process-wide default for the per-call agent budget. Each createMatch can
+  // override per-game via WerewolfMatchConfig.defaultTimeoutMs; if neither is
+  // set, falls back to the module-level DEFAULT_TIMEOUT_MS.
+  readonly defaultTimeoutMs?: number;
 }
 
 export interface WerewolfPrivateStateEvent {
@@ -47,16 +51,25 @@ interface MatchEntry {
   finalState: WerewolfGameState | null;
 }
 
-const DEFAULT_TIMEOUT_MS = 5_000;
+// Per-agent decision-call budget enforced by the runner's TimeoutHandler.
+// Long enough to cover an LLM-backed external HTTP agent generating a
+// day-speeches `speak` action with three text fields. NPCs and mock agents
+// finish in <100ms and don't approach this budget, so raising it has no
+// observable effect on local sims. The API server can override per-process
+// via WEREWOLF_AGENT_TIMEOUT_MS; per-match override via createMatch's
+// defaultTimeoutMs is also still supported.
+const DEFAULT_TIMEOUT_MS = 60_000;
 
 export class WerewolfOrchestrator {
   private readonly matches = new Map<string, MatchEntry>();
   private readonly artifactStore: IWerewolfMatchArtifactStore | null;
   private readonly decisionTraceStore: IWerewolfDecisionTraceStore | null;
+  private readonly defaultTimeoutMs: number;
 
   constructor(options: WerewolfOrchestratorOptions = {}) {
     this.artifactStore = options.artifactStore ?? null;
     this.decisionTraceStore = options.decisionTraceStore ?? null;
+    this.defaultTimeoutMs = options.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
   createMatch(
@@ -73,7 +86,7 @@ export class WerewolfOrchestrator {
       initialState,
       agents: new Map(),
       emitter,
-      defaultTimeoutMs: config.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS,
+      defaultTimeoutMs: config.defaultTimeoutMs ?? this.defaultTimeoutMs,
       bufferedEvents,
       status: 'preparing',
       summary: null,

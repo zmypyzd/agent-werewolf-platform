@@ -4,6 +4,7 @@ import type {
   WerewolfPrivateState,
   WerewolfAction,
 } from '@agent-poker/shared';
+import { buildDefaultWerewolfBriefing } from '@agent-poker/shared';
 import { WerewolfDecisionRequestSchema } from '@agent-poker/agent-protocol';
 import { buildWerewolfDecisionRequest } from '../werewolf-decision-request.js';
 
@@ -80,6 +81,39 @@ describe('buildWerewolfDecisionRequest', () => {
         deadlineMs: 5000,
       }),
     ).toThrow(/playerId mismatch/);
+  });
+
+  it('omits the briefing field when none is provided', () => {
+    const req = buildWerewolfDecisionRequest({
+      requestId: 'req-1',
+      gameId: 'g-1',
+      agentId: 'a-1',
+      playerId: 'p1',
+      publicState,
+      privateState,
+      validActions,
+      deadlineMs: 5000,
+    });
+    expect(req).not.toHaveProperty('briefing');
+  });
+
+  it('passes briefing through to the request when provided', () => {
+    const briefing = buildDefaultWerewolfBriefing({
+      docsUrl: 'https://example.com/guide',
+    });
+    const req = buildWerewolfDecisionRequest({
+      requestId: 'req-1',
+      gameId: 'g-1',
+      agentId: 'a-1',
+      playerId: 'p1',
+      publicState,
+      privateState,
+      validActions,
+      deadlineMs: 5000,
+      briefing,
+    });
+    expect(req.briefing).toEqual(briefing);
+    expect(WerewolfDecisionRequestSchema.safeParse(req).success).toBe(true);
   });
 
   it('throws if publicState.gameId !== gameId', () => {

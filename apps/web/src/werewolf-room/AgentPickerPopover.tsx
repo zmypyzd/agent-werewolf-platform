@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ApiError, api } from '../lib/api.js';
 
@@ -24,8 +24,9 @@ export interface AgentPickerPopoverProps {
   // renders into a Portal at document.body and uses position:fixed against
   // these coordinates so it can't be clipped by the .ww-board-wrapper's
   // overflow:hidden (which existed before this feature for night-overlay
-  // containment and remains load-bearing).
-  anchorRect: { left: number; bottom: number; width: number };
+  // containment and remains load-bearing). `top` is needed to flip the
+  // popover above the seat when there isn't room below.
+  anchorRect: { left: number; top: number; bottom: number; width: number };
   // Called when the user invokes "Invite NPC" from the popover.
   onInviteNpc: (seatIndex: number) => Promise<void> | void;
   // Called when the user picks an agent and the POST succeeded. Parent should
@@ -133,13 +134,65 @@ export function AgentPickerPopover({
     }
   }
 
-  // Position fixed against viewport coordinates from the anchor seat. Centered
-  // horizontally on the seat (left + width/2) and dropped below it (bottom + 8).
-  const popoverStyle: React.CSSProperties = {
+  // Position fixed against viewport coordinates from the anchor seat.
+  // Initial pass uses translateX(-50%) to center on the seat; the
+  // useLayoutEffect below then measures the popover and clamps it inside
+  // the viewport (flipping above the seat if there's no room below). We
+  // start hidden via opacity:0 so the unclamped pass is never visible —
+  // edge seats and seats near the bottom of the viewport otherwise pushed
+  // the popover off-screen and made it unclickable.
+  const [clampedStyle, setClampedStyle] = useState<React.CSSProperties | null>(null);
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const margin = 8;
+
+    function reposition() {
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      const desiredLeft =
+        anchorRect.left + anchorRect.width / 2 - rect.width / 2;
+      const left = Math.max(
+        margin,
+        Math.min(desiredLeft, vw - rect.width - margin),
+      );
+
+      const belowTop = anchorRect.bottom + margin;
+      const aboveTop = anchorRect.top - margin - rect.height;
+      let top: number;
+      if (belowTop + rect.height <= vh - margin) {
+        top = belowTop;
+      } else if (aboveTop >= margin) {
+        top = aboveTop;
+      } else {
+        top = Math.max(margin, vh - rect.height - margin);
+      }
+
+      setClampedStyle({ position: 'fixed', top, left });
+    }
+
+    reposition();
+
+    const ro = new ResizeObserver(reposition);
+    ro.observe(el);
+    window.addEventListener('resize', reposition);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', reposition);
+    };
+  }, [anchorRect]);
+
+  const popoverStyle: React.CSSProperties = clampedStyle ?? {
     position: 'fixed',
     top: anchorRect.bottom + 8,
     left: anchorRect.left + anchorRect.width / 2,
     transform: 'translateX(-50%)',
+    opacity: 0,
+    pointerEvents: 'none',
   };
 
   const ui = (

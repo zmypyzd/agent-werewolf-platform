@@ -79,6 +79,8 @@ function renderAgentsContent(props: Partial<Parameters<typeof AgentsPageContent>
         onCreateInvite={() => undefined}
         onRevokeInvite={() => undefined}
         onCopyInvitePrompt={() => undefined}
+        gameType="poker"
+        onGameTypeChange={() => undefined}
         {...props}
       />
     </StaticRouter>,
@@ -137,17 +139,65 @@ describe('AgentsPageContent', () => {
   it('builds distinct prompts for coding agents and ordinary HTTP agents', () => {
     const registerUrl = 'http://localhost:3000/api/v1/agents/invites/invite-new/register';
 
-    const codingPrompt = buildCodingAgentInvitePrompt({ token: 'invite-new', registerUrl });
+    const codingPrompt = buildCodingAgentInvitePrompt({ token: 'invite-new', registerUrl }, 'poker');
     expect(codingPrompt).toContain('create a small local HTTP server');
     expect(codingPrompt).toContain(registerUrl);
     expect(codingPrompt).toContain('"displayName"');
     expect(codingPrompt).toContain('"endpointUrl"');
 
-    const httpPrompt = buildHttpAgentInvitePrompt({ token: 'invite-new', registerUrl });
+    const httpPrompt = buildHttpAgentInvitePrompt({ token: 'invite-new', registerUrl }, 'poker');
     expect(httpPrompt).toContain('Your HTTP decision endpoint');
     expect(httpPrompt).toContain('curl -X POST');
     expect(httpPrompt).toContain(registerUrl);
     expect(httpPrompt).not.toContain('create a small local HTTP server');
+  });
+
+  // Regression for the silent-werewolf-fallback bug where a user pasted the poker
+  // scaffold into a coding agent and seated the resulting endpoint into a
+  // werewolf seat, producing empty speeches every day. The two prompts MUST
+  // differ on the load-bearing wire fields (validActions vs legalActions, type
+  // vs actionType) so a coding agent following the prompt produces an endpoint
+  // that the werewolf orchestrator can actually parse.
+  it('produces werewolf-specific invite prompts pinned to the werewolf wire shape', () => {
+    const registerUrl = 'http://localhost:3000/api/v1/agents/invites/invite-new/register';
+    const invite = { token: 'invite-new', registerUrl };
+
+    const wolfCoding = buildCodingAgentInvitePrompt(invite, 'werewolf');
+    expect(wolfCoding).toMatch(/WEREWOLF/i);
+    expect(wolfCoding).toContain('validActions');
+    expect(wolfCoding).toContain('a.type');
+    expect(wolfCoding).toContain('"speak"');
+    expect(wolfCoding).toContain('docs/werewolf-http-agent-guide.md');
+    expect(wolfCoding).not.toContain('"actionType": "fold"');
+
+    const wolfHttp = buildHttpAgentInvitePrompt(invite, 'werewolf');
+    expect(wolfHttp).toMatch(/WEREWOLF/i);
+    expect(wolfHttp).toContain('validActions');
+    expect(wolfHttp).toContain('docs/werewolf-http-agent-guide.md');
+    expect(wolfHttp).not.toContain('actionType "fold"');
+  });
+
+  it('renders a game-type picker so the invite copy can flip to werewolf', () => {
+    const generatedInvite = {
+      token: 'invite-new',
+      expiresAt: 1_777_280_900_000,
+      registerUrl: 'http://localhost:3000/api/v1/agents/invites/invite-new/register',
+    };
+    const pokerHtml = renderAgentsContent({ generatedInvite, gameType: 'poker' });
+    expect(pokerHtml).toContain('role="radiogroup"');
+    expect(pokerHtml).toContain('aria-label="Game protocol"');
+    expect(pokerHtml).toContain('Poker');
+    expect(pokerHtml).toContain('Werewolf');
+    // 'Use actionType' only appears in the poker HTTP-agent prompt — werewolf
+    // prompts intentionally reverse this naming. JSON quotes get HTML-escaped
+    // inside <pre>, so unescaped ASCII tokens are the safe assertion vehicle.
+    expect(pokerHtml).toContain('Use actionType');
+    expect(pokerHtml).not.toContain('docs/werewolf-http-agent-guide.md');
+
+    const wolfHtml = renderAgentsContent({ generatedInvite, gameType: 'werewolf' });
+    expect(wolfHtml).toContain('validActions');
+    expect(wolfHtml).toContain('docs/werewolf-http-agent-guide.md');
+    expect(wolfHtml).not.toContain('Use actionType');
   });
 
   it('renders delete confirmation with dialog markup instead of a native confirm surface', () => {

@@ -1,5 +1,6 @@
 import type {
   WerewolfAction,
+  WerewolfBriefing,
   WerewolfDecisionRequest,
   WerewolfPlayerId,
   WerewolfPublicState,
@@ -15,6 +16,7 @@ export interface BuildWerewolfDecisionRequestInput {
   readonly privateState: WerewolfPrivateState;
   readonly validActions: ReadonlyArray<WerewolfAction>;
   readonly deadlineMs: number;
+  readonly briefing?: WerewolfBriefing;
 }
 
 export function buildWerewolfDecisionRequest(
@@ -42,5 +44,6 @@ export function buildWerewolfDecisionRequest(
     privateState: input.privateState,
     validActions: input.validActions,
     deadlineMs: input.deadlineMs,
+    ...(input.briefing ? { briefing: input.briefing } : {}),
   };
 }

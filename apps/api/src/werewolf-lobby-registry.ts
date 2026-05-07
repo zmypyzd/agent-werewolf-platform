@@ -12,6 +12,7 @@ import {
   WerewolfGameNotReadyError,
   WerewolfGameAlreadyStartedError,
 } from '@agent-poker/shared';
+import type { WerewolfBriefing } from '@agent-poker/shared';
 import type { IUserAgentConfigStore } from '@agent-poker/persistence';
 import type { WerewolfOrchestrator } from '@agent-poker/werewolf-orchestrator';
 
@@ -103,6 +104,10 @@ export interface WerewolfLobbyRegistryOptions {
   detachMatch: (gameId: string) => void;
   npcThinkingDelayRange?: [number, number];
   agentConfigStore: IUserAgentConfigStore;
+  // Optional protocol briefing forwarded to every external HTTP agent on
+  // every decision request. The API server fills this in from env when
+  // WEREWOLF_BRIEFING_ENABLED is truthy. Local sims/tests leave it unset.
+  briefing?: WerewolfBriefing;
 }
 
 // Internal-only seat shape — same as WerewolfSeatInfo but the 'agent' variant
@@ -424,7 +429,12 @@ export class WerewolfLobbyRegistry {
         }
       }
     });
-    const promise = this.options.orchestrator.runMatch(gameId).then(
+    const promise = this.options.orchestrator
+      .runMatch(
+        gameId,
+        this.options.briefing ? { briefing: this.options.briefing } : {},
+      )
+      .then(
       (summary) => {
         unsubscribe();
         entry.status = 'completed';

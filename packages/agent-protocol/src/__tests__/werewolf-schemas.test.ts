@@ -66,6 +66,52 @@ describe('WerewolfDecisionRequestSchema', () => {
     const bad = { ...baseRequest, deadlineMs: 0 };
     expect(WerewolfDecisionRequestSchema.safeParse(bad).success).toBe(false);
   });
+
+  it('accepts an optional briefing with rulesSummary + outputFormat', () => {
+    const r = WerewolfDecisionRequestSchema.safeParse({
+      ...baseRequest,
+      briefing: {
+        rulesSummary: 'short rules',
+        outputFormat: 'short output spec',
+      },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts a briefing with an optional docsUrl', () => {
+    const r = WerewolfDecisionRequestSchema.safeParse({
+      ...baseRequest,
+      briefing: {
+        rulesSummary: 'short rules',
+        outputFormat: 'short output spec',
+        docsUrl: 'https://example.com/werewolf-guide',
+      },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects a briefing with an invalid docsUrl', () => {
+    const r = WerewolfDecisionRequestSchema.safeParse({
+      ...baseRequest,
+      briefing: {
+        rulesSummary: 'r',
+        outputFormat: 'o',
+        docsUrl: 'not-a-url',
+      },
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects a briefing with rulesSummary over 4000 chars', () => {
+    const r = WerewolfDecisionRequestSchema.safeParse({
+      ...baseRequest,
+      briefing: {
+        rulesSummary: 'x'.repeat(4001),
+        outputFormat: 'short',
+      },
+    });
+    expect(r.success).toBe(false);
+  });
 });
 
 describe('WerewolfDecisionResponseSchema', () => {

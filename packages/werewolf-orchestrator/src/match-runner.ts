@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import type { EventEmitter } from 'events';
 import type {
   WerewolfAction,
+  WerewolfBriefing,
   WerewolfDecisionRequest,
   WerewolfDecisionResponse,
   WerewolfGameState,
@@ -39,6 +40,11 @@ export type WerewolfAgent = IAgent<WerewolfDecisionRequest, WerewolfDecisionResp
 export interface WerewolfMatchRunnerOptions {
   readonly maxSteps?: number;
   readonly decisionTraceStore?: IWerewolfDecisionTraceStore;
+  // Optional protocol briefing forwarded into every WerewolfDecisionRequest.
+  // The API server fills this in from env when WEREWOLF_BRIEFING_ENABLED is
+  // set; left undefined for local sims and tests so existing fixtures don't
+  // churn.
+  readonly briefing?: WerewolfBriefing;
 }
 
 const DEFAULT_MAX_STEPS = 10_000;
@@ -48,6 +54,7 @@ export class WerewolfMatchRunner {
   private readonly initialState: WerewolfGameState;
   private readonly maxSteps: number;
   private readonly decisionTraceStore: IWerewolfDecisionTraceStore | null;
+  private readonly briefing: WerewolfBriefing | null;
   private replayEventCount = 0;
   private sequence = 0;
   private stepCount = 0;
@@ -64,6 +71,7 @@ export class WerewolfMatchRunner {
     this.state = initialState;
     this.maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
     this.decisionTraceStore = options.decisionTraceStore ?? null;
+    this.briefing = options.briefing ?? null;
   }
 
   async run(): Promise<WerewolfMatchSummary> {
@@ -177,6 +185,7 @@ export class WerewolfMatchRunner {
       privateState,
       validActions,
       deadlineMs: this.timeoutMs,
+      ...(this.briefing ? { briefing: this.briefing } : {}),
     });
 
     // Non-replay private-state channel. Carries the requesting player's full
@@ -249,10 +258,28 @@ export class WerewolfMatchRunner {
         }
         const parsedAction = parsedActionForTrace;
         const validation = validateWerewolfAction(parsedAction, validActions);
-        if (validation.valid) {
-          action = validation.action;
+        // Reject day-speeches `speak` actions whose public `speech` field is
+        // empty/whitespace. validActions[0] ships as an empty skeleton (the
+        // engine's template), so an agent that just echoes it back appears
+        // mute on the broadcast pane and we could not previously tell that
+        // case apart from a real fallback. Forcing those into the fallback
+        // path makes the failure observable via agent.invalid_action and
+        // keeps the broadcast-visible behaviour identical (validActions[0]
+        // is still the chosen surrogate).
+        let rejectReason: string | null = null;
+        if (!validation.valid) {
+          rejectReason = validation.reason;
+        } else if (
+          parsedAction.type === 'speak' &&
+          parsedAction.speech.trim().length === 0
+        ) {
+          rejectReason = 'empty-speech';
+        }
+
+        if (rejectReason === null) {
+          action = parsedAction;
         } else {
-          invalidReason = validation.reason;
+          invalidReason = rejectReason;
           action = werewolfFallback(req).action;
           usedFallback = true;
           this.emit('agent.invalid_action', {

@@ -156,6 +156,16 @@ const WerewolfActionSchema = z.discriminatedUnion('type', [
   }),
 ]);
 
+// Bounded so a misconfigured server can't push unbounded text into every
+// request body and every persisted artifact. The default briefing in
+// @agent-poker/shared sits well below these caps; the limits exist as a
+// safety net rather than a target.
+const WerewolfBriefingSchema = z.object({
+  rulesSummary: z.string().max(4000),
+  outputFormat: z.string().max(4000),
+  docsUrl: z.string().url().max(500).optional(),
+});
+
 export const WerewolfDecisionRequestSchema = z.object({
   requestId: z.string().min(1),
   gameId: z.string().min(1),
@@ -168,6 +178,7 @@ export const WerewolfDecisionRequestSchema = z.object({
   privateState: WerewolfPrivateStateSchema,
   validActions: z.array(WerewolfActionSchema),
   deadlineMs: z.number().int().positive(),
+  briefing: WerewolfBriefingSchema.optional(),
 });
 
 export const WerewolfReasoningSummarySchema = z.object({
@@ -185,6 +196,7 @@ export const WerewolfDecisionResponseSchema = z.object({
 
 export {
   WerewolfActionSchema,
+  WerewolfBriefingSchema,
   WerewolfPhaseSchema,
   WerewolfPlayerIdSchema,
   WerewolfPrivateStateSchema,

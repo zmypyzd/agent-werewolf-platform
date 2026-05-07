@@ -79,6 +79,17 @@ describe('User agent CRUD', () => {
     expect(r.statusCode).toBe(201);
   });
 
+  it('accepts timeoutMs at the new 60s ceiling for slow LLM-backed agents', async () => {
+    const r = await create({ ...baseConfig, timeoutMs: 60000 });
+    expect(r.statusCode).toBe(201);
+    expect(JSON.parse(r.body).data.timeoutMs).toBe(60000);
+  });
+
+  it('rejects timeoutMs above the 60s ceiling', async () => {
+    const r = await create({ ...baseConfig, timeoutMs: 60001 });
+    expect(r.statusCode).toBe(400);
+  });
+
   it('DELETE removes the config', async () => {
     const c = await create();
     const id = JSON.parse(c.body).data.agentConfigId;

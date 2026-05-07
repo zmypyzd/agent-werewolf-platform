@@ -28,7 +28,11 @@ import {
   attachWerewolfHub,
   type WerewolfHubAttachment,
 } from '@agent-poker/werewolf-orchestrator';
-import { AppError, RateLimitedError } from '@agent-poker/shared';
+import {
+  AppError,
+  RateLimitedError,
+  buildDefaultWerewolfBriefing,
+} from '@agent-poker/shared';
 import { RateLimiter, authPlugin } from '@agent-poker/auth';
 import type { RateLimiterConfig, RuntimeEnv } from '@agent-poker/auth';
 import { RealtimeHub } from '@agent-poker/realtime';
@@ -43,6 +47,7 @@ import { authRoutes } from './routes/auth.js';
 import { wsRoutes } from './routes/ws.js';
 import { meAgentsRoutes } from './routes/me-agents.js';
 import { agentInvitesRoutes } from './routes/agent-invites.js';
+import { werewolfDocsRoutes } from './routes/werewolf-docs.js';
 import { healthRoutes } from './routes/health.js';
 import { createMatchArtifactStore } from './match-artifact-store-factory.js';
 import { createWerewolfMatchArtifactStore } from './werewolf-match-artifact-store-factory.js';
@@ -91,11 +96,27 @@ export function buildServer(opts: BuildServerOptions = {}) {
   const werewolfDecisionTraceStore =
     opts.werewolfDecisionTraceStore ?? new MemoryWerewolfDecisionTraceStore();
 
+  // WEREWOLF_AGENT_TIMEOUT_MS lets the operator stretch (or shorten) the
+  // per-call agent budget without recompiling. Falls back to the orchestrator's
+  // built-in default (60s) when unset or unparseable. Anything <= 0 is rejected
+  // so a typo can't accidentally collapse the timeout.
+  const rawAgentTimeout = process.env['WEREWOLF_AGENT_TIMEOUT_MS'];
+  const parsedAgentTimeout = rawAgentTimeout
+    ? Number.parseInt(rawAgentTimeout, 10)
+    : NaN;
+  const werewolfDefaultTimeoutMs =
+    Number.isFinite(parsedAgentTimeout) && parsedAgentTimeout > 0
+      ? parsedAgentTimeout
+      : undefined;
+
   const werewolfOrch =
     opts.werewolfOrchestrator ??
     new WerewolfOrchestrator({
       artifactStore: werewolfMatchArtifactStore,
       decisionTraceStore: werewolfDecisionTraceStore,
+      ...(werewolfDefaultTimeoutMs !== undefined
+        ? { defaultTimeoutMs: werewolfDefaultTimeoutMs }
+        : {}),
     });
 
   const authDb =
@@ -191,6 +212,22 @@ export function buildServer(opts: BuildServerOptions = {}) {
     werewolfHubAttachment.detachAll();
   });
 
+  // Briefing is opt-in via env so existing fixtures and the demo CLIs don't
+  // start sending it implicitly. WEREWOLF_BRIEFING_ENABLED toggles inclusion;
+  // WEREWOLF_BRIEFING_DOCS_URL adds an optional pointer back to the full
+  // docs/werewolf-http-agent-guide.md when the operator hosts it.
+  const briefingEnvRaw = process.env['WEREWOLF_BRIEFING_ENABLED'];
+  const briefingEnabled =
+    briefingEnvRaw === '1' ||
+    briefingEnvRaw === 'true' ||
+    briefingEnvRaw === 'yes';
+  const briefingDocsUrl = process.env['WEREWOLF_BRIEFING_DOCS_URL'];
+  const werewolfBriefing = briefingEnabled
+    ? buildDefaultWerewolfBriefing(
+        briefingDocsUrl ? { docsUrl: briefingDocsUrl } : {},
+      )
+    : undefined;
+
   const werewolfLobbyRegistry =
     opts.werewolfLobbyRegistry ??
     new WerewolfLobbyRegistry({
@@ -199,6 +236,7 @@ export function buildServer(opts: BuildServerOptions = {}) {
         werewolfHubAttachment.attachMatch(gameId, ownership),
       detachMatch: (gameId) => werewolfHubAttachment.detachMatch(gameId),
       agentConfigStore: agentConfigStore!,
+      ...(werewolfBriefing ? { briefing: werewolfBriefing } : {}),
     });
 
   // Cross-game in-use joiner — passed to me-agents.ts so DELETE rejects when
@@ -237,6 +275,7 @@ export function buildServer(opts: BuildServerOptions = {}) {
     });
     await scope.register(meAgentsRoutes, { prefix: '/api/v1', agentConfigStore, agentConfigUsage });
     await scope.register(agentInvitesRoutes, { prefix: '/api/v1', agentInviteStore, agentConfigStore });
+    await scope.register(werewolfDocsRoutes, { prefix: '/api/v1' });
     await scope.register(wsRoutes, { hub });
     await scope.register(healthRoutes);
   });
