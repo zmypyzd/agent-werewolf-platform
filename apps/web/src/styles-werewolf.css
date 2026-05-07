@@ -1025,3 +1025,308 @@
   color: var(--ww-death);
   font-family: 'JetBrains Mono', monospace;
 }
+
+/* ---- Agent picker popover (D3=C / D4=A / D5=A / D6=A) -------------------- */
+
+/* Anchored popover — owner-scoped invite of a registered HTTP agent. */
+.ww-agent-picker {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: 360px;
+  background: var(--ww-surface-el, #1e2030);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 9px;
+  padding: 16px;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--ww-text);
+  /* Popover lives inside the seat-arc container; pin the anchor to the
+   * empty seat that opened it via .ww-seat (seat) → its descendant absolute. */
+}
+
+.ww-agent-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ww-agent-picker-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ww-text);
+}
+
+.ww-agent-picker-seat-marker {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--ww-night);
+  background: var(--ww-night-bg);
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+.ww-agent-picker-npc-row {
+  width: 100%;
+  text-align: left;
+  background: var(--ww-surface, #13141f);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--ww-text);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 120ms;
+}
+
+.ww-agent-picker-npc-row:hover {
+  background: var(--ww-surface-hover, #252840);
+}
+
+.ww-agent-picker-divider {
+  text-align: center;
+  margin: 12px 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--ww-text-dim);
+}
+
+.ww-agent-picker-state {
+  padding: 12px;
+  text-align: left;
+}
+
+.ww-agent-picker-state-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  margin: 0 0 4px;
+  color: var(--ww-text);
+}
+
+.ww-agent-picker-state-body {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: var(--ww-text-muted);
+  margin: 0 0 8px;
+}
+
+.ww-agent-picker-cta {
+  display: inline-block;
+  background: var(--ww-night-raw, #5b4aff);
+  color: white;
+  font-family: 'Syne', sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  padding: 8px 14px;
+  border-radius: 6px;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+}
+
+.ww-agent-picker-retry {
+  background: var(--ww-surface);
+  color: var(--ww-text);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.ww-agent-picker-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ww-agent-picker-skeleton {
+  height: 56px;
+  background: linear-gradient(90deg, #1e2030, #252840, #1e2030);
+  background-size: 200% 100%;
+  border-radius: 6px;
+  animation: ww-skel-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes ww-skel-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.ww-agent-picker-error {
+  color: var(--ww-death);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+}
+
+.ww-agent-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.ww-agent-picker-row {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background 120ms;
+  outline: none;
+  min-height: 56px;
+}
+
+.ww-agent-picker-row:last-child {
+  border-bottom: none;
+}
+
+.ww-agent-picker-row:hover,
+.ww-agent-picker-row:focus-visible {
+  background: var(--ww-surface-hover, #252840);
+}
+
+.ww-agent-picker-row:focus-visible {
+  outline: 1px solid var(--ww-night);
+  outline-offset: -2px;
+}
+
+.ww-agent-picker-row[aria-disabled='true'] {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.ww-agent-picker-row-name {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ww-text);
+}
+
+.ww-agent-picker-row-endpoint {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--ww-text-muted);
+}
+
+.ww-agent-picker-row-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.ww-agent-picker-timeout {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 500;
+  font-size: 10px;
+  background: var(--ww-surface);
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--ww-text-muted);
+}
+
+.ww-agent-picker-description {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: var(--ww-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ww-agent-picker-row-cta {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--ww-night-raw, #5b4aff);
+  color: white;
+  font-family: 'Syne', sans-serif;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 120ms;
+  pointer-events: none;
+}
+
+.ww-agent-picker-row:hover .ww-agent-picker-row-cta,
+.ww-agent-picker-row:focus-visible .ww-agent-picker-row-cta {
+  opacity: 1;
+}
+
+.ww-agent-picker-invite-error {
+  padding: 8px 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: var(--ww-death);
+  background: var(--ww-death-bg);
+  border-radius: 4px;
+  margin-top: 6px;
+  list-style: none;
+}
+
+.ww-agent-picker-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.ww-agent-picker-cancel {
+  background: var(--ww-surface);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--ww-text-muted);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* ---- Seat decorations for kind:'agent' (D2/D5) --------------------------- */
+
+.ww-seat-mine-pill {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--ww-night-bg);
+  color: var(--ww-night);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 9px;
+  padding: 2px 4px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+}
+
+.ww-seat-agent-tag {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 500;
+  font-size: 9px;
+  color: var(--ww-text-dim);
+  letter-spacing: 0.04em;
+}

@@ -20,8 +20,11 @@ describe('WerewolfRoomPage (SSR smoke)', () => {
     // Header always present.
     expect(html).toContain('狼人杀房间');
     expect(html).toContain('返回大厅');
-    // Initial state has 9 empty seats with "邀请 NPC" buttons.
-    const inviteButtons = html.match(/邀请 NPC/g) ?? [];
+    // Initial state has 9 empty seats. Plan D3=C — clicking an empty seat
+    // opens a popover with "邀请 NPC" / "邀请我的 agent" choices, so the
+    // seat itself shows a single "邀请..." entry button rather than the old
+    // inline NPC button. Count those instead.
+    const inviteButtons = html.match(/邀请\.\.\./g) ?? [];
     expect(inviteButtons.length).toBe(9);
     // Phase indicator shows "等待开局" before any data arrives.
     expect(html).toContain('等待开局');

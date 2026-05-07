@@ -1,10 +1,19 @@
+import { useState } from 'react';
 import type { WerewolfRoomState, SeatVM, WerewolfRole } from './werewolfRoomTypes.js';
 import { WerewolfSpeechBoard } from './WerewolfSpeechBoard.js';
+import { AgentPickerPopover } from './AgentPickerPopover.js';
 
 export interface WerewolfTableSurfaceProps {
   state: WerewolfRoomState;
-  onInvite?: (seatIndex: number) => void;
+  // Called when the user picks "邀请 NPC" from the per-seat popover. Parent
+  // POSTs to /seats/:i/invite-npc and refreshes lobby.
+  onInvite?: (seatIndex: number) => Promise<void> | void;
   onFillAll?: () => void;
+  // Called when the user picks one of their registered agents from the
+  // popover. Parent POSTs to /seats/:i/invite-agent and refreshes lobby.
+  // Throws a propagated error so the popover can render server-side error
+  // codes (AGENT_IN_USE, SEAT_OCCUPIED, etc.).
+  onInviteAgent?: (seatIndex: number, agentConfigId: string) => Promise<void>;
 }
 
 // Oval arc seat positions: 9 seats evenly spaced, rx=38%, ry=31%, cx=50%, cy=50%
@@ -61,13 +70,18 @@ interface SeatCardProps {
   // user's eye doesn't get pulled to a non-speaking seat.
   replaying: boolean;
   revealRoles: boolean;
-  onInvite?: (seatIndex: number) => void;
+  // D3=C — clicking an empty seat opens the picker popover. The handler is
+  // owned by WerewolfTableSurface; SeatCard just signals intent.
+  onEmptyClick?: (seatIndex: number) => void;
 }
 
-function SeatCard({ seat, pos, speaking, replaying, revealRoles, onInvite }: SeatCardProps) {
+function SeatCard({ seat, pos, speaking, replaying, revealRoles, onEmptyClick }: SeatCardProps) {
   const isEmpty = seat.occupant.kind === 'empty';
   const dead = !seat.alive && !isEmpty;
   const isWolf = seat.revealedRole === 'werewolf';
+  // D5=A — owner-only marker, server-computed via auth-aware projection.
+  const isMine = seat.occupant.kind === 'agent' && seat.occupant.isMine === true;
+  const isAgent = seat.occupant.kind === 'agent';
 
   const cardClass = [
     'ww-seat',
@@ -75,6 +89,7 @@ function SeatCard({ seat, pos, speaking, replaying, revealRoles, onInvite }: Sea
     dead ? 'is-dead' : '',
     speaking ? 'is-speaking' : '',
     replaying ? 'is-replay' : '',
+    isMine ? 'is-mine' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -125,12 +140,23 @@ function SeatCard({ seat, pos, speaking, replaying, revealRoles, onInvite }: Sea
     .filter(Boolean)
     .join(' ');
 
+  // D2=A — kind:'agent' renders displayName same as kind:'npc' (no '???'
+  // fallback). The MINE pill is rendered ONLY when seat.occupant.isMine is
+  // true — derived server-side, never client-side.
+  let seatName = '???';
+  if (seat.occupant.kind === 'npc' || seat.occupant.kind === 'agent') {
+    seatName = seat.occupant.displayName;
+  }
+
   return (
     <div
       className={cardClass}
       style={{ left: pos.left, top: pos.top }}
       data-seat-index={seat.seatIndex}
     >
+      {isMine ? (
+        <span className="ww-seat-mine-pill" aria-label="你的 agent">MINE</span>
+      ) : null}
       <div className={badgeClass}>{roleEmoji}</div>
       <div className="ww-seat-id">P{seat.seatIndex + 1}</div>
       {isEmpty ? (
@@ -138,18 +164,18 @@ function SeatCard({ seat, pos, speaking, replaying, revealRoles, onInvite }: Sea
           <div className="ww-seat-name" style={{ color: 'var(--ww-text-dim)' }}>empty</div>
           <button
             className="ww-seat-invite"
-            onClick={() => onInvite?.(seat.seatIndex)}
-            disabled={!onInvite}
+            onClick={() => onEmptyClick?.(seat.seatIndex)}
+            disabled={!onEmptyClick}
+            aria-haspopup="dialog"
           >
-            邀请 NPC
+            邀请...
           </button>
         </>
       ) : (
         <>
-          <div className="ww-seat-name">
-            {seat.occupant.kind === 'npc' ? seat.occupant.displayName : '???'}
-          </div>
+          <div className="ww-seat-name">{seatName}</div>
           <div className={statusClass}>{statusText}</div>
+          {isAgent ? <span className="ww-seat-agent-tag">AGENT</span> : null}
         </>
       )}
     </div>
@@ -160,7 +186,11 @@ export function WerewolfTableSurface({
   state,
   onInvite,
   onFillAll,
+  onInviteAgent,
 }: WerewolfTableSurfaceProps) {
+  // D3=C — clicking an empty seat opens the picker popover anchored to it.
+  // null when no popover is open. Limited to one seat at a time.
+  const [pickerSeat, setPickerSeat] = useState<number | null>(null);
   // ISSUE-005 — broadcast view: roles are visible to spectators from
   // match-start. The reducer lifts revealedRole onto each SeatVM as soon as
   // match.started arrives, so the gate now follows seat data instead of
@@ -203,11 +233,25 @@ export function WerewolfTableSurface({
               speaking={isLive}
               replaying={isReplay}
               revealRoles={revealRoles}
-              {...(onInvite ? { onInvite } : {})}
+              {...(onInvite || onInviteAgent
+                ? { onEmptyClick: (i: number) => setPickerSeat(i) }
+                : {})}
             />
           );
         })}
         <WerewolfSpeechBoard state={state} />
+        {pickerSeat !== null && (onInvite || onInviteAgent) ? (
+          <AgentPickerPopover
+            seatIndex={pickerSeat}
+            onInviteNpc={async (i) => {
+              if (onInvite) await onInvite(i);
+            }}
+            onInviteAgent={async (i, cfgId) => {
+              if (onInviteAgent) await onInviteAgent(i, cfgId);
+            }}
+            onClose={() => setPickerSeat(null)}
+          />
+        ) : null}
       </div>
     </div>
   );

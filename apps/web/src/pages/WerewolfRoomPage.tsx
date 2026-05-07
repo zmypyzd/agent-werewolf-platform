@@ -105,6 +105,24 @@ export function WerewolfRoomPage() {
     }
   }
 
+  // D2=A / plan Lane C — POST mirror of inviteNpc but seats one of the user's
+  // registered HTTP agents. Errors propagate so AgentPickerPopover can render
+  // server-side codes (AGENT_NOT_FOUND, AGENT_IN_USE, SEAT_OCCUPIED).
+  async function inviteAgent(seatIndex: number, agentConfigId: string) {
+    try {
+      await api.post(
+        `/werewolf-games/${encodeURIComponent(gameId)}/seats/${seatIndex}/invite-agent`,
+        { agentConfigId },
+      );
+      await fetchEntry();
+    } catch (e) {
+      // Re-throw so the popover can map the code to UX copy. Error banner
+      // remains for the parent surface as a fallback.
+      if (e instanceof ApiError) setError(e.message);
+      throw e;
+    }
+  }
+
   async function fillAll() {
     try {
       await api.post(
@@ -150,7 +168,12 @@ export function WerewolfRoomPage() {
           <WerewolfEventTimeline lines={state.timeline} />
         </div>
       ) : (
-        <WerewolfTableSurface state={state} onInvite={inviteNpc} onFillAll={fillAll} />
+        <WerewolfTableSurface
+          state={state}
+          onInvite={inviteNpc}
+          onInviteAgent={inviteAgent}
+          onFillAll={fillAll}
+        />
       )}
 
       {state.status === 'ready' ? (

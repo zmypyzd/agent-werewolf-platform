@@ -44,12 +44,17 @@ export interface WerewolfReplayEvent {
 }
 
 // Mirrors the server's WerewolfSeatInfo plus per-seat live UI state.
+// kind:'agent' represents a third-party HTTP agent backed by a registered
+// UserAgentConfig. isMine is set true ONLY by the server when the GET
+// /werewolf-games/:id requester is the agent's owner — never derived
+// client-side. Plan decision D2/D5.
 export interface SeatVM {
   seatIndex: number;
   playerId: string;
   occupant:
     | { kind: 'empty' }
-    | { kind: 'npc'; agentId: string; displayName: string };
+    | { kind: 'npc'; agentId: string; displayName: string }
+    | { kind: 'agent'; agentId: string; displayName: string; isMine?: true };
   alive: boolean;
   // How this seat died, propagated from event.data.eliminated[].cause on the
   // phase.changed that announced the death. Drives the seat status copy
