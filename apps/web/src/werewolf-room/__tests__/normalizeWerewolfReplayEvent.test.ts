@@ -69,6 +69,26 @@ describe('normalizeWerewolfReplayEvent', () => {
     expect(lines[0]?.text).toBe('Bot 3 投 Bot 7');
   });
 
+  // ISSUE-002 — abstain (targetId=null) used to fall through nameOf() and
+  // render as "Bot N 投 ???", which was indistinguishable from "投了一个我
+  // 看不到的玩家". Show "弃票" explicitly.
+  it('agent.action_received day-vote with targetId=null → "<name> 弃票"', () => {
+    const lines = normalizeWerewolfReplayEvent(
+      makeEvent({
+        eventType: 'agent.action_received',
+        data: {
+          phase: 'day-vote',
+          playerId: 'p5',
+          action: { type: 'day-vote', voterId: 'p5', targetId: null },
+        },
+      }),
+      NAME_INDEX,
+    );
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.kind).toBe('vote');
+    expect(lines[0]?.text).toBe('Bot 5 弃票');
+  });
+
   it('agent.action_received speak → "<name>: \\"speech\\""', () => {
     const lines = normalizeWerewolfReplayEvent(
       makeEvent({

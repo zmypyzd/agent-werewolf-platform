@@ -161,12 +161,15 @@ export function normalizeWerewolfReplayEvent(
       return lines;
     }
     if (action?.type === 'day-vote') {
-      return [{
-        id,
-        timestamp: ts,
-        kind: 'vote',
-        text: `${nameOf(playerId, names)} 投 ${nameOf(action.targetId, names)}`,
-      }];
+      // Abstain (targetId=null) is a legal action — see
+      // packages/werewolf-engine/src/valid-actions.ts:96. Render it as
+      // "弃票" instead of falling through nameOf() to "投 ???", which was
+      // indistinguishable from a renderer bug or hidden target.
+      const text =
+        action.targetId === null || action.targetId === undefined
+          ? `${nameOf(playerId, names)} 弃票`
+          : `${nameOf(playerId, names)} 投 ${nameOf(action.targetId, names)}`;
+      return [{ id, timestamp: ts, kind: 'vote', text }];
     }
     if (action?.type === 'hunter-shoot') {
       // The death itself surfaces on the next phase.changed via eliminated[].
