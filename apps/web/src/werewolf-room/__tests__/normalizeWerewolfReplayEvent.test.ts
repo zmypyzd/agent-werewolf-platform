@@ -174,4 +174,41 @@ describe('normalizeWerewolfReplayEvent', () => {
     );
     expect(lines).toHaveLength(0);
   });
+
+  // ISSUE-003 — hunter-shoot used to fall through to the generic "<name> 行动"
+  // fallback so the moment of the kill carried no information about who was
+  // shot. Surface it explicitly, with a separate copy for the abstain case.
+  it('agent.action_received hunter-shoot with target → "🏹 <name> 开枪 → <target>"', () => {
+    const lines = normalizeWerewolfReplayEvent(
+      makeEvent({
+        eventType: 'agent.action_received',
+        data: {
+          phase: 'hunter-shoot',
+          playerId: 'p4',
+          action: { type: 'hunter-shoot', targetId: 'p7' },
+        },
+      }),
+      NAME_INDEX,
+    );
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.kind).toBe('system');
+    expect(lines[0]?.text).toBe('🏹 Bot 4 开枪 → Bot 7');
+  });
+
+  it('agent.action_received hunter-shoot with targetId=null → "🏹 <name> 放弃开枪"', () => {
+    const lines = normalizeWerewolfReplayEvent(
+      makeEvent({
+        eventType: 'agent.action_received',
+        data: {
+          phase: 'hunter-shoot',
+          playerId: 'p4',
+          action: { type: 'hunter-shoot', targetId: null },
+        },
+      }),
+      NAME_INDEX,
+    );
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.kind).toBe('system');
+    expect(lines[0]?.text).toBe('🏹 Bot 4 放弃开枪');
+  });
 });

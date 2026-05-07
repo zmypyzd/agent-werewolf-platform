@@ -152,6 +152,16 @@ export function normalizeWerewolfReplayEvent(
         text: `${nameOf(playerId, names)} 投 ${nameOf(action.targetId, names)}`,
       }];
     }
+    if (action?.type === 'hunter-shoot') {
+      // The death itself surfaces on the next phase.changed via eliminated[].
+      // This line announces the moment the hunter pulls the trigger so the
+      // spectator sees the cause before the body lands.
+      const text =
+        action.targetId === null || action.targetId === undefined
+          ? `🏹 ${nameOf(playerId, names)} 放弃开枪`
+          : `🏹 ${nameOf(playerId, names)} 开枪 → ${nameOf(action.targetId, names)}`;
+      return [{ id, timestamp: ts, kind: 'system', text }];
+    }
     return [{
       id,
       timestamp: ts,
