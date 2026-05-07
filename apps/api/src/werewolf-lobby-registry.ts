@@ -21,6 +21,15 @@ export interface WerewolfSeatInfo {
   occupant:
     | { kind: 'empty' }
     | { kind: 'npc'; agentId: string; displayName: string };
+  // ISSUE-005 — populated only when the lobby entry's status is 'running'
+  // or 'completed'. Lets the spectator surface reveal the full roster from
+  // the moment the match starts, regardless of whether the WS subscription
+  // catches `match.started` (the topic doesn't replay, so a slow / late
+  // subscriber would otherwise see only generic placeholders forever).
+  // Pre-start (`waiting` / `ready`) the fields are absent — pinned by
+  // werewolf-games-info-isolation.test.ts.
+  role?: string;
+  side?: 'good' | 'werewolf';
 }
 
 export interface WerewolfFinalPlayerView {
@@ -65,6 +74,10 @@ export interface WerewolfLobbyRegistryOptions {
 
 interface InternalEntry extends WerewolfLobbyEntry {
   seed: string;
+  // Roster cached at createMatch time (engine assigns roles deterministically
+  // from the seed at that point). Used to enrich the public seats when the
+  // match has started — see publicEntry.
+  rosterByPlayerId: ReadonlyMap<string, { role: string; side: 'good' | 'werewolf' }>;
 }
 
 const TOTAL_SEATS = 9;
@@ -79,9 +92,18 @@ function emptySeats(): WerewolfSeatInfo[] {
 
 function publicEntry(entry: InternalEntry): WerewolfLobbyEntry {
   // Defense-in-depth: explicit destructure-and-omit prevents future fields like
-  // `seed` from leaking via spread.
-  const { seed: _seed, ...rest } = entry;
-  return rest;
+  // `seed` (and now `rosterByPlayerId`) from leaking via spread.
+  const { seed: _seed, rosterByPlayerId, ...rest } = entry;
+  // Reveal role/side only once the match has started. Pre-start statuses
+  // (waiting / ready) keep the existing isolation invariant — a viewer of
+  // the lobby endpoint cannot derive the roster before the game begins.
+  const reveal = rest.status === 'running' || rest.status === 'completed';
+  if (!reveal) return rest;
+  const seats = rest.seats.map((s) => {
+    const r = rosterByPlayerId.get(s.playerId);
+    return r ? { ...s, role: r.role, side: r.side } : s;
+  });
+  return { ...rest, seats };
 }
 
 export class WerewolfLobbyRegistry {
@@ -97,7 +119,14 @@ export class WerewolfLobbyRegistry {
       input.name && input.name.trim().length > 0
         ? input.name
         : `Game ${gameId.slice(0, 8)}`;
-    this.options.orchestrator.createMatch({ gameId, seed });
+    const { initialState } = this.options.orchestrator.createMatch({ gameId, seed });
+    // The engine assigns roles deterministically inside createGame at this
+    // point. Cache them so the lobby endpoint can reveal them once the
+    // match starts, without needing a second round-trip to the orchestrator.
+    const rosterByPlayerId = new Map<string, { role: string; side: 'good' | 'werewolf' }>();
+    for (const p of initialState.players) {
+      rosterByPlayerId.set(p.id, { role: p.role, side: p.side });
+    }
     const entry: InternalEntry = {
       gameId,
       name,
@@ -105,6 +134,7 @@ export class WerewolfLobbyRegistry {
       seats: emptySeats(),
       createdAt: Date.now(),
       seed,
+      rosterByPlayerId,
     };
     this.entries.set(gameId, entry);
     return publicEntry(entry);

@@ -23,6 +23,10 @@ interface ServerLobbyEntry {
     occupant:
       | { kind: 'empty' }
       | { kind: 'npc'; agentId: string; displayName: string };
+    // ISSUE-005 follow-up: server populates these once status flips to
+    // 'running' or 'completed'. Pre-start the fields are absent.
+    role?: string;
+    side?: WerewolfSide;
   }>;
   createdAt: number;
   startedAt?: number;
@@ -103,14 +107,25 @@ export function werewolfRoomReducer(
     const previousByPlayerId = new Map(state.seats.map((s) => [s.playerId, s]));
     const seats: SeatVM[] = action.entry.seats.map((s) => {
       const prev = previousByPlayerId.get(s.playerId);
+      // ISSUE-005 follow-up: when the server-side lobby entry carries
+      // role/side (status='running' or 'completed'), the lobby-sync poll
+      // is the actual delivery mechanism for the spectator broadcast view
+      // — match.started fired before the WS subscribed and the topic
+      // doesn't replay, so the fields piggyback on this 2-5s poll instead.
+      // Prefer the freshly-arrived fields over the prior seat's; fall back
+      // to the prior seat for stability across polls that drop them.
+      const incomingRole = isKnownRole(s.role) ? s.role : undefined;
+      const incomingSide = isKnownSide(s.side) ? s.side : undefined;
+      const role = incomingRole ?? prev?.revealedRole;
+      const side = incomingSide ?? prev?.revealedSide;
       return {
         seatIndex: s.seatIndex,
         playerId: s.playerId,
         occupant: s.occupant,
         alive: prev ? prev.alive : true,
         ...(prev?.causeOfDeath ? { causeOfDeath: prev.causeOfDeath } : {}),
-        ...(prev?.revealedRole ? { revealedRole: prev.revealedRole } : {}),
-        ...(prev?.revealedSide ? { revealedSide: prev.revealedSide } : {}),
+        ...(role ? { revealedRole: role } : {}),
+        ...(side ? { revealedSide: side } : {}),
       };
     });
     return {

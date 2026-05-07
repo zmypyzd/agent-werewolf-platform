@@ -107,6 +107,53 @@ describe('werewolfRoomReducer — match.started role reveal', () => {
     expect(afterPoll.seats.find((s) => s.playerId === 'p9')!.revealedRole).toBe('villager');
   });
 
+  it('lobby-sync with seats carrying role/side writes them to revealedRole/Side', async () => {
+    // ISSUE-005 follow-up: end-to-end, the WS subscribes AFTER match.started
+    // has already published, so role-from-match.started doesn't reach the
+    // web (the topic doesn't replay). The fix is to expose role/side on
+    // the lobby endpoint once status='running', and let the existing
+    // 2-5s lobby-sync poll deliver them. This test pins the reducer half
+    // of that contract: lobby-sync DOES read role/side off seats and
+    // writes them onto SeatVM.revealedRole/Side.
+    const startedLobby = {
+      type: 'lobby-sync' as const,
+      entry: {
+        gameId: 'g1',
+        name: 'demo',
+        status: 'running' as const,
+        createdAt: 0,
+        startedAt: 1,
+        seats: [
+          { seatIndex: 0, playerId: 'p1', occupant: { kind: 'npc' as const, agentId: 'a1', displayName: 'Bot 1' }, role: 'werewolf', side: 'werewolf' as const },
+          { seatIndex: 1, playerId: 'p2', occupant: { kind: 'npc' as const, agentId: 'a2', displayName: 'Bot 2' }, role: 'seer', side: 'good' as const },
+          ...Array.from({ length: 7 }, (_, i) => ({
+            seatIndex: i + 2,
+            playerId: `p${i + 3}`,
+            occupant: { kind: 'npc' as const, agentId: `a${i + 3}`, displayName: `Bot ${i + 3}` },
+            role: 'villager',
+            side: 'good' as const,
+          })),
+        ],
+      },
+    };
+    const after = werewolfRoomReducer(emptyRoomState('g1'), startedLobby);
+    expect(after.seats.find((s) => s.playerId === 'p1')!.revealedRole).toBe('werewolf');
+    expect(after.seats.find((s) => s.playerId === 'p1')!.revealedSide).toBe('werewolf');
+    expect(after.seats.find((s) => s.playerId === 'p2')!.revealedRole).toBe('seer');
+    expect(after.seats.find((s) => s.playerId === 'p3')!.revealedRole).toBe('villager');
+  });
+
+  it('lobby-sync with NO role/side on seats (pre-start lobby) leaves revealedRole undefined', async () => {
+    // Negative control: existing lobby-sync shape without role/side must
+    // NOT spuriously populate revealedRole. Pre-start, the surface stays
+    // generic.
+    const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+    for (const s of seeded.seats) {
+      expect(s.revealedRole).toBeUndefined();
+      expect(s.revealedSide).toBeUndefined();
+    }
+  });
+
   it('match.started without role/side fields (legacy) leaves revealedRole undefined', async () => {
     // Defensive: an older orchestrator that omits role/side must not blow up.
     const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
