@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ApiError, api } from '../lib/api.js';
 
 export interface MyAgentConfigVM {
@@ -19,6 +20,12 @@ export type AgentPickerState =
 export interface AgentPickerPopoverProps {
   // The seat the popover is anchored to (used for header label + invite POST).
   seatIndex: number;
+  // Viewport coordinates of the seat that opened this popover. The popover
+  // renders into a Portal at document.body and uses position:fixed against
+  // these coordinates so it can't be clipped by the .ww-board-wrapper's
+  // overflow:hidden (which existed before this feature for night-overlay
+  // containment and remains load-bearing).
+  anchorRect: { left: number; bottom: number; width: number };
   // Called when the user invokes "Invite NPC" from the popover.
   onInviteNpc: (seatIndex: number) => Promise<void> | void;
   // Called when the user picks an agent and the POST succeeded. Parent should
@@ -34,6 +41,7 @@ export interface AgentPickerPopoverProps {
 // callbacks.
 export function AgentPickerPopover({
   seatIndex,
+  anchorRect,
   onInviteNpc,
   onInviteAgent,
   onClose,
@@ -125,13 +133,23 @@ export function AgentPickerPopover({
     }
   }
 
-  return (
+  // Position fixed against viewport coordinates from the anchor seat. Centered
+  // horizontally on the seat (left + width/2) and dropped below it (bottom + 8).
+  const popoverStyle: React.CSSProperties = {
+    position: 'fixed',
+    top: anchorRect.bottom + 8,
+    left: anchorRect.left + anchorRect.width / 2,
+    transform: 'translateX(-50%)',
+  };
+
+  const ui = (
     <div
       ref={containerRef}
       className="ww-agent-picker"
       role="dialog"
       aria-modal="true"
       aria-labelledby="ww-agent-picker-header"
+      style={popoverStyle}
     >
       <header className="ww-agent-picker-header">
         <span id="ww-agent-picker-header" className="ww-agent-picker-title">
@@ -249,6 +267,10 @@ export function AgentPickerPopover({
       </footer>
     </div>
   );
+
+  // Render to document.body so the parent's overflow:hidden (set on
+  // .ww-board-wrapper for night-overlay containment) cannot clip us.
+  return createPortal(ui, document.body);
 }
 
 function truncate(s: string, n: number): string {

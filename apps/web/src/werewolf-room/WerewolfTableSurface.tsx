@@ -69,9 +69,12 @@ interface SeatCardProps {
   // user's eye doesn't get pulled to a non-speaking seat.
   replaying: boolean;
   revealRoles: boolean;
-  // D3=C — clicking an empty seat opens the picker popover. The handler is
-  // owned by WerewolfTableSurface; SeatCard just signals intent.
-  onEmptyClick?: (seatIndex: number) => void;
+  // D3=C — clicking an empty seat opens the picker popover. Owner is
+  // WerewolfTableSurface; SeatCard reports both the seat index and the
+  // viewport rect of the seat element so the popover (rendered into a
+  // Portal) can position itself against the actual seat coords rather than
+  // depending on DOM nesting (the seat-arc container is overflow-clipped).
+  onEmptyClick?: (seatIndex: number, rect: DOMRect) => void;
 }
 
 function SeatCard({ seat, pos, speaking, replaying, revealRoles, onEmptyClick }: SeatCardProps) {
@@ -163,7 +166,11 @@ function SeatCard({ seat, pos, speaking, replaying, revealRoles, onEmptyClick }:
           <div className="ww-seat-name" style={{ color: 'var(--ww-text-dim)' }}>empty</div>
           <button
             className="ww-seat-invite"
-            onClick={() => onEmptyClick?.(seat.seatIndex)}
+            onClick={(e) => {
+              const seatEl = (e.currentTarget as HTMLElement).closest('.ww-seat');
+              if (!seatEl || !onEmptyClick) return;
+              onEmptyClick(seat.seatIndex, seatEl.getBoundingClientRect());
+            }}
             disabled={!onEmptyClick}
             aria-haspopup="dialog"
           >
@@ -188,7 +195,12 @@ export function WerewolfTableSurface({
 }: WerewolfTableSurfaceProps) {
   // D3=C — clicking an empty seat opens the picker popover anchored to it.
   // null when no popover is open. Limited to one seat at a time.
-  const [pickerSeat, setPickerSeat] = useState<number | null>(null);
+  // Stores both seatIndex and the viewport rect captured at click-time so the
+  // popover can position itself against the real seat coordinates without
+  // depending on DOM ancestry (seat-arc has overflow:hidden upstream).
+  const [pickerAnchor, setPickerAnchor] = useState<
+    { seatIndex: number; rect: DOMRect } | null
+  >(null);
   // ISSUE-005 — broadcast view: roles are visible to spectators from
   // match-start. The reducer lifts revealedRole onto each SeatVM as soon as
   // match.started arrives, so the gate now follows seat data instead of
@@ -224,22 +236,30 @@ export function WerewolfTableSurface({
               replaying={isReplay}
               revealRoles={revealRoles}
               {...(onInvite || onInviteAgent
-                ? { onEmptyClick: (i: number) => setPickerSeat(i) }
+                ? {
+                    onEmptyClick: (i: number, rect: DOMRect) =>
+                      setPickerAnchor({ seatIndex: i, rect }),
+                  }
                 : {})}
             />
           );
         })}
         <WerewolfSpeechBoard state={state} />
-        {pickerSeat !== null && (onInvite || onInviteAgent) ? (
+        {pickerAnchor !== null && (onInvite || onInviteAgent) ? (
           <AgentPickerPopover
-            seatIndex={pickerSeat}
+            seatIndex={pickerAnchor.seatIndex}
+            anchorRect={{
+              left: pickerAnchor.rect.left,
+              bottom: pickerAnchor.rect.bottom,
+              width: pickerAnchor.rect.width,
+            }}
             onInviteNpc={async (i) => {
               if (onInvite) await onInvite(i);
             }}
             onInviteAgent={async (i, cfgId) => {
               if (onInviteAgent) await onInviteAgent(i, cfgId);
             }}
-            onClose={() => setPickerSeat(null)}
+            onClose={() => setPickerAnchor(null)}
           />
         ) : null}
       </div>

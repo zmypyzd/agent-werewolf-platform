@@ -1008,12 +1008,14 @@
 
 /* ---- Agent picker popover (D3=C / D4=A / D5=A / D6=A) -------------------- */
 
-/* Anchored popover — owner-scoped invite of a registered HTTP agent. */
+/* Anchored popover — owner-scoped invite of a registered HTTP agent.
+ * Position/top/left come from inline style set by AgentPickerPopover.tsx
+ * after measuring the seat's getBoundingClientRect. Rendered via React
+ * Portal to document.body so .ww-board-wrapper's overflow:hidden cannot
+ * clip it (the overflow:hidden is required for night-overlay containment
+ * and is not safe to remove). */
 .ww-agent-picker {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  position: fixed;
   z-index: 50;
   width: 360px;
   background: var(--ww-surface-el, #1e2030);
@@ -1022,8 +1024,6 @@
   padding: 16px;
   font-family: 'DM Sans', sans-serif;
   color: var(--ww-text);
-  /* Popover lives inside the seat-arc container; pin the anchor to the
-   * empty seat that opened it via .ww-seat (seat) → its descendant absolute. */
 }
 
 .ww-agent-picker-header {
