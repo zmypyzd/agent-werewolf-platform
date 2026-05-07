@@ -87,6 +87,12 @@ export class WerewolfMatchRunner {
       this.state = startFirstNight(this.state);
     }
 
+    // Spectator broadcast view (ISSUE-005): match.started carries role+side
+    // for every player so the web spectator surface can reveal the full
+    // roster from t=0. Safe to put on the public realtime topic — agents
+    // never read private info from this stream (they get it via the
+    // decision-request envelope, which redacts), so the live-game info
+    // isolation invariant is unaffected.
     this.emit('match.started', {
       gameId: this.state.gameId,
       seed: this.state.seed,
@@ -94,6 +100,8 @@ export class WerewolfMatchRunner {
         id: p.id,
         seatIndex: p.seatIndex,
         name: p.name,
+        role: p.role,
+        side: p.side,
       })),
     });
 

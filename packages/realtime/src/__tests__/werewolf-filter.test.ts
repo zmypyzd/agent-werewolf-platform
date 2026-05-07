@@ -26,6 +26,33 @@ describe('werewolfReplayEventToPublic — werewolf', () => {
     expect(out.data['players']).toEqual([{ id: 'p1', seatIndex: 0, name: 'Alice' }]);
   });
 
+  // ISSUE-005 — spectator broadcast view requires role+side to make it
+  // through the public filter so the spectator surface can reveal every
+  // role from t=0. Agents never read this stream (they get private info
+  // via the decision-request envelope), so passing role/side here does not
+  // violate the live-game info isolation invariant.
+  it('preserves role + side per player on match.started for spectator reveal', () => {
+    const e: WerewolfReplayEvent = {
+      ...baseEvent,
+      eventType: 'match.started',
+      data: {
+        gameId: 'g-1',
+        seed: 'seed-1',
+        players: [
+          { id: 'p1', seatIndex: 0, name: 'Alice', role: 'werewolf', side: 'werewolf' },
+          { id: 'p2', seatIndex: 1, name: 'Bob', role: 'seer', side: 'good' },
+        ],
+      },
+    };
+    const out = werewolfReplayEventToPublic(e)!;
+    expect(out.data['players']).toEqual([
+      { id: 'p1', seatIndex: 0, name: 'Alice', role: 'werewolf', side: 'werewolf' },
+      { id: 'p2', seatIndex: 1, name: 'Bob', role: 'seer', side: 'good' },
+    ]);
+    // seed is still stripped — that's separate from role reveal.
+    expect(out.data['seed']).toBeUndefined();
+  });
+
   it('passes match.started through unchanged when no seed is present', () => {
     const e: WerewolfReplayEvent = {
       ...baseEvent,

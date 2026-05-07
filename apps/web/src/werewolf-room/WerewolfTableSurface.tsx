@@ -89,15 +89,18 @@ function SeatCard({ seat, pos, speaking, replaying, revealRoles, onInvite }: Sea
 
   let statusText: string;
   if (dead) {
-    if (revealRoles && seat.revealedRole) {
-      // Match-completed: prefer the role reveal — cause-of-death is moot
-      // once everyone's identity is on the table.
-      statusText = `✝ ${ROLE_LABELS[seat.revealedRole]}`;
-    } else if (seat.causeOfDeath) {
+    if (seat.causeOfDeath) {
+      // Cause-of-death is the freshest, most-dynamic info on a dead seat
+      // and never duplicates the role badge (which already shows on top of
+      // the card via roleEmoji). Wins over the role label in every mode —
+      // mid-match spectator broadcast view, and post-match scoreboard.
       statusText = CAUSE_OF_DEATH_LABELS[seat.causeOfDeath];
+    } else if (revealRoles && seat.revealedRole) {
+      // Fallback for dead seats whose elimination event arrived without a
+      // cause (legacy replays, schema-failed events). Role is still useful
+      // signal there.
+      statusText = `✝ ${ROLE_LABELS[seat.revealedRole]}`;
     } else {
-      // Legacy fallback — replay events from before the cause-of-death
-      // wiring don't carry it; don't blank the seat.
       statusText = '✝ 已淘汰';
     }
   } else if (speaking) {
@@ -158,7 +161,12 @@ export function WerewolfTableSurface({
   onInvite,
   onFillAll,
 }: WerewolfTableSurfaceProps) {
-  const revealRoles = state.status === 'completed';
+  // ISSUE-005 — broadcast view: roles are visible to spectators from
+  // match-start. The reducer lifts revealedRole onto each SeatVM as soon as
+  // match.started arrives, so the gate now follows seat data instead of
+  // status. Pre-match (lobby) the seats have no revealedRole and the table
+  // still renders generic placeholders, so the lobby UX is unchanged.
+  const revealRoles = state.seats.some((s) => s.revealedRole !== undefined);
   const showFillAll =
     state.status === 'waiting' &&
     state.seats.some((s) => s.occupant.kind === 'empty');

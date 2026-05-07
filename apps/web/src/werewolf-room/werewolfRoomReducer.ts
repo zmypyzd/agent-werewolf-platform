@@ -69,6 +69,17 @@ function isKnownCause(cause: string): cause is KnownCause {
   return (KNOWN_CAUSES as readonly string[]).includes(cause);
 }
 
+const KNOWN_ROLES = ['werewolf', 'villager', 'seer', 'witch', 'hunter'] as const;
+const KNOWN_SIDES = ['good', 'werewolf'] as const;
+
+function isKnownRole(v: unknown): v is WerewolfRole {
+  return typeof v === 'string' && (KNOWN_ROLES as readonly string[]).includes(v);
+}
+
+function isKnownSide(v: unknown): v is WerewolfSide {
+  return typeof v === 'string' && (KNOWN_SIDES as readonly string[]).includes(v);
+}
+
 function nameIndexFromSeats(seats: SeatVM[]): NameIndex {
   const out: Record<string, string> = {};
   for (const s of seats) {
@@ -145,6 +156,44 @@ export function werewolfRoomReducer(
   const names = nameIndexFromSeats(state.seats);
   const phase = (event.data['phase'] as string | undefined) ?? state.currentPhase;
   let next: WerewolfRoomState = state;
+
+  // ISSUE-005 — spectator broadcast view: match.started carries role+side
+  // per player (orchestrator emits them on the public realtime topic; agents
+  // never read this stream). Lift them onto SeatVM.revealedRole/Side so the
+  // spectator surface reveals every role from t=0. Living seats then render
+  // the role badge; dead seats keep the cause-of-death copy from ISSUE-004.
+  if (event.eventType === 'match.started') {
+    const playersRaw = event.data['players'];
+    if (Array.isArray(playersRaw)) {
+      const byId = new Map<string, { role?: WerewolfRole; side?: WerewolfSide }>();
+      for (const p of playersRaw) {
+        if (typeof p !== 'object' || p === null) continue;
+        const rec = p as Record<string, unknown>;
+        const id = rec['id'];
+        if (typeof id !== 'string') continue;
+        const role = isKnownRole(rec['role']) ? rec['role'] : undefined;
+        const side = isKnownSide(rec['side']) ? rec['side'] : undefined;
+        byId.set(id, {
+          ...(role ? { role } : {}),
+          ...(side ? { side } : {}),
+        });
+      }
+      if (byId.size > 0) {
+        next = {
+          ...next,
+          seats: next.seats.map((s) => {
+            const reveal = byId.get(s.playerId);
+            if (!reveal) return s;
+            return {
+              ...s,
+              ...(reveal.role ? { revealedRole: reveal.role } : {}),
+              ...(reveal.side ? { revealedSide: reveal.side } : {}),
+            };
+          }),
+        };
+      }
+    }
+  }
 
   if (event.eventType === 'phase.changed') {
     const newPhase = event.data['phase'] as WerewolfPhase | undefined;
