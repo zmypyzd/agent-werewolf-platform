@@ -81,7 +81,12 @@ describe('normalizeWerewolfReplayEvent — eliminations and PK rounds', () => {
     expect(death!.text).toContain('猎人开枪');
   });
 
-  it('day-vote with pkRound>=1 emits a "PK 第 N 轮" line and SUPPRESSES the day banner', () => {
+  it('day-vote with pkRound=1 emits "进入第 1 轮 PK 投票" and SUPPRESSES the day banner', () => {
+    // ISSUE-006 — pkRound is now treated as a 1-based PK index in copy.
+    // Old text was "进入第 2 轮决战投票" at pkRound=1, which was confusing
+    // because spectators had already seen the regular day-1 vote round
+    // (no PK label) and wondered where "第 1 轮决战投票" went. New copy
+    // drops both the +1 and the "决战" word: "第 ${pkRound} 轮 PK 投票".
     const lines = normalizeWerewolfReplayEvent(
       makeEvent({
         eventType: 'phase.changed',
@@ -91,9 +96,22 @@ describe('normalizeWerewolfReplayEvent — eliminations and PK rounds', () => {
     );
     expect(lines).toHaveLength(1);
     expect(lines[0]?.kind).toBe('system');
-    expect(lines[0]?.text).toContain('第 2 轮决战投票');
+    expect(lines[0]?.text).toBe('⚖️ 票数相同，进入第 1 轮 PK 投票');
     // Verify no double day banner during a PK revote
     expect(lines.find((l) => l.kind === 'phase-day')).toBeUndefined();
+  });
+
+  it('PK round number scales linearly: pkRound=2 → "进入第 2 轮 PK 投票", pkRound=3 → "进入第 3 轮 PK 投票"', () => {
+    for (const pk of [2, 3]) {
+      const lines = normalizeWerewolfReplayEvent(
+        makeEvent({
+          eventType: 'phase.changed',
+          data: { phase: 'day-vote', dayNumber: 1, pkRound: pk },
+        }),
+        NAME_INDEX,
+      );
+      expect(lines[0]?.text).toBe(`⚖️ 票数相同，进入第 ${pk} 轮 PK 投票`);
+    }
   });
 
   it('day-vote with pkRound=0 (or missing) emits the normal day banner', () => {

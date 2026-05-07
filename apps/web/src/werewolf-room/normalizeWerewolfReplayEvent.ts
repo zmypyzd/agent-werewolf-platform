@@ -81,11 +81,17 @@ export function normalizeWerewolfReplayEvent(
         ? (event.data['pkRound'] as number)
         : 0;
     if (phase === 'day-vote' && pkRound > 0) {
+      // ISSUE-006: pkRound is the orchestrator's 1-based PK index, so
+      // pkRound=1 IS the first PK round. The previous copy "进入第
+      // ${pkRound+1} 轮决战投票" double-counted (calling the first PK
+      // round the "second" decisive vote) and mixed two terminologies
+      // ("决战" vs "PK"). Now uses pkRound directly with consistent "PK"
+      // wording.
       lines.push({
         id: `${id}-pk`,
         timestamp: ts,
         kind: 'system',
-        text: `⚖️ 票数相同，进入第 ${pkRound + 1} 轮决战投票`,
+        text: `⚖️ 票数相同，进入第 ${pkRound} 轮 PK 投票`,
       });
     }
 
