@@ -8,7 +8,6 @@ export interface WerewolfTableSurfaceProps {
   // Called when the user picks "邀请 NPC" from the per-seat popover. Parent
   // POSTs to /seats/:i/invite-npc and refreshes lobby.
   onInvite?: (seatIndex: number) => Promise<void> | void;
-  onFillAll?: () => void;
   // Called when the user picks one of their registered agents from the
   // popover. Parent POSTs to /seats/:i/invite-agent and refreshes lobby.
   // Throws a propagated error so the popover can render server-side error
@@ -185,7 +184,6 @@ function SeatCard({ seat, pos, speaking, replaying, revealRoles, onEmptyClick }:
 export function WerewolfTableSurface({
   state,
   onInvite,
-  onFillAll,
   onInviteAgent,
 }: WerewolfTableSurfaceProps) {
   // D3=C — clicking an empty seat opens the picker popover anchored to it.
@@ -197,9 +195,6 @@ export function WerewolfTableSurface({
   // status. Pre-match (lobby) the seats have no revealedRole and the table
   // still renders generic placeholders, so the lobby UX is unchanged.
   const revealRoles = state.seats.some((s) => s.revealedRole !== undefined);
-  const showFillAll =
-    state.status === 'waiting' &&
-    state.seats.some((s) => s.occupant.kind === 'empty');
 
   const isNight =
     typeof state.currentPhase === 'string' &&
@@ -207,11 +202,6 @@ export function WerewolfTableSurface({
 
   return (
     <div className={`ww-board-wrapper${isNight ? '' : ' is-day'}`}>
-      {showFillAll && onFillAll ? (
-        <button className="ww-fill-all" onClick={onFillAll}>
-          一键填满 9 个 NPC
-        </button>
-      ) : null}
       <div className="ww-board-night-overlay" />
       <div className="ww-seat-arc">
         {state.seats.map((seat, i) => {

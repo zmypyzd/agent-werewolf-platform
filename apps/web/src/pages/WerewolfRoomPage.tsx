@@ -123,18 +123,6 @@ export function WerewolfRoomPage() {
     }
   }
 
-  async function fillAll() {
-    try {
-      await api.post(
-        `/werewolf-games/${encodeURIComponent(gameId)}/fill-with-npcs`,
-        {},
-      );
-      await fetchEntry();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Fill failed');
-    }
-  }
-
   async function startMatch() {
     try {
       await api.post(`/werewolf-games/${encodeURIComponent(gameId)}/start`, {});
@@ -172,7 +160,6 @@ export function WerewolfRoomPage() {
           state={state}
           onInvite={inviteNpc}
           onInviteAgent={inviteAgent}
-          onFillAll={fillAll}
         />
       )}
 
