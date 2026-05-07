@@ -37,6 +37,16 @@ const ROLE_LABELS: Record<WerewolfRole, string> = {
   hunter:   '猎人',
 };
 
+// ISSUE-004 — mid-match dead seats now display the cause instead of the
+// generic "已淘汰", so the 9-seat board doubles as a death-cause dashboard
+// without the user having to scan the right-side timeline.
+const CAUSE_OF_DEATH_LABELS: Record<NonNullable<SeatVM['causeOfDeath']>, string> = {
+  'wolf-kill':    '✝ 被狼刀',
+  'witch-poison': '✝ 被毒',
+  'banishment':   '✝ 被放逐',
+  'hunter-shoot': '✝ 被开枪',
+};
+
 interface SeatCardProps {
   seat: SeatVM;
   pos: { left: string; top: string };
@@ -79,9 +89,17 @@ function SeatCard({ seat, pos, speaking, replaying, revealRoles, onInvite }: Sea
 
   let statusText: string;
   if (dead) {
-    statusText = revealRoles && seat.revealedRole
-      ? `✝ ${ROLE_LABELS[seat.revealedRole]}`
-      : '✝ 已淘汰';
+    if (revealRoles && seat.revealedRole) {
+      // Match-completed: prefer the role reveal — cause-of-death is moot
+      // once everyone's identity is on the table.
+      statusText = `✝ ${ROLE_LABELS[seat.revealedRole]}`;
+    } else if (seat.causeOfDeath) {
+      statusText = CAUSE_OF_DEATH_LABELS[seat.causeOfDeath];
+    } else {
+      // Legacy fallback — replay events from before the cause-of-death
+      // wiring don't carry it; don't blank the seat.
+      statusText = '✝ 已淘汰';
+    }
   } else if (speaking) {
     statusText = 'speaking…';
   } else if (replaying) {

@@ -62,6 +62,13 @@ function isNightPhase(phase: string | WerewolfPhase | undefined): boolean {
   return typeof phase === 'string' && phase.startsWith(NIGHT_PHASE_PREFIX);
 }
 
+const KNOWN_CAUSES = ['wolf-kill', 'witch-poison', 'banishment', 'hunter-shoot'] as const;
+type KnownCause = (typeof KNOWN_CAUSES)[number];
+
+function isKnownCause(cause: string): cause is KnownCause {
+  return (KNOWN_CAUSES as readonly string[]).includes(cause);
+}
+
 function nameIndexFromSeats(seats: SeatVM[]): NameIndex {
   const out: Record<string, string> = {};
   for (const s of seats) {
@@ -90,6 +97,7 @@ export function werewolfRoomReducer(
         playerId: s.playerId,
         occupant: s.occupant,
         alive: prev ? prev.alive : true,
+        ...(prev?.causeOfDeath ? { causeOfDeath: prev.causeOfDeath } : {}),
         ...(prev?.revealedRole ? { revealedRole: prev.revealedRole } : {}),
         ...(prev?.revealedSide ? { revealedSide: prev.revealedSide } : {}),
       };
@@ -159,11 +167,18 @@ export function werewolfRoomReducer(
           : [];
       const seatsAfterDeaths =
         eliminated.length > 0
-          ? next.seats.map((s) =>
-              eliminated.some((e) => e.playerId === s.playerId)
-                ? { ...s, alive: false }
-                : s,
-            )
+          ? next.seats.map((s) => {
+              const death = eliminated.find((e) => e.playerId === s.playerId);
+              if (!death) return s;
+              const cause = isKnownCause(death.cause)
+                ? death.cause
+                : undefined;
+              return {
+                ...s,
+                alive: false,
+                ...(cause ? { causeOfDeath: cause } : {}),
+              };
+            })
           : next.seats;
 
       next = {

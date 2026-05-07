@@ -78,3 +78,122 @@ describe('WerewolfTableSurface — survivor status after match completes', () =>
     expect(waitingMatches).toHaveLength(0);
   });
 });
+
+// ISSUE-004 — mid-match (status !== 'completed', revealRoles=false), the
+// surface used to render every dead seat as "✝ 已淘汰" regardless of cause.
+// Now the surface renders distinct copy per causeOfDeath so the 9 seats
+// double as a death-cause dashboard. After match-completed (revealRoles
+// turns on), seats fall back to the role label as before.
+function makeRunningStateWithCauses(): WerewolfRoomState {
+  const base = emptyRoomState('g-running');
+  const seats: SeatVM[] = [
+    {
+      seatIndex: 0,
+      playerId: 'p1',
+      occupant: { kind: 'npc', agentId: 'a1', displayName: 'Bot 1' },
+      alive: false,
+      causeOfDeath: 'wolf-kill',
+    },
+    {
+      seatIndex: 1,
+      playerId: 'p2',
+      occupant: { kind: 'npc', agentId: 'a2', displayName: 'Bot 2' },
+      alive: false,
+      causeOfDeath: 'witch-poison',
+    },
+    {
+      seatIndex: 2,
+      playerId: 'p3',
+      occupant: { kind: 'npc', agentId: 'a3', displayName: 'Bot 3' },
+      alive: false,
+      causeOfDeath: 'banishment',
+    },
+    {
+      seatIndex: 3,
+      playerId: 'p4',
+      occupant: { kind: 'npc', agentId: 'a4', displayName: 'Bot 4' },
+      alive: false,
+      causeOfDeath: 'hunter-shoot',
+    },
+  ];
+  while (seats.length < 9) {
+    const i = seats.length;
+    seats.push({
+      seatIndex: i,
+      playerId: `p${i + 1}`,
+      occupant: { kind: 'npc', agentId: `a${i + 1}`, displayName: `Bot ${i + 1}` },
+      alive: true,
+    });
+  }
+  return {
+    ...base,
+    status: 'running',
+    currentPhase: 'day-speeches',
+    seats,
+  };
+}
+
+describe('WerewolfTableSurface — cause-of-death copy on dead seats mid-match', () => {
+  it('renders ✝ 被狼刀 / ✝ 被毒 / ✝ 被放逐 / ✝ 被开枪 distinctly', () => {
+    const html = renderToStaticMarkup(
+      <WerewolfTableSurface state={makeRunningStateWithCauses()} />,
+    );
+    expect(html).toContain('✝ 被狼刀');
+    expect(html).toContain('✝ 被毒');
+    expect(html).toContain('✝ 被放逐');
+    expect(html).toContain('✝ 被开枪');
+  });
+
+  it('falls back to ✝ 已淘汰 for a dead seat with no causeOfDeath', () => {
+    const base = emptyRoomState('g-fallback');
+    const seats: SeatVM[] = base.seats.map((s, i) =>
+      i === 0
+        ? {
+            seatIndex: 0,
+            playerId: 'p1',
+            occupant: { kind: 'npc', agentId: 'a1', displayName: 'Bot 1' },
+            alive: false,
+            // No causeOfDeath set — older replay events without the field
+            // must still render something.
+          }
+        : {
+            ...s,
+            occupant: { kind: 'npc', agentId: `a${i + 1}`, displayName: `Bot ${i + 1}` },
+          },
+    );
+    const html = renderToStaticMarkup(
+      <WerewolfTableSurface state={{ ...base, status: 'running', currentPhase: 'day-speeches', seats }} />,
+    );
+    expect(html).toContain('✝ 已淘汰');
+  });
+
+  it('after match-completed (revealRoles=true) dead seats show role, not cause', () => {
+    // Carry both causeOfDeath and revealedRole on the same seat — the surface
+    // must prefer the role label once the match has ended.
+    const base = emptyRoomState('g-completed-with-cause');
+    const seats: SeatVM[] = base.seats.map((s, i) =>
+      i === 0
+        ? {
+            seatIndex: 0,
+            playerId: 'p1',
+            occupant: { kind: 'npc', agentId: 'a1', displayName: 'Bot 1' },
+            alive: false,
+            causeOfDeath: 'wolf-kill',
+            revealedRole: 'witch',
+            revealedSide: 'good',
+          }
+        : {
+            ...s,
+            occupant: { kind: 'npc', agentId: `a${i + 1}`, displayName: `Bot ${i + 1}` },
+            alive: false,
+            revealedRole: 'villager',
+            revealedSide: 'good',
+          },
+    );
+    const html = renderToStaticMarkup(
+      <WerewolfTableSurface state={{ ...base, status: 'completed', currentPhase: 'completed', seats, winner: 'werewolf' }} />,
+    );
+    expect(html).toContain('✝ 女巫');
+    expect(html).not.toContain('✝ 被狼刀');
+  });
+});

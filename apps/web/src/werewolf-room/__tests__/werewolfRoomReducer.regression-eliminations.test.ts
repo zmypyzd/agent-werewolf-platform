@@ -206,6 +206,123 @@ describe('werewolfRoomReducer — phase.changed eliminations', () => {
     expect(afterSync.seats.find((s) => s.playerId === 'p3')!.revealedRole).toBe('seer');
   });
 
+  // ISSUE-004 — seats only said "✝ 已淘汰" no matter how the player died.
+  // The reducer now propagates the cause from event.data.eliminated[].cause
+  // into seat.causeOfDeath so the table surface can render distinct text
+  // ("✝ 被狼刀" / "✝ 被毒" / "✝ 被放逐" / "✝ 被开枪").
+  describe('seat.causeOfDeath propagation', () => {
+    it('writes seat.causeOfDeath="wolf-kill" when phase.changed elimination cause is wolf-kill', async () => {
+      const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+      const after = werewolfRoomReducer(seeded, {
+        type: 'replay-event',
+        event: makeEvent({
+          eventType: 'phase.changed',
+          data: {
+            phase: 'day-announce',
+            nightNumber: 1,
+            dayNumber: 1,
+            eliminated: [{ playerId: 'p2', cause: 'wolf-kill' }],
+          },
+        }),
+      });
+      const seat = after.seats.find((s) => s.playerId === 'p2')!;
+      expect(seat.alive).toBe(false);
+      expect(seat.causeOfDeath).toBe('wolf-kill');
+    });
+
+    it('writes distinct causes per eliminated entry in a multi-death tick', async () => {
+      const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+      const after = werewolfRoomReducer(seeded, {
+        type: 'replay-event',
+        event: makeEvent({
+          eventType: 'phase.changed',
+          data: {
+            phase: 'day-speeches',
+            nightNumber: 1,
+            dayNumber: 1,
+            eliminated: [
+              { playerId: 'p3', cause: 'wolf-kill' },
+              { playerId: 'p4', cause: 'witch-poison' },
+            ],
+          },
+        }),
+      });
+      expect(after.seats.find((s) => s.playerId === 'p3')!.causeOfDeath).toBe('wolf-kill');
+      expect(after.seats.find((s) => s.playerId === 'p4')!.causeOfDeath).toBe('witch-poison');
+    });
+
+    it('writes seat.causeOfDeath="banishment" / "hunter-shoot" through the same path', async () => {
+      const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+      const banished = werewolfRoomReducer(seeded, {
+        type: 'replay-event',
+        event: makeEvent({
+          eventType: 'phase.changed',
+          data: {
+            phase: 'hunter-shoot',
+            nightNumber: 1,
+            dayNumber: 1,
+            eliminated: [{ playerId: 'p5', cause: 'banishment' }],
+          },
+        }),
+      });
+      expect(banished.seats.find((s) => s.playerId === 'p5')!.causeOfDeath).toBe('banishment');
+
+      const shot = werewolfRoomReducer(banished, {
+        type: 'replay-event',
+        event: makeEvent({
+          eventType: 'phase.changed',
+          data: {
+            phase: 'night-werewolf-vote',
+            nightNumber: 2,
+            dayNumber: 1,
+            eliminated: [{ playerId: 'p7', cause: 'hunter-shoot' }],
+          },
+        }),
+      });
+      expect(shot.seats.find((s) => s.playerId === 'p7')!.causeOfDeath).toBe('hunter-shoot');
+    });
+
+    it('seat.causeOfDeath survives a subsequent lobby-sync poll', async () => {
+      const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+      const afterDeath = werewolfRoomReducer(seeded, {
+        type: 'replay-event',
+        event: makeEvent({
+          eventType: 'phase.changed',
+          data: {
+            phase: 'day-announce',
+            nightNumber: 1,
+            dayNumber: 1,
+            eliminated: [{ playerId: 'p1', cause: 'wolf-kill' }],
+          },
+        }),
+      });
+      const afterSync = werewolfRoomReducer(afterDeath, SEEDED_LOBBY);
+      const seat = afterSync.seats.find((s) => s.playerId === 'p1')!;
+      expect(seat.alive).toBe(false);
+      expect(seat.causeOfDeath).toBe('wolf-kill');
+    });
+
+    it('living seats have no causeOfDeath', async () => {
+      const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+      const after = werewolfRoomReducer(seeded, {
+        type: 'replay-event',
+        event: makeEvent({
+          eventType: 'phase.changed',
+          data: {
+            phase: 'day-announce',
+            nightNumber: 1,
+            dayNumber: 1,
+            eliminated: [{ playerId: 'p2', cause: 'wolf-kill' }],
+          },
+        }),
+      });
+      for (const s of after.seats) {
+        if (s.playerId === 'p2') continue;
+        expect(s.causeOfDeath).toBeUndefined();
+      }
+    });
+  });
+
   it('PK revote phase.changed with pkRound>=1 does NOT touch alive flags', async () => {
     const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
     // Pretend p5 died at night

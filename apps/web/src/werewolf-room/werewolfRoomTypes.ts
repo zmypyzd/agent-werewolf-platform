@@ -51,6 +51,12 @@ export interface SeatVM {
     | { kind: 'empty' }
     | { kind: 'npc'; agentId: string; displayName: string };
   alive: boolean;
+  // How this seat died, propagated from event.data.eliminated[].cause on the
+  // phase.changed that announced the death. Drives the seat status copy
+  // (✝ 被狼刀 / ✝ 被毒 / ✝ 被放逐 / ✝ 被开枪) before match-completed
+  // reveals the role. Absent on living seats and on legacy events that
+  // didn't carry a cause.
+  causeOfDeath?: 'wolf-kill' | 'witch-poison' | 'banishment' | 'hunter-shoot';
   revealedRole?: WerewolfRole;
   revealedSide?: WerewolfSide;
 }
