@@ -59,6 +59,16 @@ Five protected points, each defended by ≥2 layers and pinned by tests:
    `apps/api/src/routes/ws.ts:isOwnPlayerTopic` (subscribe-time) +
    per-player ownership map in `attachWerewolfHub` (publish-time).
 
+**Not on this list — and intentionally so**: `role` / `side` on each
+player. As of ISSUE-005 the orchestrator emits both fields in the
+`match.started` event payload, and `werewolfReplayEventToPublic` passes
+them through to spectators and to the persisted public artifact. This is
+the broadcast-view feature, not a leak: agents read private info via the
+decision-request envelope (already redacted by `getPrivateState`),
+they never read it from this stream. The pass-through is locked in by
+`packages/realtime/src/__tests__/werewolf-filter.test.ts` so a future
+overzealous redactor can't accidentally strip it.
+
 ## Runtime data flow (one decision)
 
 ```
@@ -116,10 +126,33 @@ a game, fill it with `WerewolfRandomMockAgent` instances via the new
 and watch it stream over the existing `match:<gameId>` WS topic. See
 `docs/superpowers/specs/2026-05-06-werewolf-demo-ui-design.md` for the
 spec and `docs/superpowers/plans/2026-05-06-werewolf-demo-ui.md` for the
-implementation plan. Information-isolation invariants (seed never echoed,
-roles only revealed after game-over, night actor never highlighted) are
-pinned by tests in `apps/api/src/__tests__/werewolf-games-info-isolation.test.ts`
-and `apps/web/src/werewolf-room/__tests__/werewolfRoomReducer.test.ts`.
+implementation plan.
+
+The demo surface is a **spectator broadcast view** — every role/side is
+revealed from `match.started` so the 9-seat board acts as a scoreboard
+from t=0 (ISSUE-005). The role badge on top of each card shows the
+player's role; the dead-seat status line prefers the cause-of-death copy
+(✝ 被狼刀 / 被毒 / 被放逐 / 被开枪) over the role label, since the role
+is already conveyed by the badge and the cause is the freshest
+information about a corpse (ISSUE-004 + 005). PK revote copy is "进入第
+N 轮 PK 投票" with `pkRound` as the 1-based PK index (ISSUE-006).
+
+Information-isolation invariants on the demo path:
+
+- Lobby seat info (`/api/v1/werewolf-games/:id`) never carries role or
+  side, so a viewer reading the lobby endpoint cannot derive the roster.
+  Pinned by `apps/api/src/__tests__/werewolf-games-info-isolation.test.ts`.
+- Match seed never echoed on any public surface (see invariant #2 above).
+- Night actor never highlighted in agent.action_* events emitted during
+  night phases (see invariant #1 above).
+- Realtime spectator stream **does** include role/side on `match.started`
+  by design — this is the broadcast view, not a leak (agents never read
+  this stream; see "Not on this list" above).
+
+Pinned by tests in `apps/api/src/__tests__/werewolf-games-info-isolation.test.ts`,
+`apps/web/src/werewolf-room/__tests__/werewolfRoomReducer.test.ts`,
+`packages/werewolf-orchestrator/src/__tests__/match-runner.regression-spectator-reveal.test.ts`,
+and `packages/realtime/src/__tests__/werewolf-filter.test.ts`.
 
 ## Out of scope
 
