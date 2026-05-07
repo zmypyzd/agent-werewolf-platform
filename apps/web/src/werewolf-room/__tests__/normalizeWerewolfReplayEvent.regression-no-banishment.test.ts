@@ -77,7 +77,8 @@ describe('normalizeWerewolfReplayEvent — no-banishment outcome', () => {
     );
     const flopped = lines.find((l) => l.text.includes('投票流产'));
     expect(flopped).toBeUndefined();
-    const pk = lines.find((l) => l.text.includes('决战投票'));
+    // Track the PK line by the post-ISSUE-006 wording.
+    const pk = lines.find((l) => l.text.includes('PK 投票'));
     expect(pk).toBeDefined();
   });
 });
