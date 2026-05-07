@@ -38,6 +38,7 @@ import { matchesRoutes } from './routes/matches.js';
 import { werewolfMatchesRoutes } from './routes/werewolf-matches.js';
 import { werewolfGamesRoutes } from './routes/werewolf-games.js';
 import { WerewolfLobbyRegistry } from './werewolf-lobby-registry.js';
+import { AgentConfigUsageService } from './services/agent-config-usage.js';
 import { authRoutes } from './routes/auth.js';
 import { wsRoutes } from './routes/ws.js';
 import { meAgentsRoutes } from './routes/me-agents.js';
@@ -197,7 +198,12 @@ export function buildServer(opts: BuildServerOptions = {}) {
       attachMatch: (gameId, ownership) =>
         werewolfHubAttachment.attachMatch(gameId, ownership),
       detachMatch: (gameId) => werewolfHubAttachment.detachMatch(gameId),
+      agentConfigStore: agentConfigStore!,
     });
+
+  // Cross-game in-use joiner — passed to me-agents.ts so DELETE rejects when
+  // an agent config is seated in either a poker table or a werewolf lobby.
+  const agentConfigUsage = new AgentConfigUsageService(orch, werewolfLobbyRegistry);
 
   // Auth plugin + WebSocket plugin must register before any route plugin that
   // needs request.user / requireAuth or the websocket route option.
@@ -229,7 +235,7 @@ export function buildServer(opts: BuildServerOptions = {}) {
       prefix: '/api/v1',
       registry: werewolfLobbyRegistry,
     });
-    await scope.register(meAgentsRoutes, { prefix: '/api/v1', agentConfigStore, orchestrator: orch });
+    await scope.register(meAgentsRoutes, { prefix: '/api/v1', agentConfigStore, agentConfigUsage });
     await scope.register(agentInvitesRoutes, { prefix: '/api/v1', agentInviteStore, agentConfigStore });
     await scope.register(wsRoutes, { hub });
     await scope.register(healthRoutes);

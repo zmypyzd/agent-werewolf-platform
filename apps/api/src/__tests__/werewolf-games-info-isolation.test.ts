@@ -4,10 +4,25 @@ import { buildServer } from '../server.js';
 
 describe('werewolf-games info isolation', () => {
   let app: FastifyInstance;
+  let cookie: string;
 
   beforeEach(async () => {
     app = await buildServer();
     await app.ready();
+    const reg = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch' },
+      payload: JSON.stringify({
+        email: `iso-${Math.random().toString(36).slice(2)}@x.test`,
+        password: 'hunter22pw',
+        displayName: 'Iso',
+      }),
+    });
+    const setCookie = Array.isArray(reg.headers['set-cookie'])
+      ? reg.headers['set-cookie'].join(';')
+      : reg.headers['set-cookie'] ?? '';
+    cookie = setCookie.match(/apk_sid=([^;]+)/)![1]!;
   });
 
   afterEach(async () => {
@@ -19,6 +34,7 @@ describe('werewolf-games info isolation', () => {
       method: 'POST',
       url,
       headers: { 'X-Requested-With': 'fetch', 'Content-Type': 'application/json' },
+      cookies: { apk_sid: cookie },
       payload: body,
     });
   }

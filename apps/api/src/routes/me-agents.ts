@@ -7,11 +7,15 @@ import {
   PatchUserAgentConfigRequestSchema,
 } from '@agent-poker/agent-protocol';
 import type { IUserAgentConfigStore, UserAgentConfig } from '@agent-poker/persistence';
-import type { TableOrchestrator } from '@agent-poker/table-orchestrator';
+import type { AgentConfigUsageService } from '../services/agent-config-usage.js';
 
 interface MeAgentsPluginOptions extends FastifyPluginOptions {
   agentConfigStore: IUserAgentConfigStore;
-  orchestrator: TableOrchestrator;
+  // Cross-game in-use joiner — replaces the previous direct
+  // TableOrchestrator dependency so this route stays game-agnostic.
+  // Adding werewolf in-use means just changing the joiner's wiring,
+  // not this file.
+  agentConfigUsage: AgentConfigUsageService;
 }
 
 function toPublicConfig(c: UserAgentConfig) {
@@ -29,7 +33,7 @@ function toPublicConfig(c: UserAgentConfig) {
 }
 
 export async function meAgentsRoutes(app: FastifyInstance, opts: MeAgentsPluginOptions) {
-  const { agentConfigStore, orchestrator } = opts;
+  const { agentConfigStore, agentConfigUsage } = opts;
 
   app.get(
     '/me/agents',
@@ -107,7 +111,7 @@ export async function meAgentsRoutes(app: FastifyInstance, opts: MeAgentsPluginO
       const userId = req.user!.userId;
       const cfg = await agentConfigStore.get(userId, req.params.agentId);
       if (!cfg) throw new AppError('AGENT_NOT_FOUND', `Agent config ${req.params.agentId} not found`);
-      if (orchestrator.isAgentConfigInUse(cfg.agentConfigId)) {
+      if (agentConfigUsage.isInUse(cfg.agentConfigId)) {
         throw new AgentInUseError(cfg.agentConfigId);
       }
       await agentConfigStore.delete(userId, req.params.agentId);

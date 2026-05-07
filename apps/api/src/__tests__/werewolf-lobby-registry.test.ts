@@ -1,18 +1,44 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { WerewolfOrchestrator } from '@agent-poker/werewolf-orchestrator';
+import type { IUserAgentConfigStore, UserAgentConfig } from '@agent-poker/persistence';
 import { WerewolfLobbyRegistry } from '../werewolf-lobby-registry.js';
+
+// Minimal in-memory agentConfigStore for tests. Default behavior:
+// - list/get returns empty/null so the existing npc-only tests don't change
+// - create/update/delete are no-ops; they shouldn't be hit by registry code
+// Individual tests that exercise inviteAgent() can install configs by pushing
+// into `configs` directly.
+function makeMockAgentConfigStore(): IUserAgentConfigStore & {
+  configs: Map<string, UserAgentConfig>;
+} {
+  const configs = new Map<string, UserAgentConfig>();
+  return {
+    configs,
+    async list() { return [...configs.values()]; },
+    async get(userId, agentConfigId) {
+      const c = configs.get(agentConfigId);
+      return c && c.userId === userId ? c : null;
+    },
+    async create(cfg) { configs.set(cfg.agentConfigId, cfg as UserAgentConfig); return cfg as UserAgentConfig; },
+    async update(_u, id, _patch) { return configs.get(id)!; },
+    async delete(_u, id) { configs.delete(id); },
+  };
+}
 
 describe('WerewolfLobbyRegistry', () => {
   let orch: WerewolfOrchestrator;
   let registry: WerewolfLobbyRegistry;
+  let agentConfigStore: ReturnType<typeof makeMockAgentConfigStore>;
 
   beforeEach(() => {
     orch = new WerewolfOrchestrator();
+    agentConfigStore = makeMockAgentConfigStore();
     registry = new WerewolfLobbyRegistry({
       orchestrator: orch,
       attachMatch: vi.fn(),
       detachMatch: vi.fn(),
       npcThinkingDelayRange: [0, 0],
+      agentConfigStore,
     });
   });
 
@@ -77,6 +103,102 @@ describe('WerewolfLobbyRegistry', () => {
     expect(() => registry.start(gameId)).toThrowError(/NOT_READY|cannot start/);
   });
 
+  // ---- inviteAgent (D2/D5) -------------------------------------------------
+
+  function installCfg(userId: string, agentConfigId = 'cfg-test-1') {
+    const cfg = {
+      agentConfigId,
+      userId,
+      agentName: 'gpt-werewolf',
+      endpointUrl: 'https://example.test/agent',
+      authHeaderName: null,
+      authHeaderValue: null,
+      timeoutMs: 5000,
+      description: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    agentConfigStore.configs.set(agentConfigId, cfg);
+    return cfg;
+  }
+
+  it('inviteAgent fills the seat and registers an HTTP adapter', async () => {
+    const { gameId } = registry.create({ name: 'demo' });
+    installCfg('user-1', 'cfg-A');
+    const updated = await registry.inviteAgent(gameId, 0, 'cfg-A', 'user-1');
+    const seat = updated.seats[0]!;
+    expect(seat.occupant.kind).toBe('agent');
+    if (seat.occupant.kind !== 'agent') return;
+    expect(seat.occupant.agentId).toBe('agent-p1');
+    expect(seat.occupant.displayName).toBe('gpt-werewolf');
+    // owner-only projection: when viewer === owner, isMine=true
+    expect(seat.occupant.isMine).toBe(true);
+  });
+
+  it('inviteAgent isolation: cross-account access surfaces as AGENT_NOT_FOUND, not 403', async () => {
+    // P0 — must not leak whether cfg exists for another user.
+    const { gameId } = registry.create({ name: 'demo' });
+    installCfg('owner-A', 'cfg-A');
+    await expect(
+      registry.inviteAgent(gameId, 0, 'cfg-A', 'attacker-B'),
+    ).rejects.toMatchObject({ code: 'AGENT_NOT_FOUND' });
+  });
+
+  it('inviteAgent rejects same cfg into two seats of one game (within-game in-use)', async () => {
+    const { gameId } = registry.create({ name: 'demo' });
+    installCfg('user-1', 'cfg-A');
+    await registry.inviteAgent(gameId, 0, 'cfg-A', 'user-1');
+    await expect(
+      registry.inviteAgent(gameId, 1, 'cfg-A', 'user-1'),
+    ).rejects.toMatchObject({ code: 'AGENT_IN_USE' });
+  });
+
+  it('publicEntry never leaks ownerUserId or agentConfigId, regardless of viewer', async () => {
+    const { gameId } = registry.create({ name: 'demo' });
+    installCfg('owner-1', 'cfg-secret');
+    await registry.inviteAgent(gameId, 0, 'cfg-secret', 'owner-1');
+    // anonymous viewer
+    const anon = registry.get(gameId)!;
+    const json = JSON.stringify(anon);
+    expect(json).not.toContain('owner-1');
+    expect(json).not.toContain('cfg-secret');
+    // owner viewer — should ALSO not contain those raw fields, only isMine
+    const ownerView = registry.get(gameId, 'owner-1')!;
+    const ownerJson = JSON.stringify(ownerView);
+    expect(ownerJson).not.toContain('owner-1');
+    expect(ownerJson).not.toContain('cfg-secret');
+    expect(ownerJson).toContain('"isMine":true');
+  });
+
+  it('publicEntry does NOT set isMine for non-owner viewers', async () => {
+    const { gameId } = registry.create({ name: 'demo' });
+    installCfg('owner-1', 'cfg-A');
+    await registry.inviteAgent(gameId, 0, 'cfg-A', 'owner-1');
+    const otherView = registry.get(gameId, 'someone-else')!;
+    const seat = otherView.seats[0]!;
+    expect(seat.occupant.kind).toBe('agent');
+    if (seat.occupant.kind === 'agent') {
+      expect(seat.occupant.isMine).toBeUndefined();
+    }
+  });
+
+  it('isAgentConfigInUse reflects active waiting/ready/running games only', async () => {
+    expect(registry.isAgentConfigInUse('cfg-A')).toBe(false);
+    const { gameId } = registry.create({ name: 'demo' });
+    installCfg('user-1', 'cfg-A');
+    await registry.inviteAgent(gameId, 0, 'cfg-A', 'user-1');
+    expect(registry.isAgentConfigInUse('cfg-A')).toBe(true);
+  });
+
+  it('inviteAgent + npcs flips status to ready when all 9 seats filled (mixed kinds)', async () => {
+    const { gameId } = registry.create({ name: 'demo' });
+    installCfg('user-1', 'cfg-A');
+    await registry.inviteAgent(gameId, 0, 'cfg-A', 'user-1');
+    for (let i = 1; i < 9; i++) registry.inviteNpc(gameId, i);
+    const after = registry.get(gameId)!;
+    expect(after.status).toBe('ready');
+  });
+
   it('start flips status to running and calls attachMatch', () => {
     const attachMatch = vi.fn();
     const reg = new WerewolfLobbyRegistry({
@@ -84,6 +206,7 @@ describe('WerewolfLobbyRegistry', () => {
       attachMatch,
       detachMatch: vi.fn(),
       npcThinkingDelayRange: [0, 0],
+      agentConfigStore: makeMockAgentConfigStore(),
     });
     const { gameId } = reg.create({ name: 'demo', seed: 'fixed' });
     reg.fillWithNpcs(gameId);
@@ -112,6 +235,7 @@ describe('WerewolfLobbyRegistry', () => {
       attachMatch: vi.fn(),
       detachMatch: vi.fn(),
       npcThinkingDelayRange: [0, 0],
+      agentConfigStore: makeMockAgentConfigStore(),
     });
     const { gameId } = reg.create({ name: 'real', seed: 'werewolf-seed-001' });
     reg.fillWithNpcs(gameId);
@@ -142,6 +266,7 @@ describe('WerewolfLobbyRegistry', () => {
       attachMatch: vi.fn(),
       detachMatch: vi.fn(),
       npcThinkingDelayRange: [0, 0],
+      agentConfigStore: makeMockAgentConfigStore(),
     });
     const { gameId: gid } = reg.create({ name: 'iso2', seed: 'werewolf-seed-001' });
     reg.fillWithNpcs(gid);

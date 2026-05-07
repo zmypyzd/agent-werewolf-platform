@@ -1,11 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import { WerewolfNpcAgent, WerewolfRandomMockAgent } from '@agent-poker/agent-runtime';
 import {
+  WerewolfHttpAgentAdapter,
+  WerewolfNpcAgent,
+  WerewolfRandomMockAgent,
+} from '@agent-poker/agent-runtime';
+import {
+  AgentInUseError,
+  AppError,
   WerewolfGameNotFoundError,
   WerewolfSeatOccupiedError,
   WerewolfGameNotReadyError,
   WerewolfGameAlreadyStartedError,
 } from '@agent-poker/shared';
+import type { IUserAgentConfigStore } from '@agent-poker/persistence';
 import type { WerewolfOrchestrator } from '@agent-poker/werewolf-orchestrator';
 
 export type WerewolfLobbyStatus =
@@ -33,7 +40,12 @@ export interface WerewolfSeatInfo {
   playerId: string;
   occupant:
     | { kind: 'empty' }
-    | { kind: 'npc'; agentId: string; displayName: string };
+    | { kind: 'npc'; agentId: string; displayName: string }
+    // kind:'agent' = a third-party HTTP agent backed by a registered
+    // UserAgentConfig. ownerUserId / agentConfigId are stored INTERNALLY only
+    // (see InternalSeatOccupantAgent below); the public projection in
+    // publicEntry() omits them and may set isMine=true for the requester.
+    | { kind: 'agent'; agentId: string; displayName: string; isMine?: true };
   // ISSUE-005 — populated only when the lobby entry's status is 'running'
   // or 'completed'. Lets the spectator surface reveal the full roster from
   // the moment the match starts, regardless of whether the WS subscription
@@ -90,9 +102,30 @@ export interface WerewolfLobbyRegistryOptions {
   ) => void;
   detachMatch: (gameId: string) => void;
   npcThinkingDelayRange?: [number, number];
+  agentConfigStore: IUserAgentConfigStore;
 }
 
-interface InternalEntry extends WerewolfLobbyEntry {
+// Internal-only seat shape — same as WerewolfSeatInfo but the 'agent' variant
+// carries ownerUserId/agentConfigId for ownership checks and the per-viewer
+// isMine projection. publicEntry() must NEVER expose these fields directly;
+// it derives isMine for the requester and drops the rest.
+type InternalSeatOccupant =
+  | { kind: 'empty' }
+  | { kind: 'npc'; agentId: string; displayName: string }
+  | {
+      kind: 'agent';
+      agentId: string;
+      displayName: string;
+      ownerUserId: string;
+      agentConfigId: string;
+    };
+
+interface InternalSeatInfo extends Omit<WerewolfSeatInfo, 'occupant'> {
+  occupant: InternalSeatOccupant;
+}
+
+interface InternalEntry extends Omit<WerewolfLobbyEntry, 'seats'> {
+  seats: InternalSeatInfo[];
   seed: string;
   // Roster cached at createMatch time (engine assigns roles deterministically
   // from the seed at that point). Used to enrich the public seats when the
@@ -106,7 +139,7 @@ interface InternalEntry extends WerewolfLobbyEntry {
 
 const TOTAL_SEATS = 9;
 
-function emptySeats(): WerewolfSeatInfo[] {
+function emptySeats(): InternalSeatInfo[] {
   return Array.from({ length: TOTAL_SEATS }, (_, i) => ({
     seatIndex: i,
     playerId: `p${i + 1}`,
@@ -114,7 +147,34 @@ function emptySeats(): WerewolfSeatInfo[] {
   }));
 }
 
-function publicEntry(entry: InternalEntry): WerewolfLobbyEntry {
+// Project an internal seat to its public shape. For kind:'agent' seats the
+// ownerUserId and agentConfigId are dropped unconditionally; the only owner
+// signal that survives is isMine, set true iff the seat's owner matches the
+// requesting viewer. This is the load-bearing information-isolation point for
+// the agent-seating feature — every public response funnels through here.
+function projectSeat(s: InternalSeatInfo, viewerUserId?: string): WerewolfSeatInfo {
+  if (s.occupant.kind === 'agent') {
+    const isMine = viewerUserId !== undefined && s.occupant.ownerUserId === viewerUserId;
+    const occupant: WerewolfSeatInfo['occupant'] = isMine
+      ? {
+          kind: 'agent',
+          agentId: s.occupant.agentId,
+          displayName: s.occupant.displayName,
+          isMine: true,
+        }
+      : {
+          kind: 'agent',
+          agentId: s.occupant.agentId,
+          displayName: s.occupant.displayName,
+        };
+    const { occupant: _o, ...rest } = s;
+    return { ...rest, occupant };
+  }
+  // empty / npc — internal and public shapes are identical.
+  return s as WerewolfSeatInfo;
+}
+
+function publicEntry(entry: InternalEntry, viewerUserId?: string): WerewolfLobbyEntry {
   // Defense-in-depth: explicit destructure-and-omit prevents future fields like
   // `seed`, `rosterByPlayerId`, and `deathsByPlayerId` from leaking via spread.
   const { seed: _seed, rosterByPlayerId, deathsByPlayerId, ...rest } = entry;
@@ -122,10 +182,12 @@ function publicEntry(entry: InternalEntry): WerewolfLobbyEntry {
   // (waiting / ready) keep the existing isolation invariant — a viewer of
   // the lobby endpoint cannot derive the roster before the game begins.
   const reveal = rest.status === 'running' || rest.status === 'completed';
-  if (!reveal) return rest;
-  const seats = rest.seats.map((s) => {
-    const r = rosterByPlayerId.get(s.playerId);
-    const d = deathsByPlayerId.get(s.playerId);
+  const projected = rest.seats.map((s) => projectSeat(s, viewerUserId));
+  if (!reveal) return { ...rest, seats: projected };
+  const seats: WerewolfSeatInfo[] = projected.map((s, i) => {
+    const internal = rest.seats[i]!;
+    const r = rosterByPlayerId.get(internal.playerId);
+    const d = deathsByPlayerId.get(internal.playerId);
     return {
       ...s,
       ...(r ? { role: r.role, side: r.side } : {}),
@@ -171,9 +233,9 @@ export class WerewolfLobbyRegistry {
     return publicEntry(entry);
   }
 
-  get(gameId: string): WerewolfLobbyEntry | undefined {
+  get(gameId: string, viewerUserId?: string): WerewolfLobbyEntry | undefined {
     const entry = this.entries.get(gameId);
-    return entry ? publicEntry(entry) : undefined;
+    return entry ? publicEntry(entry, viewerUserId) : undefined;
   }
 
   list(): WerewolfLobbySummary[] {
@@ -184,9 +246,32 @@ export class WerewolfLobbyRegistry {
         gameId: e.gameId,
         name: e.name,
         status: e.status,
-        seatedCount: e.seats.filter((s) => s.occupant.kind === 'npc').length,
+        // Count any non-empty seat (npc OR agent) as "seated" for the lobby
+        // summary. Pre-agent code only had npc seats so the predicate was
+        // narrower; widening it preserves the existing UX for npc-only games
+        // and lets agent-seated games surface their progress correctly.
+        seatedCount: e.seats.filter((s) => s.occupant.kind !== 'empty').length,
         createdAt: e.createdAt,
       }));
+  }
+
+  // True if the given agent config is currently seated in any waiting/ready/
+  // running werewolf game. Used by the cross-game in-use joiner to decide
+  // whether DELETE /me/agents/:id should be rejected (D3=C in the plan).
+  isAgentConfigInUse(agentConfigId: string): boolean {
+    for (const entry of this.entries.values()) {
+      // Completed/failed games no longer hold the cfg — only live ones.
+      if (entry.status === 'completed' || entry.status === 'failed') continue;
+      for (const seat of entry.seats) {
+        if (
+          seat.occupant.kind === 'agent' &&
+          seat.occupant.agentConfigId === agentConfigId
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   inviteNpc(
@@ -222,10 +307,82 @@ export class WerewolfLobbyRegistry {
       playerId,
       occupant: { kind: 'npc', agentId, displayName: finalDisplayName },
     };
-    if (entry.seats.every((s) => s.occupant.kind === 'npc')) {
+    // "All seats filled" once both npc and agent occupants count toward ready.
+    if (entry.seats.every((s) => s.occupant.kind !== 'empty')) {
       entry.status = 'ready';
     }
     return publicEntry(entry);
+  }
+
+  // Seat a third-party HTTP agent backed by a user-owned UserAgentConfig.
+  // Mirrors inviteNpc structurally; differs in three load-bearing ways:
+  //   - reads cfg from agentConfigStore and verifies cfg.userId === ownerUserId
+  //     (cross-account access is reported as AGENT_NOT_FOUND, not 403, so the
+  //     caller cannot probe for cfg existence belonging to other users)
+  //   - rejects if the same cfg is already seated in this game (cross-game
+  //     in-use is the joiner service's job, see AgentConfigUsageService)
+  //   - records ownerUserId / agentConfigId on the internal seat so publicEntry
+  //     can compute isMine for the requester without leaking owner identity
+  async inviteAgent(
+    gameId: string,
+    seatIndex: number,
+    agentConfigId: string,
+    ownerUserId: string,
+    displayName?: string,
+  ): Promise<WerewolfLobbyEntry> {
+    const entry = this.requireEntry(gameId);
+    if (entry.status !== 'waiting') {
+      throw new WerewolfGameNotReadyError(gameId, entry.status);
+    }
+    const seat = entry.seats[seatIndex];
+    if (!seat) {
+      throw new WerewolfSeatOccupiedError(gameId, seatIndex);
+    }
+    if (seat.occupant.kind !== 'empty') {
+      throw new WerewolfSeatOccupiedError(gameId, seatIndex);
+    }
+    const cfg = await this.options.agentConfigStore.get(ownerUserId, agentConfigId);
+    if (!cfg) {
+      throw new AppError('AGENT_NOT_FOUND', `Agent config ${agentConfigId} not found`);
+    }
+    // Within-game guard. Cross-game (poker + werewolf) is checked one layer
+    // up by AgentConfigUsageService; here we only need to prevent two seats
+    // in THIS lobby from holding the same cfg.
+    for (const s of entry.seats) {
+      if (
+        s.occupant.kind === 'agent' &&
+        s.occupant.agentConfigId === agentConfigId
+      ) {
+        throw new AgentInUseError(agentConfigId);
+      }
+    }
+    const playerId = seat.playerId;
+    const agentId = `agent-${playerId}`;
+    const finalDisplayName = displayName?.trim() || cfg.agentName;
+    const adapter = new WerewolfHttpAgentAdapter({
+      agentId,
+      name: finalDisplayName,
+      endpointUrl: cfg.endpointUrl,
+      authHeaderName: cfg.authHeaderName,
+      authHeaderValue: cfg.authHeaderValue,
+      timeoutMs: cfg.timeoutMs,
+    });
+    this.options.orchestrator.registerAgent(gameId, playerId, adapter);
+    entry.seats[seatIndex] = {
+      seatIndex,
+      playerId,
+      occupant: {
+        kind: 'agent',
+        agentId,
+        displayName: finalDisplayName,
+        ownerUserId,
+        agentConfigId,
+      },
+    };
+    if (entry.seats.every((s) => s.occupant.kind !== 'empty')) {
+      entry.status = 'ready';
+    }
+    return publicEntry(entry, ownerUserId);
   }
 
   fillWithNpcs(gameId: string): WerewolfLobbyEntry {
