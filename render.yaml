@@ -1,0 +1,39 @@
+# Render Blueprint — one-click provisioning for the werewolf API.
+#
+# Apply via https://dashboard.render.com/blueprints — point Render at
+# this repo and it will create the service, set the health-check path,
+# and prompt you to fill the three Supabase secrets in the dashboard.
+#
+# Free plan: spins down after 15 minutes of inactivity. Cold start ~30s.
+# Upgrade to Starter (~$7/mo) for always-on if the long-poll mailbox
+# starts dropping connections during scale-down.
+#
+# Region note: choose `singapore` if your Supabase project is in Tokyo
+# / ap-northeast-1 (the duck's current setup) so cross-region latency
+# doesn't dominate decision-trace writes. Switch to `oregon` if your
+# Supabase project lives in us-west / us-east.
+services:
+  - type: web
+    name: werewolf-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Supabase keys — set values in the Render dashboard, never commit.
+      # `sync: false` keeps them out of this YAML so the Blueprint can be
+      # re-applied without leaking secrets.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Optional operational toggles. The API works without them; flip
+      # them on for production.
+      - key: WEREWOLF_BRIEFING_ENABLED
+        value: "1"

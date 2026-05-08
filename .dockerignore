@@ -1,0 +1,47 @@
+# Build context exclusions. Anything listed here is invisible to
+# `docker build` — keeps the build context small + reproducible.
+
+# Local dependency / build outputs (the Dockerfile rebuilds these).
+node_modules
+*/node_modules
+**/node_modules
+**/dist
+**/.tsbuildinfo
+
+# Test / dev artifacts.
+**/coverage
+**/.vitest
+**/playwright-report
+**/test-results
+apps/web/dist
+examples/*/output
+
+# Editor / OS noise.
+.DS_Store
+.idea
+.vscode
+*.swp
+
+# Local secrets must never enter the image.
+.env
+.env.local
+.env.*.local
+
+# Git metadata isn't useful in the runtime image; keep it out unless
+# the entrypoint explicitly needs the SHA (none does).
+.git
+.github
+
+# CI / docs / tooling that has no runtime relevance.
+docs
+README.md
+*.md
+!apps/api/README.md
+
+# Dockerfile itself + ignore — recursive copy avoidance.
+Dockerfile
+.dockerignore
+
+# Supabase migrations are applied separately via `supabase db push`,
+# not bundled into the runtime image.
+supabase
