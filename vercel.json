@@ -7,11 +7,11 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://$API_HOST/api/$1"
+      "destination": "https://werewolf-api-ttsb.onrender.com/api/$1"
     },
     {
       "source": "/ws",
-      "destination": "https://$API_HOST/ws"
+      "destination": "https://werewolf-api-ttsb.onrender.com/ws"
     },
     {
       "source": "/((?!api|ws|assets).*)",
