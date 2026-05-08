@@ -28,7 +28,17 @@ export function WerewolfPhaseIndicator({ state }: WerewolfPhaseIndicatorProps) {
   const isDay =
     typeof currentPhase === 'string' && currentPhase.startsWith('day-');
   const isEnded = status === 'completed' || status === 'failed';
-  const isWaiting = status === 'waiting' || currentPhase === 'pre-match';
+
+  // Late-joining spectators receive `status: 'running'` from the lobby
+  // poll but no phase events (SSE has no backlog — see
+  // apps/api/src/routes/werewolf-stream.ts). Without a fallback the bar
+  // would render '等待开局 / WAITING FOR PLAYERS' for a clearly-running
+  // match. Surface a generic "in progress" label instead until the next
+  // phase.changed event lands and the precise day/night reading replaces it.
+  const isRunningUnknownPhase = status === 'running' && !isNight && !isDay;
+  const isWaiting =
+    !isRunningUnknownPhase &&
+    (status === 'waiting' || currentPhase === 'pre-match');
 
   let label: string;
   if (status === 'failed') {
@@ -39,13 +49,20 @@ export function WerewolfPhaseIndicator({ state }: WerewolfPhaseIndicatorProps) {
     label = `🌙 夜 ${nightNumber}`;
   } else if (isDay) {
     label = `☀️ 天 ${dayNumber}`;
+  } else if (isRunningUnknownPhase) {
+    label = '对局进行中';
   } else {
     label = '等待开局';
   }
 
-  const subtitle =
-    PHASE_SUBTITLES[currentPhase as string] ??
-    (isNight ? `NIGHT · ROUND ${nightNumber}` : isDay ? `DAY · ROUND ${dayNumber}` : undefined);
+  const subtitle = isRunningUnknownPhase
+    ? 'GAME IN PROGRESS'
+    : PHASE_SUBTITLES[currentPhase as string] ??
+      (isNight
+        ? `NIGHT · ROUND ${nightNumber}`
+        : isDay
+          ? `DAY · ROUND ${dayNumber}`
+          : undefined);
 
   const barClass = [
     'ww-phase-bar',
