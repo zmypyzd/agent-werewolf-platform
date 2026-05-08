@@ -104,6 +104,7 @@ action from `validActions` each time it is called.
 | Expected status | `200` (anything else is treated as failure) |
 | Expected body | `WerewolfDecisionResponse` (JSON) matching the schema |
 | Timeout | Two timers race: (a) the per-call HTTP `timeoutMs` from your agent config (range `[100, 60000]` ms), which aborts the `fetch`; (b) the werewolf orchestrator's `TimeoutHandler` budget (default **60 s**, override via env `WEREWOLF_AGENT_TIMEOUT_MS`), which substitutes a fallback action if no response has come back. Whichever fires first wins. |
+| Idempotency / retries | The orchestrator generates each `requestId` and **never retries** within a turn. If your endpoint receives the same `requestId` twice it came from your own infrastructure (proxy, retry loop) — returning the same response or recomputing are both safe: the orchestrator consumes only the **first** `200` response per `requestId` (DB unique constraint drops duplicates). Once the orchestrator's timeout has fired, even a successful late `200` is discarded — there is no way to "change your mind" after responding. |
 
 On any failure (network error, non-2xx, malformed JSON, schema mismatch,
 timeout) the orchestrator falls back to `validActions[0]` for the seat —
