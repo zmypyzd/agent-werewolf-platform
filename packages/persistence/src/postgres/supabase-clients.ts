@@ -58,6 +58,28 @@ export class SupabaseConfigError extends Error {
   }
 }
 
+// Decode a Supabase API key (JWT) payload without verifying the signature.
+// We only need the `role` claim to fail-fast when the operator has swapped
+// service_role and anon env vars — a Supabase Cloud API gateway would
+// reject a forged JWT regardless, so signature verification here adds no
+// security and would only require a public key we don't have at boot.
+function readJwtRole(jwt: string): string | null {
+  const parts = jwt.split('.');
+  if (parts.length !== 3) return null;
+  const payload = parts[1];
+  if (!payload) return null;
+  try {
+    // base64url → base64
+    const b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+    const json = Buffer.from(padded, 'base64').toString('utf8');
+    const claims = JSON.parse(json) as { role?: unknown };
+    return typeof claims.role === 'string' ? claims.role : null;
+  } catch {
+    return null;
+  }
+}
+
 export function loadSupabaseConfigFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): SupabaseClientConfig {
@@ -74,5 +96,28 @@ export function loadSupabaseConfigFromEnv(
       .join(', ');
     throw new SupabaseConfigError(`Missing Supabase env: ${missing}`);
   }
+
+  // Catch the most common deployment misconfiguration: SUPABASE_SERVICE_ROLE_KEY
+  // populated with the anon key (or vice-versa). The JWT payload's `role`
+  // claim is what PostgREST uses to switch Postgres roles, so a swapped
+  // value silently degrades every server-side query to the anon role —
+  // surfacing later as "permission denied for table …" the first time
+  // the orchestrator writes. Failing at boot is much easier to diagnose.
+  const serviceRoleClaim = readJwtRole(serviceRoleKey);
+  if (serviceRoleClaim !== null && serviceRoleClaim !== 'service_role') {
+    throw new SupabaseConfigError(
+      `SUPABASE_SERVICE_ROLE_KEY carries role="${serviceRoleClaim}", expected "service_role". ` +
+        `Most likely the anon key was placed in this slot. ` +
+        `Re-copy the service_role key from Supabase → Project Settings → API.`,
+    );
+  }
+  const anonClaim = readJwtRole(anonKey);
+  if (anonClaim !== null && anonClaim !== 'anon') {
+    throw new SupabaseConfigError(
+      `SUPABASE_ANON_KEY carries role="${anonClaim}", expected "anon". ` +
+        `Re-copy the anon key from Supabase → Project Settings → API.`,
+    );
+  }
+
   return { url, serviceRoleKey, anonKey };
 }

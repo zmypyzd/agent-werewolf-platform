@@ -160,6 +160,8 @@ recommended same-origin-via-rewrites topology.
 | Symptom | Likely cause |
 |---|---|
 | Boot log says SQLite, not Postgres | One of the SUPABASE_* env vars is missing on Render |
+| Boot fails with `SUPABASE_SERVICE_ROLE_KEY carries role="anon"` | The anon key was placed in the service-role slot. Re-copy from Supabase → Project Settings → API. |
+| `permission denied for table werewolf_*` at runtime | `service_role` is missing GRANTs on the werewolf tables. Apply `supabase/migrations/20260508030000_werewolf_service_role_grants.sql` via `supabase db push`. |
 | `/api/v1/werewolf/wait` returns 404 | bundle.mailbox didn't initialize — check Render logs for Supabase connect errors at boot |
 | SSE `/werewolf/stream/<id>` immediately closes | Vercel cold-start; first hit re-opens. Check `Cache-Control` and `X-Accel-Buffering` headers (`vercel.json` sets them, but a custom proxy in front would need to too) |
 | Cookie auth fails on Vercel-hosted UI | Browser SameSite=Lax cookies don't cross sites. Either use Vercel rewrites (recommended) or switch to `SameSite=None; Secure` (split-origin path). |
