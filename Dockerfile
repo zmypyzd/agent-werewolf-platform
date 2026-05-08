@@ -47,7 +47,7 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
 # Now copy the rest. Source-only layer so a code change doesn't bust the
 # install cache above.
-COPY tsconfig.json vitest.workspace.ts ./
+COPY tsconfig.base.json vitest.workspace.ts ./
 COPY apps apps
 COPY packages packages
 COPY examples examples
