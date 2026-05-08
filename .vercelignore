@@ -1,0 +1,67 @@
+# Vercel only builds the SPA (apps/web). Aggressively prune everything
+# that doesn't participate in `pnpm --filter web build`.
+#
+# Keep: apps/web, packages/* (workspace deps), root configs, vercel.json,
+# pnpm-lock.yaml, pnpm-workspace.yaml, package.json, tsconfig.base.json.
+
+# Build outputs and node_modules (Vercel rebuilds inside its build container).
+node_modules
+**/node_modules
+**/dist
+**/.tsbuildinfo
+**/.vite
+**/coverage
+**/.vitest
+**/playwright-report
+**/test-results
+
+# Render / Docker artifacts — not used by Vercel builds.
+Dockerfile
+.dockerignore
+render.yaml
+
+# Server-side code that Vercel doesn't ship as static. The rewrites in
+# vercel.json forward /api and /ws to https://$API_HOST (Render).
+apps/api
+
+# Examples / local sims — runtime artifacts only.
+examples
+
+# Schema / migrations — applied to Supabase via CLI, not bundled.
+supabase
+
+# Docs and design docs — not part of the runtime bundle.
+docs
+**/*.md
+!apps/web/README.md
+
+# Test files — Vercel build only needs source.
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+apps/web/e2e
+apps/web/playwright.config.ts
+
+# Editor / OS noise.
+.DS_Store
+.idea
+.vscode
+*.swp
+
+# Local secrets must never be uploaded.
+.env
+.env.local
+.env.*.local
+
+# Tooling.
+.gstack
+.teamagent
+.worktrees
+.qoder
+.productize-mvp
+.claude
+
+# Git metadata.
+.git
+.github
