@@ -21,6 +21,8 @@ import type {
   IDecisionTraceStore,
   IWerewolfMatchArtifactStore,
   IWerewolfDecisionTraceStore,
+  IWerewolfMatchRegistry,
+  IWerewolfReplayEventStore,
   SqliteDb,
 } from '@agent-poker/persistence';
 import {
@@ -63,6 +65,18 @@ export interface BuildServerOptions {
   decisionTraceStore?: IDecisionTraceStore;
   werewolfMatchArtifactStore?: IWerewolfMatchArtifactStore;
   werewolfDecisionTraceStore?: IWerewolfDecisionTraceStore;
+  // Optional Postgres-backed match registry. When set, lobby.start() persists
+  // each match into werewolf_matches before the first decision fires, so the
+  // trace store's resolveMatchPk() can find the row. Required for any deploy
+  // that ships the Postgres bundle; safe to leave undefined for the in-memory
+  // dev/test path (the trace store is then memory-backed too, no resolver
+  // round-trip happens).
+  werewolfMatchRegistry?: IWerewolfMatchRegistry;
+  // Paired with werewolfMatchRegistry: when both are set, lobby.start() also
+  // appends every replay event to werewolf_replay_events live, so the SSE
+  // stream + replay queries see a non-empty stream for an in-flight match.
+  // Without this, only the end-of-match artifact upsert populates the table.
+  werewolfReplayEventStore?: IWerewolfReplayEventStore;
   werewolfOrchestrator?: WerewolfOrchestrator;
   // When provided, buildServer uses this attachment instead of creating one.
   // Used by tests that need a handle on WerewolfHubAttachment to drive
@@ -247,6 +261,12 @@ export function buildServer(opts: BuildServerOptions = {}) {
       detachMatch: (gameId) => werewolfHubAttachment.detachMatch(gameId),
       agentConfigStore: agentConfigStore!,
       ...(werewolfBriefing ? { briefing: werewolfBriefing } : {}),
+      ...(opts.werewolfMatchRegistry
+        ? { matchRegistry: opts.werewolfMatchRegistry }
+        : {}),
+      ...(opts.werewolfReplayEventStore
+        ? { replayEventStore: opts.werewolfReplayEventStore }
+        : {}),
     });
 
   // Cross-game in-use joiner — passed to me-agents.ts so DELETE rejects when

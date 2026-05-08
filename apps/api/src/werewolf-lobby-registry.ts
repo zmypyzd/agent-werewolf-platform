@@ -13,7 +13,11 @@ import {
   WerewolfGameAlreadyStartedError,
 } from '@agent-poker/shared';
 import type { WerewolfBriefing } from '@agent-poker/shared';
-import type { IUserAgentConfigStore } from '@agent-poker/persistence';
+import type {
+  IUserAgentConfigStore,
+  IWerewolfMatchRegistry,
+  IWerewolfReplayEventStore,
+} from '@agent-poker/persistence';
 import type { WerewolfOrchestrator } from '@agent-poker/werewolf-orchestrator';
 
 export type WerewolfLobbyStatus =
@@ -108,6 +112,19 @@ export interface WerewolfLobbyRegistryOptions {
   // every decision request. The API server fills this in from env when
   // WEREWOLF_BRIEFING_ENABLED is truthy. Local sims/tests leave it unset.
   briefing?: WerewolfBriefing;
+  // When set, start() persists the match in werewolf_matches before runMatch
+  // emits any events. Without this, PostgresWerewolfDecisionTraceStore.saveTrace
+  // throws "resolveMatchPk: no match for game_id <id>" the moment the first
+  // agent decides — because the trace store looks up matchPk by gameId, but
+  // the row was never inserted. Optional so the in-memory dev/test path
+  // (no SUPABASE_* env) keeps working without a Postgres registry.
+  matchRegistry?: IWerewolfMatchRegistry;
+  // When set together with matchRegistry, every replay event the orchestrator
+  // emits is appended to werewolf_replay_events live. Mirrors the flow in
+  // PostgresWerewolfOrchestrator.startMatch — fire-and-forget per event so an
+  // ingestion error doesn't kill the match; saveMatchArtifact at end-of-match
+  // still upserts any rows that didn't make it.
+  replayEventStore?: IWerewolfReplayEventStore;
 }
 
 // Internal-only seat shape — same as WerewolfSeatInfo but the 'agent' variant
@@ -140,6 +157,11 @@ interface InternalEntry extends Omit<WerewolfLobbyEntry, 'seats'> {
   // Empty until the match starts; used in publicEntry to expose per-seat
   // alive/causeOfDeath so late-joining spectators can restore the board.
   deathsByPlayerId: Map<string, { cause: CauseOfDeath }>;
+  // werewolf_matches.id (uuid) — populated by start() when a matchRegistry is
+  // wired in. Lets downstream Postgres-backed stores (replay events, decision
+  // traces, final artifact) resolve gameId → matchPk without a round-trip per
+  // call. Stays undefined in pure in-memory mode.
+  matchPk?: string;
 }
 
 const TOTAL_SEATS = 9;
@@ -414,10 +436,12 @@ export class WerewolfLobbyRegistry {
     }
     entry.status = 'running';
     entry.startedAt = Date.now();
+    // attachMatch + the death-tracker subscription stay synchronous so callers
+    // observing `attachMatch.toHaveBeenCalled()` immediately after start()
+    // continue to see the call (this is load-bearing for spectator broadcast
+    // coverage — the hub must be wired before any agent decision can fire).
     this.options.attachMatch(gameId, []);
-    // ISSUE-005 — track per-seat deaths as they happen so the lobby endpoint
-    // can expose alive/causeOfDeath for late-joining or reloading spectators.
-    const unsubscribe = this.options.orchestrator.subscribe(gameId, (event) => {
+    const deathUnsubscribe = this.options.orchestrator.subscribe(gameId, (event) => {
       if (event.eventType !== 'phase.changed') return;
       const eliminated = event.data['eliminated'];
       if (!Array.isArray(eliminated)) return;
@@ -429,37 +453,94 @@ export class WerewolfLobbyRegistry {
         }
       }
     });
-    const promise = this.options.orchestrator
-      .runMatch(
-        gameId,
-        this.options.briefing ? { briefing: this.options.briefing } : {},
-      )
-      .then(
-      (summary) => {
-        unsubscribe();
-        entry.status = 'completed';
-        entry.completedAt = summary.completedAt;
-        entry.winner = summary.winner;
-        entry.finalPlayers = summary.finalPlayers.map((p) => ({
-          id: p.id,
-          seatIndex: p.seatIndex,
-          name: p.name,
-          role: p.role,
-          side: p.side,
-          alive: p.alive,
-        }));
-        this.options.detachMatch(gameId);
-      },
-      (err: unknown) => {
-        unsubscribe();
-        entry.status = 'failed';
-        entry.completedAt = Date.now();
-        entry.failureReason = err instanceof Error ? err.message : String(err);
-        this.options.detachMatch(gameId);
-      },
-    );
+    const promise = this.runWithPersistence(gameId, entry, deathUnsubscribe);
     this.runPromises.set(gameId, promise);
     return promise;
+  }
+
+  // Run-loop body for a started match. Splits out from start() so the
+  // synchronous prelude (status flip, attachMatch, death-tracker subscribe)
+  // happens before this async work begins — preserving the contract that
+  // start() returns a promise, but the lobby entry is observably 'running'
+  // by the time the route handler reads it.
+  private async runWithPersistence(
+    gameId: string,
+    entry: InternalEntry,
+    deathUnsubscribe: () => void,
+  ): Promise<void> {
+    let replayUnsubscribe: (() => void) | null = null;
+    try {
+      // Persist the match row in the durable registry, if Postgres mode is on.
+      // Without this, PostgresWerewolfDecisionTraceStore.saveTrace fails at the
+      // first decision with `resolveMatchPk: no match for game_id <id>` because
+      // it looks up werewolf_matches by game_id and finds nothing.
+      if (this.options.matchRegistry) {
+        const created = await this.options.matchRegistry.createMatch({
+          gameId,
+          // ownerId stays null until the lobby tracks the creator's userId.
+          // The DB column is nullable; this is a follow-up enhancement, not a
+          // blocker for the resolveMatchPk fix.
+          ownerId: null,
+          seed: entry.seed,
+          seats: entry.seats.map((s) => ({
+            seatIndex: s.seatIndex,
+            playerId: s.playerId,
+            // werewolf_seats.agent_id FKs to public.agents — the lobby's
+            // user-registered HTTP agents live in user_agent_configs, a
+            // different table. Leaving null until agent attribution is
+            // wired through agentStore (out of scope for this fix).
+            agentId: null,
+            displayName:
+              s.occupant.kind === 'empty'
+                ? // Cannot reach: status='ready' guarantees no empty seats,
+                  // and start() rejects any other status. Guard for type
+                  // narrowing only.
+                  `Seat ${s.seatIndex + 1}`
+                : s.occupant.displayName,
+          })),
+        });
+        entry.matchPk = created.matchPk;
+
+        // Live replay-event ingestion. Mirrors PostgresWerewolfOrchestrator.startMatch:
+        // fire-and-forget per event so an ingestion error doesn't kill the match;
+        // saveMatchArtifact at end-of-match upserts any rows that didn't make it.
+        if (this.options.replayEventStore) {
+          const replayStore = this.options.replayEventStore;
+          const matchPk = created.matchPk;
+          replayUnsubscribe = this.options.orchestrator.subscribe(gameId, (event) => {
+            void replayStore.appendEvent(matchPk, event).catch((err) => {
+              console.error(
+                `werewolf-lobby: live replay-event ingestion failed (${event.eventType} seq=${event.sequence}): ${(err as Error).message}`,
+              );
+            });
+          });
+        }
+      }
+
+      const summary = await this.options.orchestrator.runMatch(
+        gameId,
+        this.options.briefing ? { briefing: this.options.briefing } : {},
+      );
+      entry.status = 'completed';
+      entry.completedAt = summary.completedAt;
+      entry.winner = summary.winner;
+      entry.finalPlayers = summary.finalPlayers.map((p) => ({
+        id: p.id,
+        seatIndex: p.seatIndex,
+        name: p.name,
+        role: p.role,
+        side: p.side,
+        alive: p.alive,
+      }));
+    } catch (err) {
+      entry.status = 'failed';
+      entry.completedAt = Date.now();
+      entry.failureReason = err instanceof Error ? err.message : String(err);
+    } finally {
+      deathUnsubscribe();
+      if (replayUnsubscribe) replayUnsubscribe();
+      this.options.detachMatch(gameId);
+    }
   }
 
   private requireEntry(gameId: string): InternalEntry {

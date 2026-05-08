@@ -291,4 +291,83 @@ describe('WerewolfLobbyRegistry', () => {
     const finalDead = completed.finalPlayers?.filter((p) => !p.alive) ?? [];
     expect(deadSeats.length).toBe(finalDead.length);
   });
+
+  // Regression for the production fault `resolveMatchPk: no match for game_id <id>`:
+  // when a Postgres-backed match registry is wired in, lobby.start() MUST
+  // call registry.createMatch BEFORE the orchestrator emits any decision
+  // trace. Without this, the trace store's resolveMatchPk lookup finds no
+  // werewolf_matches row and the run fails on the first agent decision.
+  it('start() persists the match via matchRegistry before runMatch begins', async () => {
+    const calls: Array<{
+      gameId: string;
+      ownerId: string | null;
+      seed: string;
+      seatCount: number;
+    }> = [];
+    const fakeRegistry = {
+      createMatch: vi.fn(async (input: {
+        gameId: string;
+        ownerId: string | null;
+        seed: string;
+        seats: ReadonlyArray<unknown>;
+      }) => {
+        calls.push({
+          gameId: input.gameId,
+          ownerId: input.ownerId,
+          seed: input.seed,
+          seatCount: input.seats.length,
+        });
+        return {
+          matchPk: 'fake-pk-' + input.gameId.slice(0, 8),
+          gameId: input.gameId,
+          status: 'running' as const,
+          startedAt: Date.now(),
+        };
+      }),
+      abortMatch: vi.fn(async () => {}),
+      getStatus: vi.fn(async () => null),
+      resolveMatchPk: vi.fn(async () => 'unused'),
+      // exposed for parity with the Postgres impl; tests don't drive the cache
+      clearCache: vi.fn(() => {}),
+    };
+    const appendedEvents: Array<{ matchPk: string; eventType: string }> = [];
+    const fakeReplayStore = {
+      appendEvent: vi.fn(async (matchPk: string, event: { eventType: string }) => {
+        appendedEvents.push({ matchPk, eventType: event.eventType });
+      }),
+      appendEvents: vi.fn(async () => {}),
+      listEvents: vi.fn(async () => []),
+    };
+    const realOrch = new WerewolfOrchestrator();
+    const reg = new WerewolfLobbyRegistry({
+      orchestrator: realOrch,
+      attachMatch: vi.fn(),
+      detachMatch: vi.fn(),
+      npcThinkingDelayRange: [0, 0],
+      agentConfigStore: makeMockAgentConfigStore(),
+      matchRegistry: fakeRegistry,
+      replayEventStore: fakeReplayStore,
+    });
+    const { gameId } = reg.create({ name: 'pg', seed: 'werewolf-seed-001' });
+    reg.fillWithNpcs(gameId);
+    await reg.start(gameId);
+
+    // createMatch was called exactly once with the lobby's gameId+seed and 9 seats.
+    expect(fakeRegistry.createMatch).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual([
+      { gameId, ownerId: null, seed: 'werewolf-seed-001', seatCount: 9 },
+    ]);
+
+    // The match completed without falling into the "no match for game_id"
+    // failure path — i.e. the createMatch happened before runMatch needed it.
+    const completed = reg.get(gameId)!;
+    expect(completed.status).toBe('completed');
+    expect(completed.failureReason).toBeUndefined();
+
+    // Live replay events were forwarded with the matchPk we returned, not
+    // the gameId — the trace store's resolveMatchPk indirection is the whole
+    // reason this fix exists.
+    expect(appendedEvents.length).toBeGreaterThan(0);
+    expect(appendedEvents.every((e) => e.matchPk === 'fake-pk-' + gameId.slice(0, 8))).toBe(true);
+  });
 });

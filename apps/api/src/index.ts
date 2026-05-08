@@ -14,6 +14,14 @@ if (bundle) {
   opts.werewolfDecisionTraceStore = bundle.traceStore;
   opts.werewolfAgentStore = bundle.agentStore;
   opts.werewolfMailbox = bundle.mailbox;
+  // Wire the registry + replay-event store so lobby.start() persists the
+  // werewolf_matches row before runMatch emits any events. Without this,
+  // PostgresWerewolfDecisionTraceStore.saveTrace throws "resolveMatchPk:
+  // no match for game_id <id>" the moment the first agent decides. The
+  // bundle constructed both stores already; the gap was that index.ts
+  // never forwarded them to buildServer.
+  opts.werewolfMatchRegistry = bundle.registry;
+  opts.werewolfReplayEventStore = bundle.replayEventStore;
 }
 
 const app = buildServer(opts);
