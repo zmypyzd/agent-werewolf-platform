@@ -15,3 +15,4 @@ export * from './werewolf-mock-agent.js';
 export * from './werewolf-random-mock-agent.js';
 export * from './werewolf-npc-agent.js';
 export * from './werewolf-prng.js';
+export * from './werewolf-mailbox-runner.js';

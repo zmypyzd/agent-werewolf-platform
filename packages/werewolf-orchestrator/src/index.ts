@@ -7,3 +7,5 @@ export * from './match-runner.js';
 export * from './orchestrator.js';
 export * from './hub-integration.js';
 export * from './match-ttl-cleaner.js';
+export * from './mailbox-agent-adapter.js';
+export * from './postgres-werewolf-orchestrator.js';

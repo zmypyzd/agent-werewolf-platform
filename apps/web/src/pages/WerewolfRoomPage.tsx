@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError } from '../lib/api.js';
-import { WsClient, type WsMessage } from '../lib/ws.js';
+import { SseClient, type SseMessage, werewolfStreamUrl } from '../lib/sse.js';
 import {
   emptyRoomState,
   type WerewolfReplayEvent,
@@ -28,7 +28,7 @@ export function WerewolfRoomPage() {
   const navigate = useNavigate();
   const [state, dispatch] = useReducer(werewolfRoomReducer, gameId, emptyRoomState);
   const [error, setError] = useState<string | null>(null);
-  const wsRef = useRef<WsClient | null>(null);
+  const sseRef = useRef<SseClient | null>(null);
 
   const fetchEntry = useCallback(async () => {
     try {
@@ -68,12 +68,15 @@ export function WerewolfRoomPage() {
 
   useEffect(() => {
     if (state.status !== 'running') return;
-    const ws = new WsClient();
-    wsRef.current = ws;
-    ws.connect();
+    // SSE replaces the prior WebSocket subscription. The topic is
+    // baked into the URL path (/api/v1/werewolf/stream/<gameId>) so
+    // there is no client-initiated subscribe handshake — opening the
+    // EventSource is the subscription.
     const topic = `match:${gameId}`;
-    ws.subscribe(topic);
-    const off = ws.on((m: WsMessage) => {
+    const sse = new SseClient(werewolfStreamUrl(gameId));
+    sseRef.current = sse;
+    sse.connect();
+    const off = sse.on((m: SseMessage) => {
       if (m.topic !== topic) return;
       const event: WerewolfReplayEvent = {
         eventId: (m.payload['eventId'] as string) ?? `evt-${Date.now()}`,
@@ -87,9 +90,8 @@ export function WerewolfRoomPage() {
     });
     return () => {
       off();
-      ws.unsubscribe(topic);
-      ws.close();
-      wsRef.current = null;
+      sse.close();
+      sseRef.current = null;
     };
   }, [state.status, gameId]);
 

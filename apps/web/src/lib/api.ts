@@ -1,7 +1,14 @@
 // Lightweight authed fetch wrapper. Always sends:
 //   - credentials: 'include'  → session cookie travels on every call
 //   - X-Requested-With: fetch → matches the server-side CSRF guard
-const BASE = '/api/v1';
+//
+// BASE is built from the optional VITE_API_BASE_URL env var (set at
+// build time for split-deploy setups where the SPA and the API live
+// on different origins). Default empty → relative paths, which work
+// when the SPA is served same-origin with the API or when an upstream
+// proxy / Vercel rewrite handles the indirection.
+const API_ROOT = import.meta.env?.VITE_API_BASE_URL ?? '';
+const BASE = `${API_ROOT}/api/v1`;
 
 export class ApiError extends Error {
   constructor(

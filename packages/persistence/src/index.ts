@@ -11,3 +11,4 @@ export * from './werewolf-match-artifact-types.js';
 export * from './werewolf-match-artifact-serialization.js';
 export * from './werewolf-match-artifact-store.js';
 export * from './sqlite/index.js';
+export * from './postgres/index.js';

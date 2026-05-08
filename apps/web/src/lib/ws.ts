@@ -1,5 +1,19 @@
 // Auto-reconnecting WebSocket client. Maintains the set of subscribed topics
 // across reconnects and dispatches every server-pushed message to listeners.
+
+// Resolve the WS endpoint at construction time. VITE_API_BASE_URL is the
+// HTTP origin of the API (e.g. https://api.example.com); we map it to
+// the ws[s]:// scheme. Empty / unset → same-origin (the dev / Vercel-
+// rewrite path).
+function defaultWsUrl(): string {
+  const root: string = import.meta.env?.VITE_API_BASE_URL ?? '';
+  if (root.length === 0) {
+    return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+  }
+  // VITE_API_BASE_URL must be absolute (https://… or http://…) so the
+  // protocol swap below is well-defined.
+  return `${root.replace(/^http/, 'ws')}/ws`;
+}
 export interface WsMessage {
   topic: string;
   type: string;
@@ -19,7 +33,7 @@ export class WsClient {
   private status: ConnectionStatus | null = null;
   private closed = false;
 
-  constructor(private readonly url: string = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`) {}
+  constructor(private readonly url: string = defaultWsUrl()) {}
 
   connect(isReconnect = false): void {
     if (this.closed) return;

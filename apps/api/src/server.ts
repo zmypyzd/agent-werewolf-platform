@@ -49,6 +49,10 @@ import { meAgentsRoutes } from './routes/me-agents.js';
 import { agentInvitesRoutes } from './routes/agent-invites.js';
 import { werewolfDocsRoutes } from './routes/werewolf-docs.js';
 import { healthRoutes } from './routes/health.js';
+import { werewolfMailboxRoutes } from './routes/werewolf-mailbox.js';
+import { meWerewolfAgentsRoutes } from './routes/me-werewolf-agents.js';
+import { werewolfStreamRoutes } from './routes/werewolf-stream.js';
+import type { IAgentStore, IWerewolfDecisionMailbox } from '@agent-poker/persistence';
 import { createMatchArtifactStore } from './match-artifact-store-factory.js';
 import { createWerewolfMatchArtifactStore } from './werewolf-match-artifact-store-factory.js';
 
@@ -77,6 +81,12 @@ export interface BuildServerOptions {
   // using a small in-memory counter. Default off so the existing test suite
   // doesn't trip the limit running 30+ register calls in seconds.
   authRateLimit?: RateLimiterConfig;
+  // When both are provided, the server registers /api/v1/werewolf/wait +
+  // /action backed by the Postgres mailbox. Omitted in the SQLite-only
+  // dev path (the existing tests don't need them); production wires
+  // these from the Supabase-backed bootstrap in index.ts.
+  werewolfAgentStore?: IAgentStore;
+  werewolfMailbox?: IWerewolfDecisionMailbox;
 }
 
 export function buildServer(opts: BuildServerOptions = {}) {
@@ -276,7 +286,21 @@ export function buildServer(opts: BuildServerOptions = {}) {
     await scope.register(meAgentsRoutes, { prefix: '/api/v1', agentConfigStore, agentConfigUsage });
     await scope.register(agentInvitesRoutes, { prefix: '/api/v1', agentInviteStore, agentConfigStore });
     await scope.register(werewolfDocsRoutes, { prefix: '/api/v1' });
+    if (opts.werewolfAgentStore) {
+      await scope.register(meWerewolfAgentsRoutes, {
+        prefix: '/api/v1',
+        agentStore: opts.werewolfAgentStore,
+      });
+    }
+    if (opts.werewolfAgentStore && opts.werewolfMailbox) {
+      await scope.register(werewolfMailboxRoutes, {
+        prefix: '/api/v1',
+        agentStore: opts.werewolfAgentStore,
+        mailbox: opts.werewolfMailbox,
+      });
+    }
     await scope.register(wsRoutes, { hub });
+    await scope.register(werewolfStreamRoutes, { prefix: '/api/v1', hub });
     await scope.register(healthRoutes);
   });
 
