@@ -1,4 +1,17 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
+
+// Node 20 (Render's runtime) lacks a global WebSocket; supabase-js 2.45+
+// initializes RealtimeClient eagerly inside createClient and crashes on
+// startup without one. We pass `ws` as the realtime transport explicitly
+// so the same client works on Node 20 and Node 22+.
+//
+// The cast to `any` papers over a structural mismatch between `ws`'s
+// `ErrorEvent` (with .message/.error) and the DOM lib's `ErrorEvent`.
+// Runtime is fine — supabase-realtime only reads .data/.code from
+// MessageEvent/CloseEvent, never touches the differing ErrorEvent fields.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const realtimeOpts = { transport: WebSocket as any };
 
 export interface SupabaseClientConfig {
   readonly url: string;
@@ -20,6 +33,7 @@ export function createServiceRoleClient(cfg: SupabaseClientConfig): SupabaseServ
   return createClient(cfg.url, cfg.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     db: { schema: 'public' },
+    realtime: realtimeOpts,
   });
 }
 
@@ -33,6 +47,7 @@ export function createUserScopedClient(
   return createClient(cfg.url, cfg.anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { Authorization: `Bearer ${userJwt}` } },
+    realtime: realtimeOpts,
   });
 }
 
