@@ -104,9 +104,21 @@ export class PostgresWerewolfMatchArtifactStore implements IWerewolfMatchArtifac
       throw new Error(`saveMatchArtifact: update werewolf_matches failed: ${matchErr.message}`);
     }
 
+    // PostgREST's upsert (Prefer: resolution=merge-duplicates) does NOT
+    // preserve unspecified columns on the conflict-update path — they get
+    // set to their default (or NULL when there's no default). werewolf_seats
+    // has player_id and display_name as NOT NULL, so omitting them here
+    // crashes the artifact write at end-of-match with `null value in column
+    // "player_id" violates not-null constraint`. Restate the immutable
+    // identity fields (player_id, display_name) alongside the role/side/alive
+    // reveal — they're the same values createMatch already inserted, so the
+    // UPDATE branch is a no-op for them and the INSERT branch (theoretically
+    // unreachable since createMatch always pre-seeds the row) stays safe.
     const seatRows = record.summary.finalPlayers.map((p) => ({
       match_id: matchPk,
       seat_index: p.seatIndex,
+      player_id: p.id,
+      display_name: p.name,
       role: p.role,
       side: p.side,
       alive: p.alive,
