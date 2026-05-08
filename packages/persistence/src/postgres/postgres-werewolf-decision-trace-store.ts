@@ -20,6 +20,19 @@ export interface MatchPkResolver {
   resolveMatchPk(matchId: string): Promise<string>;
 }
 
+// werewolf_decision_traces.agent_id is a `uuid references public.agents(id)`
+// column. House-bot seats use synthetic agentIds like "agent-p1" that don't
+// parse as UUIDs and aren't registered in the agents table either — so they
+// belong as NULL on the trace row, not literal strings. This coercion catches
+// both empty values (legacy behavior) and any non-UUID shape so a future agent
+// runner that emits a different style of synthetic id can't crash an in-flight
+// match. Exported for direct unit coverage.
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function agentIdForUuidColumn(value: string): string | null {
+  return UUID_RE.test(value) ? value : null;
+}
+
 export interface PostgresWerewolfDecisionTraceStoreOptions {
   resolver: MatchPkResolver;
   limits?: Partial<WerewolfDecisionTraceStoreLimits>;
@@ -88,7 +101,7 @@ export class PostgresWerewolfDecisionTraceStore implements IWerewolfDecisionTrac
       match_id: matchPk,
       sequence: publicTrace.sequence,
       request_id: publicTrace.requestId,
-      agent_id: publicTrace.agentId.length === 0 ? null : publicTrace.agentId,
+      agent_id: agentIdForUuidColumn(publicTrace.agentId),
       player_id: publicTrace.playerId,
       phase: publicTrace.phase,
       night_number: publicTrace.nightNumber,
