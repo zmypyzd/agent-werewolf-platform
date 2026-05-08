@@ -364,6 +364,15 @@ describe('WerewolfLobbyRegistry', () => {
     expect(completed.status).toBe('completed');
     expect(completed.failureReason).toBeUndefined();
 
+    // Info-isolation regression: matchPk is a werewolf_matches.id UUID kept
+    // on the internal entry for downstream Postgres calls. It must NEVER
+    // appear in the public lobby projection — same defense-in-depth as the
+    // existing seed / roster omission. Pin both the property and the literal
+    // string so a future spread that accidentally includes it gets caught.
+    const fakeMatchPk = 'fake-pk-' + gameId.slice(0, 8);
+    expect(completed).not.toHaveProperty('matchPk');
+    expect(JSON.stringify(completed)).not.toContain(fakeMatchPk);
+
     // Live replay events were forwarded with the matchPk we returned, not
     // the gameId — the trace store's resolveMatchPk indirection is the whole
     // reason this fix exists.

@@ -203,8 +203,17 @@ function projectSeat(s: InternalSeatInfo, viewerUserId?: string): WerewolfSeatIn
 
 function publicEntry(entry: InternalEntry, viewerUserId?: string): WerewolfLobbyEntry {
   // Defense-in-depth: explicit destructure-and-omit prevents future fields like
-  // `seed`, `rosterByPlayerId`, and `deathsByPlayerId` from leaking via spread.
-  const { seed: _seed, rosterByPlayerId, deathsByPlayerId, ...rest } = entry;
+  // `seed`, `rosterByPlayerId`, `deathsByPlayerId`, and `matchPk` from leaking
+  // via spread. The matchPk in particular is a uuid for werewolf_matches.id —
+  // not catastrophic if exposed (RLS still gates the row), but it's an
+  // internal database identifier with no business crossing the API boundary.
+  const {
+    seed: _seed,
+    rosterByPlayerId,
+    deathsByPlayerId,
+    matchPk: _matchPk,
+    ...rest
+  } = entry;
   // Reveal role/side/alive only once the match has started. Pre-start statuses
   // (waiting / ready) keep the existing isolation invariant — a viewer of
   // the lobby endpoint cannot derive the roster before the game begins.
