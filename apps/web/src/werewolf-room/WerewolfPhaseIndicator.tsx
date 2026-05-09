@@ -35,34 +35,63 @@ export function WerewolfPhaseIndicator({ state }: WerewolfPhaseIndicatorProps) {
   // would render '等待开局 / WAITING FOR PLAYERS' for a clearly-running
   // match. Surface a generic "in progress" label instead until the next
   // phase.changed event lands and the precise day/night reading replaces it.
+  // Pre-existing: late-joining spectators see status='running' but no phase
+  // events yet. Kept as a class signal even though the label/subtitle are
+  // now computed via isUnnumberedRunning (which strictly subsumes this).
   const isRunningUnknownPhase = status === 'running' && !isNight && !isDay;
   const isWaiting =
     !isRunningUnknownPhase &&
     (status === 'waiting' || currentPhase === 'pre-match');
+
+  // emptyRoomState seeds nightNumber/dayNumber to 0 (sentinel). If a night-/
+  // day-prefixed currentPhase arrives before phase.changed has populated a
+  // real round number, rendering "🌙 夜 0" / "☀️ 天 0" misleads spectators
+  // — there is no round 0 in the game. Detect the sentinel and fall back to
+  // the unnumbered "running-unknown" copy until a real number lands.
+  const hasRealNightNumber = typeof nightNumber === 'number' && nightNumber > 0;
+  const hasRealDayNumber = typeof dayNumber === 'number' && dayNumber > 0;
+  const isNumberedNight = isNight && hasRealNightNumber;
+  const isNumberedDay = isDay && hasRealDayNumber;
+  const isUnnumberedRunning =
+    !isNumberedNight && !isNumberedDay && (status === 'running' || isNight || isDay);
 
   let label: string;
   if (status === 'failed') {
     label = '异常终止';
   } else if (status === 'completed') {
     label = '🏁 已结束';
-  } else if (isNight) {
+  } else if (isNumberedNight) {
     label = `🌙 夜 ${nightNumber}`;
-  } else if (isDay) {
+  } else if (isNumberedDay) {
     label = `☀️ 天 ${dayNumber}`;
-  } else if (isRunningUnknownPhase) {
+  } else if (isUnnumberedRunning) {
     label = '对局进行中';
   } else {
     label = '等待开局';
   }
 
-  const subtitle = isRunningUnknownPhase
-    ? 'GAME IN PROGRESS'
-    : PHASE_SUBTITLES[currentPhase as string] ??
-      (isNight
+  // Subtitle: if the match has failed, surface a fixed "MATCH FAILED" string
+  // instead of the underlying phase-keyed subtitle. Without this, a lobby
+  // that fails before the first phase.changed event renders the contradictory
+  // pair "异常终止" + "WAITING FOR PLAYERS" — the label says we ended, the
+  // subtitle says we're still waiting. Same defense for the completed path
+  // (status takes precedence over currentPhase if currentPhase is stale).
+  let subtitle: string | undefined;
+  if (status === 'failed') {
+    subtitle = 'MATCH FAILED';
+  } else if (status === 'completed') {
+    subtitle = PHASE_SUBTITLES['completed'];
+  } else if (isUnnumberedRunning) {
+    subtitle = 'GAME IN PROGRESS';
+  } else {
+    subtitle =
+      PHASE_SUBTITLES[currentPhase as string] ??
+      (isNumberedNight
         ? `NIGHT · ROUND ${nightNumber}`
-        : isDay
+        : isNumberedDay
           ? `DAY · ROUND ${dayNumber}`
           : undefined);
+  }
 
   const barClass = [
     'ww-phase-bar',
