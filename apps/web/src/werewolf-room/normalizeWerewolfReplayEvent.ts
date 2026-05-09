@@ -72,26 +72,36 @@ export function normalizeWerewolfReplayEvent(
       });
     }
 
-    // PK round indicator. The engine loops back into day-vote on a tie or no
-    // strict majority, up to WEREWOLF_MAX_PK_ROUNDS. Surface this so the
-    // user understands the second round of vote events is a re-vote, not
-    // duplicate/stuck events.
+    // PK round indicator. The engine loops back into day-vote when the top
+    // vote-getters are genuinely tied (or all abstained), up to
+    // WEREWOLF_MAX_PK_ROUNDS. Surface this so the user understands the
+    // second round of vote events is a re-vote, not duplicate/stuck events.
     const pkRound =
       typeof event.data['pkRound'] === 'number'
         ? (event.data['pkRound'] as number)
         : 0;
+    const pkCandidatesRaw = event.data['pkCandidates'];
+    const pkCandidates: string[] = Array.isArray(pkCandidatesRaw)
+      ? pkCandidatesRaw.filter((x): x is string => typeof x === 'string')
+      : [];
     if (phase === 'day-vote' && pkRound > 0) {
       // ISSUE-006: pkRound is the orchestrator's 1-based PK index, so
       // pkRound=1 IS the first PK round. The previous copy "进入第
       // ${pkRound+1} 轮决战投票" double-counted (calling the first PK
       // round the "second" decisive vote) and mixed two terminologies
       // ("决战" vs "PK"). Now uses pkRound directly with consistent "PK"
-      // wording.
+      // wording. When the orchestrator forwards the PK candidate list,
+      // name them explicitly so spectators see WHO is on the PK ballot
+      // instead of the misleading bare "票数相同".
+      const candidateNames = pkCandidates.map((pid) => nameOf(pid, names)).join('、');
+      const headline = candidateNames.length > 0
+        ? `⚖️ ${candidateNames} 票数并列，进入第 ${pkRound} 轮 PK 投票`
+        : `⚖️ 进入第 ${pkRound} 轮 PK 投票`;
       lines.push({
         id: `${id}-pk`,
         timestamp: ts,
         kind: 'system',
-        text: `⚖️ 票数相同，进入第 ${pkRound} 轮 PK 投票`,
+        text: headline,
       });
     }
 

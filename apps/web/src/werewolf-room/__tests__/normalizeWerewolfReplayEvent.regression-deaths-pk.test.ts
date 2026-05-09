@@ -81,12 +81,42 @@ describe('normalizeWerewolfReplayEvent — eliminations and PK rounds', () => {
     expect(death!.text).toContain('猎人开枪');
   });
 
-  it('day-vote with pkRound=1 emits "进入第 1 轮 PK 投票" and SUPPRESSES the day banner', () => {
-    // ISSUE-006 — pkRound is now treated as a 1-based PK index in copy.
-    // Old text was "进入第 2 轮决战投票" at pkRound=1, which was confusing
-    // because spectators had already seen the regular day-1 vote round
-    // (no PK label) and wondered where "第 1 轮决战投票" went. New copy
-    // drops both the +1 and the "决战" word: "第 ${pkRound} 轮 PK 投票".
+  it('day-vote with pkRound=1 + pkCandidates names the tied players and SUPPRESSES the day banner', () => {
+    // ISSUE-006 / voting bug fix:
+    //   - pkRound is the 1-based PK index, so pkRound=1 IS the first PK round.
+    //   - We now show the PK candidate list explicitly. Previously the copy
+    //     said "票数相同" even when the engine had wrongly forced PK on a
+    //     plurality (e.g. 4-3-2 of 9). The engine now only triggers PK on a
+    //     real tie and forwards the tied players, so the copy can name them.
+    const lines = normalizeWerewolfReplayEvent(
+      makeEvent({
+        eventType: 'phase.changed',
+        data: { phase: 'day-vote', dayNumber: 1, pkRound: 1, pkCandidates: ['p2', 'p3'] },
+      }),
+      NAME_INDEX,
+    );
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.kind).toBe('system');
+    expect(lines[0]?.text).toBe('⚖️ Bot 2、Bot 3 票数并列，进入第 1 轮 PK 投票');
+    // Verify no double day banner during a PK revote
+    expect(lines.find((l) => l.kind === 'phase-day')).toBeUndefined();
+  });
+
+  it('PK round number scales linearly: pkRound=2 / pkRound=3 keep the candidate list intact', () => {
+    for (const pk of [2, 3]) {
+      const lines = normalizeWerewolfReplayEvent(
+        makeEvent({
+          eventType: 'phase.changed',
+          data: { phase: 'day-vote', dayNumber: 1, pkRound: pk, pkCandidates: ['p4', 'p7'] },
+        }),
+        NAME_INDEX,
+      );
+      expect(lines[0]?.text).toBe(`⚖️ Bot 4、Bot 7 票数并列，进入第 ${pk} 轮 PK 投票`);
+    }
+  });
+
+  it('day-vote with pkRound>0 but no pkCandidates falls back to the bare PK header', () => {
+    // Defensive: legacy events without pkCandidates still render a PK banner.
     const lines = normalizeWerewolfReplayEvent(
       makeEvent({
         eventType: 'phase.changed',
@@ -95,23 +125,7 @@ describe('normalizeWerewolfReplayEvent — eliminations and PK rounds', () => {
       NAME_INDEX,
     );
     expect(lines).toHaveLength(1);
-    expect(lines[0]?.kind).toBe('system');
-    expect(lines[0]?.text).toBe('⚖️ 票数相同，进入第 1 轮 PK 投票');
-    // Verify no double day banner during a PK revote
-    expect(lines.find((l) => l.kind === 'phase-day')).toBeUndefined();
-  });
-
-  it('PK round number scales linearly: pkRound=2 → "进入第 2 轮 PK 投票", pkRound=3 → "进入第 3 轮 PK 投票"', () => {
-    for (const pk of [2, 3]) {
-      const lines = normalizeWerewolfReplayEvent(
-        makeEvent({
-          eventType: 'phase.changed',
-          data: { phase: 'day-vote', dayNumber: 1, pkRound: pk },
-        }),
-        NAME_INDEX,
-      );
-      expect(lines[0]?.text).toBe(`⚖️ 票数相同，进入第 ${pk} 轮 PK 投票`);
-    }
+    expect(lines[0]?.text).toBe('⚖️ 进入第 1 轮 PK 投票');
   });
 
   it('day-vote with pkRound=0 (or missing) emits the normal day banner', () => {
