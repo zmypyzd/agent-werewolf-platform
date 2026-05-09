@@ -1,16 +1,21 @@
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { ZodError } from 'zod';
-import { randomUUID } from 'crypto';
 import { AgentInUseError, AppError, NotFoundError, SchemaValidationError } from '@agent-poker/shared';
 import {
   CreateUserAgentConfigRequestSchema,
   PatchUserAgentConfigRequestSchema,
 } from '@agent-poker/agent-protocol';
-import type { IUserAgentConfigStore, UserAgentConfig } from '@agent-poker/persistence';
+import {
+  PostgresAgentStore,
+  createUserScopedClient,
+  type AgentRecord,
+  type SupabaseClientConfig,
+} from '@agent-poker/persistence';
+import type { JwtAuthenticatedRequest } from '../middleware/auth.js';
 import type { AgentConfigUsageService } from '../services/agent-config-usage.js';
 
 interface MeAgentsPluginOptions extends FastifyPluginOptions {
-  agentConfigStore: IUserAgentConfigStore;
+  supabaseConfig?: SupabaseClientConfig;
   // Cross-game in-use joiner — replaces the previous direct
   // TableOrchestrator dependency so this route stays game-agnostic.
   // Adding werewolf in-use means just changing the joiner's wiring,
@@ -18,36 +23,55 @@ interface MeAgentsPluginOptions extends FastifyPluginOptions {
   agentConfigUsage: AgentConfigUsageService;
 }
 
-function toPublicConfig(c: UserAgentConfig) {
+function requireSupabaseConfig(opts: MeAgentsPluginOptions): SupabaseClientConfig {
+  if (!opts.supabaseConfig) {
+    throw new AppError('NOT_IMPLEMENTED', 'Supabase config not provided');
+  }
+  return opts.supabaseConfig;
+}
+
+function toPublicAgent(agent: AgentRecord) {
   return {
-    agentConfigId: c.agentConfigId,
-    agentName: c.agentName,
-    endpointUrl: c.endpointUrl,
-    authHeaderName: c.authHeaderName,
-    hasAuthHeader: c.authHeaderValue !== null && c.authHeaderValue.length > 0,
-    timeoutMs: c.timeoutMs,
-    description: c.description,
-    createdAt: c.createdAt,
-    updatedAt: c.updatedAt,
+    agentConfigId: agent.id,
+    agentName: agent.name,
+    endpointUrl: agent.callbackUrl,
+    authHeaderName: agent.authHeaderName,
+    hasAuthHeader: agent.authHeaderValue !== null && agent.authHeaderValue !== undefined && agent.authHeaderValue.length > 0,
+    timeoutMs: agent.timeoutMs,
+    description: agent.description,
+    protocol: agent.protocol,
+    status: agent.status,
+    createdAt: agent.createdAt,
+    updatedAt: agent.updatedAt,
   };
 }
 
 export async function meAgentsRoutes(app: FastifyInstance, opts: MeAgentsPluginOptions) {
-  const { agentConfigStore, agentConfigUsage } = opts;
+  const { agentConfigUsage } = opts;
 
+  // GET /me/agents — list user's agents
   app.get(
     '/me/agents',
-    { preHandler: [app.requireAuth] },
+    { preHandler: [app.requireJwtAuth] },
     async (req, reply) => {
-      const list = await agentConfigStore.list(req.user!.userId);
-      reply.send({ data: list.map(toPublicConfig) });
+      const { userId, jwt } = (req as JwtAuthenticatedRequest).jwtUser;
+      const config = requireSupabaseConfig(opts);
+      const userClient = createUserScopedClient(config, jwt);
+      const store = new PostgresAgentStore(userClient);
+
+      const agents = await store.list(userId);
+      reply.send({ data: agents.map(toPublicAgent) });
     },
   );
 
+  // POST /me/agents — create a new agent directly (without invite flow)
   app.post(
     '/me/agents',
-    { preHandler: [app.requireAuth, app.requireCsrf] },
+    { preHandler: [app.requireJwtAuth] },
     async (req, reply) => {
+      const { userId, jwt } = (req as JwtAuthenticatedRequest).jwtUser;
+      const config = requireSupabaseConfig(opts);
+
       let body;
       try {
         body = CreateUserAgentConfigRequestSchema.parse(req.body);
@@ -55,34 +79,48 @@ export async function meAgentsRoutes(app: FastifyInstance, opts: MeAgentsPluginO
         if (e instanceof ZodError) throw new SchemaValidationError(e.message);
         throw e;
       }
-      const cfg = await agentConfigStore.create({
-        agentConfigId: `cfg-${randomUUID().slice(0, 12)}`,
-        userId: req.user!.userId,
-        agentName: body.agentName,
-        endpointUrl: body.endpointUrl,
+
+      const userClient = createUserScopedClient(config, jwt);
+      const store = new PostgresAgentStore(userClient);
+
+      const { agent } = await store.create({
+        ownerId: userId,
+        name: body.agentName,
+        protocol: 'http',
+        callbackUrl: body.endpointUrl,
         authHeaderName: body.authHeaderName,
         authHeaderValue: body.authHeaderValue,
         timeoutMs: body.timeoutMs,
         description: body.description,
       });
-      reply.status(201).send({ data: toPublicConfig(cfg) });
+      reply.status(201).send({ data: toPublicAgent(agent) });
     },
   );
 
+  // GET /me/agents/:agentId — get one agent
   app.get<{ Params: { agentId: string } }>(
     '/me/agents/:agentId',
-    { preHandler: [app.requireAuth] },
+    { preHandler: [app.requireJwtAuth] },
     async (req, reply) => {
-      const cfg = await agentConfigStore.get(req.user!.userId, req.params.agentId);
-      if (!cfg) throw new AppError('AGENT_NOT_FOUND', `Agent config ${req.params.agentId} not found`);
-      reply.send({ data: toPublicConfig(cfg) });
+      const { userId, jwt } = (req as JwtAuthenticatedRequest).jwtUser;
+      const config = requireSupabaseConfig(opts);
+      const userClient = createUserScopedClient(config, jwt);
+      const store = new PostgresAgentStore(userClient);
+
+      const agent = await store.get(userId, req.params.agentId);
+      if (!agent) throw new AppError('AGENT_NOT_FOUND', `Agent config ${req.params.agentId} not found`);
+      reply.send({ data: toPublicAgent(agent) });
     },
   );
 
+  // PATCH /me/agents/:agentId — update one agent
   app.patch<{ Params: { agentId: string } }>(
     '/me/agents/:agentId',
-    { preHandler: [app.requireAuth, app.requireCsrf] },
+    { preHandler: [app.requireJwtAuth] },
     async (req, reply) => {
+      const { userId, jwt } = (req as JwtAuthenticatedRequest).jwtUser;
+      const config = requireSupabaseConfig(opts);
+
       let body;
       try {
         body = PatchUserAgentConfigRequestSchema.parse(req.body);
@@ -90,31 +128,46 @@ export async function meAgentsRoutes(app: FastifyInstance, opts: MeAgentsPluginO
         if (e instanceof ZodError) throw new SchemaValidationError(e.message);
         throw e;
       }
-      const patch: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(body)) {
-        if (v !== undefined) patch[k] = v;
-      }
-      const updated = await agentConfigStore
-        .update(req.user!.userId, req.params.agentId, patch)
+
+      const userClient = createUserScopedClient(config, jwt);
+      const store = new PostgresAgentStore(userClient);
+
+      // Map from agent-protocol field names to PostgresAgentStore PatchAgent field names
+      const patch: Parameters<PostgresAgentStore['update']>[2] = {
+        ...(body.agentName !== undefined ? { name: body.agentName } : {}),
+        ...(body.endpointUrl !== undefined ? { callbackUrl: body.endpointUrl } : {}),
+        ...(body.authHeaderName !== undefined ? { authHeaderName: body.authHeaderName } : {}),
+        ...(body.authHeaderValue !== undefined ? { authHeaderValue: body.authHeaderValue } : {}),
+        ...(body.timeoutMs !== undefined ? { timeoutMs: body.timeoutMs } : {}),
+        ...(body.description !== undefined ? { description: body.description } : {}),
+      };
+
+      const updated = await store
+        .update(userId, req.params.agentId, patch)
         .catch(e => {
           if (e instanceof NotFoundError) throw new AppError('AGENT_NOT_FOUND', e.message);
           throw e;
         });
-      reply.send({ data: toPublicConfig(updated) });
+      reply.send({ data: toPublicAgent(updated) });
     },
   );
 
+  // DELETE /me/agents/:agentId — delete one agent
   app.delete<{ Params: { agentId: string } }>(
     '/me/agents/:agentId',
-    { preHandler: [app.requireAuth, app.requireCsrf] },
+    { preHandler: [app.requireJwtAuth] },
     async (req, reply) => {
-      const userId = req.user!.userId;
-      const cfg = await agentConfigStore.get(userId, req.params.agentId);
-      if (!cfg) throw new AppError('AGENT_NOT_FOUND', `Agent config ${req.params.agentId} not found`);
-      if (agentConfigUsage.isInUse(cfg.agentConfigId)) {
-        throw new AgentInUseError(cfg.agentConfigId);
+      const { userId, jwt } = (req as JwtAuthenticatedRequest).jwtUser;
+      const config = requireSupabaseConfig(opts);
+      const userClient = createUserScopedClient(config, jwt);
+      const store = new PostgresAgentStore(userClient);
+
+      const agent = await store.get(userId, req.params.agentId);
+      if (!agent) throw new AppError('AGENT_NOT_FOUND', `Agent config ${req.params.agentId} not found`);
+      if (agentConfigUsage.isInUse(agent.id)) {
+        throw new AgentInUseError(agent.id);
       }
-      await agentConfigStore.delete(userId, req.params.agentId);
+      await store.delete(userId, req.params.agentId);
       reply.status(204).send();
     },
   );

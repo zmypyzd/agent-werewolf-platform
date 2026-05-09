@@ -341,7 +341,11 @@ export function buildServer(opts: BuildServerOptions = {}) {
       prefix: '/api/v1',
       registry: werewolfLobbyRegistry,
     });
-    await scope.register(meAgentsRoutes, { prefix: '/api/v1', agentConfigStore, agentConfigUsage });
+    await scope.register(meAgentsRoutes, {
+      prefix: '/api/v1',
+      agentConfigUsage,
+      ...(opts.supabaseConfig ? { supabaseConfig: opts.supabaseConfig } : {}),
+    });
     await scope.register(agentInvitesRoutes, {
       prefix: '/api/v1',
       ...(opts.supabaseConfig ? { supabaseConfig: opts.supabaseConfig } : {}),
