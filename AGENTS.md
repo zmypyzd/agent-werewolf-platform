@@ -24,13 +24,15 @@ Two paths coexist; use this table to decide which to follow when touching a rout
 |---|---|---|
 | `/api/v1/agents/invites/*`, `/api/v1/me/agents/*` | Supabase JWT (`Authorization: Bearer …` + `app.requireJwtAuth`) | Postgres `agents` / `agent_invites` under RLS |
 | `/api/v1/tables/*`, `/api/v1/werewolf-games/*`, `/api/v1/simulate`, `/api/v1/auth/*` | Cookie session (`apk_sid` + `X-Requested-With: fetch` CSRF) | SQLite (`users`, sessions, `user_agent_configs`) |
+| `/api/v1/me/werewolf-agents/*` | Cookie session (legacy) | Postgres `agents` (hybrid: new store, old auth) |
 | `/api/v1/agents/invites/:token/register` | Public (no auth) | Postgres (service-role client) |
 
 When adding new authenticated routes, prefer the JWT path. `apps/api/src/routes/auth.ts`
 is marked DEPRECATED — it will be deleted once the cookie path retires.
 
-**Test pattern:** inject `authService: new MockAuthService('test-user-id')` into
-`buildServer()` and send `Authorization: Bearer mock-token` headers. Leave
+**Test pattern:** inject `authService: new MockAuthService(<any-user-id>)` into
+`buildServer()` and send `Authorization: Bearer <any-token-string>` headers — `MockAuthService`
+accepts any non-empty bearer and resolves to the constructor user id. Leave
 `supabaseConfig` undefined so routes return `501 NOT_IMPLEMENTED` for CRUD calls (auth
 gate still verifiable). See `apps/api/src/__tests__/agent-invites.test.ts` and
 `route-audit.test.ts` for canonical test setups.

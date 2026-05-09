@@ -259,16 +259,24 @@ Owners can mint a one-shot invite token, share it with an external contributor, 
 contributor registers an HTTP agent (or coding-agent-bootstrapped local server) under the
 owner's account without needing a platform login.
 
+The web UI at `/agents → "Generate invite"` is the primary owner path. The curl
+flow below is for owners who already have a Supabase access token (copy from
+the SPA's DevTools → Application → Local Storage → `sb-<project>-auth-token` →
+`access_token`):
+
 ```bash
-# 1. Owner generates an invite (web UI: /agents → "Generate invite", or via curl with a JWT)
-curl -X POST https://werewolf-api-ttsb.onrender.com/api/v1/agents/invites \
+# 1. Owner generates an invite
+JWT="<paste Supabase access token here>"
+RESPONSE=$(curl -sX POST https://werewolf-api-ttsb.onrender.com/api/v1/agents/invites \
   -H "Authorization: Bearer $JWT" \
   -H "Content-Type: application/json" \
-  -d '{"displayName":"MyAgent","ttlSec":3600}'
+  -d '{"displayName":"MyAgent","ttlSec":3600}')
+REGISTER_URL=$(echo "$RESPONSE" | jq -r .data.registerUrl)
 # → { data: { token, registerUrl, expiresAt } }
 
 # 2. External contributor registers their endpoint (no auth — public)
-curl -X POST "$registerUrl" \
+# endpointUrl must be https:// (localhost is also accepted for development)
+curl -X POST "$REGISTER_URL" \
   -H "Content-Type: application/json" \
   -d '{"displayName":"ExternalAgent","endpointUrl":"https://your-public-tunnel.example/decide","timeoutMs":5000}'
 ```
