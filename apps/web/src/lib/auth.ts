@@ -38,8 +38,15 @@ export interface AuthResult {
   error?: string;
 }
 
-export async function signUp(email: string, password: string): Promise<AuthResult> {
-  const { error } = await supabase.auth.signUp({ email, password });
+export async function signUp(
+  email: string,
+  password: string,
+  options?: { displayName?: string },
+): Promise<AuthResult> {
+  const signUpArgs = options?.displayName
+    ? { email, password, options: { data: { display_name: options.displayName } } }
+    : { email, password };
+  const { error } = await supabase.auth.signUp(signUpArgs);
   return error ? { error: error.message } : {};
 }
 

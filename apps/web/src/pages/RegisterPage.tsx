@@ -1,8 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AuthPanel } from '../components/AuthPanel.js';
-import { ApiError } from '../lib/api.js';
-import { useAuth } from '../auth/AuthContext.js';
+import { signUp, useSession } from '../lib/auth.js';
 
 export interface RegisterPageContentProps {
   email: string;
@@ -17,7 +16,7 @@ export interface RegisterPageContentProps {
 }
 
 export function RegisterPage() {
-  const { user, register } = useAuth();
+  const { user } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -35,15 +34,14 @@ export function RegisterPage() {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
-    try {
-      await register(email, password, displayName);
-      const next = new URLSearchParams(location.search).get('next') ?? '/lobby';
-      navigate(next, { replace: true });
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Registration failed');
-    } finally {
+    const result = await signUp(email, password, { displayName });
+    if (result.error) {
+      setError(result.error);
       setSubmitting(false);
+      return;
     }
+    const next = new URLSearchParams(location.search).get('next') ?? '/lobby';
+    navigate(next, { replace: true });
   }
 
   return (

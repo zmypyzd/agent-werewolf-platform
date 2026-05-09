@@ -1,8 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AuthPanel } from '../components/AuthPanel.js';
-import { ApiError } from '../lib/api.js';
-import { useAuth } from '../auth/AuthContext.js';
+import { signIn, useSession } from '../lib/auth.js';
 
 export interface LoginPageContentProps {
   email: string;
@@ -15,7 +14,7 @@ export interface LoginPageContentProps {
 }
 
 export function LoginPage() {
-  const { user, login } = useAuth();
+  const { user } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -32,15 +31,14 @@ export function LoginPage() {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
-    try {
-      await login(email, password);
-      const next = new URLSearchParams(location.search).get('next') ?? '/lobby';
-      navigate(next, { replace: true });
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Login failed');
-    } finally {
+    const result = await signIn(email, password);
+    if (result.error) {
+      setError(result.error);
       setSubmitting(false);
+      return;
     }
+    const next = new URLSearchParams(location.search).get('next') ?? '/lobby';
+    navigate(next, { replace: true });
   }
 
   return (
