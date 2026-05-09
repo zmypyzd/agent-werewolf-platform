@@ -1,4 +1,12 @@
 import type { WerewolfRoomState, WerewolfRole, SeatVM } from './werewolfRoomTypes.js';
+import { useStickyValue } from './useStickyValue.js';
+
+// How long the booth keeps the last speech visible after the reducer has
+// already cleared state.currentSpeech (which happens on every phase.changed,
+// notably the day-speeches → day-vote fired by the LAST living speaker).
+// 4s is enough to read a typical 1-2 sentence summon-style speech without
+// pinning the booth through the entire voting phase. Tune via this constant.
+const SPEECH_STICKY_MS = 4000;
 
 export interface WerewolfSpeechBoardProps {
   state: WerewolfRoomState;
@@ -39,7 +47,7 @@ function speakerDisplayName(seat: SeatVM | undefined, fallback: string): string 
 }
 
 export function WerewolfSpeechBoard({ state }: WerewolfSpeechBoardProps) {
-  const speech = state.currentSpeech;
+  const speech = useStickyValue(state.currentSpeech, SPEECH_STICKY_MS);
   if (!speech) return null;
 
   const seat = findSeatByPlayerId(state.seats, speech.actorId);

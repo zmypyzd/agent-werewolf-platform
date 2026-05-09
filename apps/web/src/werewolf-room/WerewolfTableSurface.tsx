@@ -2,6 +2,14 @@ import { useState } from 'react';
 import type { WerewolfRoomState, SeatVM, WerewolfRole } from './werewolfRoomTypes.js';
 import { WerewolfSpeechBoard } from './WerewolfSpeechBoard.js';
 import { AgentPickerPopover } from './AgentPickerPopover.js';
+import { useStickyValue } from './useStickyValue.js';
+
+// Mirror the speech-board hold so the seat replay glow on the last day-speech
+// speaker stays visible for the same window the booth shows their words.
+// Without this, the seat would lose its "JUST SPOKE" glow the instant
+// phase.changed fires while the booth still displays the speech, leaving the
+// user with text on the booth but no visual anchor on the table.
+const SEAT_REPLAY_STICKY_MS = 4000;
 
 export interface WerewolfTableSurfaceProps {
   state: WerewolfRoomState;
@@ -212,6 +220,13 @@ export function WerewolfTableSurface({
     typeof state.currentPhase === 'string' &&
     state.currentPhase.startsWith('night-');
 
+  // Sticky version of currentSpeech so the seat replay glow stays in lockstep
+  // with the broadcast booth (which uses the same hook with the same hold).
+  // The reducer clears state.currentSpeech on every phase.changed; this
+  // hook bridges the visual gap so the LAST day-speech speaker's glow
+  // doesn't drop out a frame before the booth fades.
+  const stickySpeech = useStickyValue(state.currentSpeech, SEAT_REPLAY_STICKY_MS);
+
   return (
     <div className={`ww-board-wrapper${isNight ? '' : ' is-day'}`}>
       <div className="ww-board-night-overlay" />
@@ -219,14 +234,14 @@ export function WerewolfTableSurface({
         {state.seats.map((seat, i) => {
           const pos = SEAT_POSITIONS[i] ?? { left: '50%', top: '50%' };
           const isLive = state.speakingActor === seat.playerId;
-          // Replay: center panel still shows this seat's last speech, but
-          // speakingActor has already cleared (next agent is being requested).
-          // The amber glow used to live on the next thinker — we moved it
-          // here so the seat-glow always points at the same person the
-          // center panel is showing.
+          // Replay: booth still shows this seat's last speech (the sticky
+          // value), but speakingActor has already cleared (next agent is
+          // being requested OR phase advanced into voting). The amber glow
+          // used to live on the next thinker — we moved it here so the
+          // seat-glow always points at the same person the center panel is
+          // showing.
           const isReplay =
-            !state.speakingActor &&
-            state.currentSpeech?.actorId === seat.playerId;
+            !state.speakingActor && stickySpeech?.actorId === seat.playerId;
           return (
             <SeatCard
               key={seat.seatIndex}
