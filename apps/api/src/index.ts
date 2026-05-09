@@ -1,5 +1,6 @@
 import { buildServer, type BuildServerOptions } from './server.js';
 import { createPostgresWerewolfBundle } from './postgres-werewolf-bundle.js';
+import { SupabaseAuthService } from '@agent-poker/auth';
 
 // Boot wiring. SQLite is the default; Postgres mode activates when all
 // three SUPABASE_* env vars are present. Modes are not mutually exclusive
@@ -27,6 +28,10 @@ if (bundle) {
   // Forward supabaseConfig so agent-invites routes can create user-scoped
   // and service-role clients for RLS-aware CRUD.
   opts.supabaseConfig = bundle.config;
+  // Wire SupabaseAuthService so requireJwtAuth validates real JWTs and
+  // returns the correct Supabase user UUID as userId (used as owner_id
+  // when creating agents / invites in Postgres).
+  opts.authService = new SupabaseAuthService(bundle.config.url, bundle.config.anonKey);
 }
 
 const app = buildServer(opts);
