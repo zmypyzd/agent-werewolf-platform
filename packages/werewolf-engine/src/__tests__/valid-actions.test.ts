@@ -129,13 +129,39 @@ describe('getValidActions', () => {
 
   it('day-vote: alive players may vote any alive non-self target or abstain (null)', () => {
     const base = createGame({ gameId: 'g1', seed: 'seed-A' });
-    const s: WerewolfGameState = { ...base, phase: 'day-vote', dayNumber: 1, pendingDayVote: { votes: [], tally: {}, banished: null, pkRound: 0, tied: false } };
+    const s: WerewolfGameState = { ...base, phase: 'day-vote', dayNumber: 1, pendingDayVote: { votes: [], tally: {}, banished: null, pkRound: 0, tied: false, pkCandidates: [] } };
     const voter = s.players[0]!;
     const acts = getValidActions(s, voter.id);
     const targets = acts.filter((a) => a.type === 'day-vote').map((a) => (a as { targetId: string | null }).targetId);
     expect(targets).toContain(null);
     expect(targets).toContain('p2');
     expect(targets).not.toContain('p1');
+  });
+
+  it('day-vote: in PK round only pkCandidates (and abstain) are valid targets', () => {
+    const base = createGame({ gameId: 'g1', seed: 'seed-A' });
+    const s: WerewolfGameState = {
+      ...base,
+      phase: 'day-vote',
+      dayNumber: 1,
+      pendingDayVote: {
+        votes: [],
+        tally: { p2: 4, p3: 4, p4: 1 },
+        banished: null,
+        pkRound: 1,
+        tied: true,
+        pkCandidates: ['p2', 'p3'],
+      },
+    };
+    const voter = s.players[0]!; // p1
+    const acts = getValidActions(s, voter.id);
+    const targets = acts.filter((a) => a.type === 'day-vote').map((a) => (a as { targetId: string | null }).targetId);
+    expect(targets).toContain(null); // abstain still allowed
+    expect(targets).toContain('p2');
+    expect(targets).toContain('p3');
+    expect(targets).not.toContain('p4'); // not on the PK ballot
+    expect(targets).not.toContain('p5');
+    expect(targets).not.toContain('p1'); // self never allowed
   });
 
   it('hunter-shoot: only the pending hunter may act, targeting any alive non-self or null (no shot)', () => {

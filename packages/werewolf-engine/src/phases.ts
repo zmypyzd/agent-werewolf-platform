@@ -117,7 +117,7 @@ export function startDayVote(state: WerewolfGameState): WerewolfGameState {
   return {
     ...state,
     phase: 'day-vote',
-    pendingDayVote: { votes: [], tally: {}, banished: null, pkRound: 0, tied: false },
+    pendingDayVote: { votes: [], tally: {}, banished: null, pkRound: 0, tied: false, pkCandidates: [] },
   };
 }
 

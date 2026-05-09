@@ -57,6 +57,11 @@ export interface DayVoteRecord {
   readonly banished: WerewolfPlayerId | null;
   readonly pkRound: number;
   readonly tied: boolean;
+  // Eligible targets for THIS round of voting. Empty in pkRound===0 (regular
+  // day vote: any alive non-self player is eligible). Non-empty in pkRound>0:
+  // the players who tied for top in the previous round and are now on the PK
+  // ballot. Voters can only target someone in this list (or abstain).
+  readonly pkCandidates: ReadonlyArray<WerewolfPlayerId>;
 }
 
 export type WerewolfHistoryEntry =

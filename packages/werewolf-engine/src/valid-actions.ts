@@ -94,7 +94,16 @@ export function getValidActions(state: WerewolfGameState, playerId: WerewolfPlay
       // Filter already-voted players for the same reason.
       if (state.pendingDayVote?.votes.some((v) => v.voterId === self.id)) return [];
       const out: WerewolfAction[] = [{ type: 'day-vote', voterId: self.id, targetId: null }];
-      for (const t of aliveNonSelf(state.players, self.id)) {
+      // PK-round target restriction: in pkRound>0, only the players still on
+      // the PK ballot (pkCandidates) are valid targets. Self-vote is always
+      // disallowed; abstain is always allowed (the empty-targetId entry above).
+      const pkRound = state.pendingDayVote?.pkRound ?? 0;
+      const pkCandidates = state.pendingDayVote?.pkCandidates ?? [];
+      const eligible =
+        pkRound > 0 && pkCandidates.length > 0
+          ? aliveNonSelf(state.players, self.id).filter((t) => pkCandidates.includes(t.id))
+          : aliveNonSelf(state.players, self.id);
+      for (const t of eligible) {
         out.push({ type: 'day-vote', voterId: self.id, targetId: t.id });
       }
       return out;

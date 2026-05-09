@@ -207,10 +207,24 @@ function applyDayVote(
     const target = findPlayer(state, action.targetId);
     if (!target.alive) throw new InvalidWerewolfActionError('cannot banish a dead player');
     if (target.id === voter.id) throw new InvalidWerewolfActionError('cannot vote for self');
+    // PK-round target restriction: in pkRound>0 only the previous round's tied
+    // top vote-getters (state.pendingDayVote.pkCandidates) are on the ballot.
+    // Standard 9-player rules: the PK round narrows the choice to the tied top,
+    // not "vote anyone again". Abstain (targetId===null) is always allowed.
+    if (
+      state.pendingDayVote.pkRound > 0 &&
+      state.pendingDayVote.pkCandidates.length > 0 &&
+      !state.pendingDayVote.pkCandidates.includes(action.targetId)
+    ) {
+      throw new InvalidWerewolfActionError(
+        `target ${action.targetId} is not on the PK ballot`,
+      );
+    }
   }
   const updatedVotes = [...state.pendingDayVote.votes, { voterId: action.voterId, targetId: action.targetId }];
   const aliveIds = state.players.filter((p) => p.alive).map((p) => p.id);
   const everyoneVoted = updatedVotes.length === aliveIds.length;
+  const previousCandidates = state.pendingDayVote.pkCandidates;
   let next: WerewolfGameState = {
     ...state,
     pendingDayVote: { ...state.pendingDayVote, votes: updatedVotes },
@@ -228,15 +242,33 @@ function applyDayVote(
     if (c > topCount) { banished = t; topCount = c; tied = false; }
     else if (c === topCount) { tied = true; }
   }
-  // Strict majority required: top candidate must have > half of alive votes
-  const aliveCount = aliveIds.length;
-  if (!tied && banished !== null && topCount <= aliveCount / 2) {
-    tied = true;
-    banished = null;
-  }
+  // Plurality wins: the highest vote-getter is banished. PK is triggered only
+  // when two or more players truly tie for the top (or when nobody received a
+  // vote at all, i.e. all abstained — banished===null). The previous code
+  // also forced PK when topCount<=aliveCount/2 ("no strict majority"), which
+  // mislabelled clear pluralities (e.g. 4-3-2 of 9) as "tied" and surfaced a
+  // misleading "票数相同" banner. Standard 9-player Werewolf rules are
+  // plurality, not strict-majority, so that gate is removed.
   if (tied || banished === null) {
+    // PK candidates for the next round = players tied at the top of THIS
+    // round's tally. If everyone abstained (tally empty), preserve the prior
+    // round's candidates so an abstain round doesn't accidentally widen the
+    // ballot.
+    const topTied = Object.entries(tally)
+      .filter(([, c]) => c === topCount && topCount > 0)
+      .map(([t]) => t);
+    const nextCandidates: ReadonlyArray<string> =
+      topTied.length > 0 ? topTied : previousCandidates;
+
     if (state.pendingDayVote.pkRound >= WEREWOLF_MAX_PK_ROUNDS) {
-      const finalRecord = { votes: updatedVotes, tally, banished: null, pkRound: state.pendingDayVote.pkRound, tied: true };
+      const finalRecord = {
+        votes: updatedVotes,
+        tally,
+        banished: null,
+        pkRound: state.pendingDayVote.pkRound,
+        tied: true,
+        pkCandidates: previousCandidates,
+      };
       next = {
         ...next,
         phase: 'day-resolve',
@@ -245,15 +277,43 @@ function applyDayVote(
       };
       return advanceFromDayResolve(next);
     }
-    const pkRecord = { votes: [], tally, banished: null, pkRound: state.pendingDayVote.pkRound + 1, tied: true };
+    const pkRecord = {
+      votes: [],
+      tally,
+      banished: null,
+      pkRound: state.pendingDayVote.pkRound + 1,
+      tied: true,
+      pkCandidates: nextCandidates,
+    };
     return {
       ...next,
       pendingDayVote: pkRecord,
-      history: [...next.history, { type: 'vote', day: next.dayNumber, record: { votes: updatedVotes, tally, banished: null, pkRound: state.pendingDayVote.pkRound, tied: true } }],
+      history: [
+        ...next.history,
+        {
+          type: 'vote',
+          day: next.dayNumber,
+          record: {
+            votes: updatedVotes,
+            tally,
+            banished: null,
+            pkRound: state.pendingDayVote.pkRound,
+            tied: true,
+            pkCandidates: previousCandidates,
+          },
+        },
+      ],
     };
   }
 
-  const finalRecord = { votes: updatedVotes, tally, banished, pkRound: state.pendingDayVote.pkRound, tied: false };
+  const finalRecord = {
+    votes: updatedVotes,
+    tally,
+    banished,
+    pkRound: state.pendingDayVote.pkRound,
+    tied: false,
+    pkCandidates: previousCandidates,
+  };
   next = {
     ...next,
     phase: 'day-resolve',
