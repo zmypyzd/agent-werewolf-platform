@@ -8,20 +8,24 @@ Cross-PR follow-ups. Each item should have enough context that someone picking i
 
 **What:** Add `supportedGames: GameType[]` field so an agent built for one game can't be seated in another. Original plan: SQLite + Zod + CRUD + UI + seat-time validation in both poker and werewolf routes.
 
-**Why deferred (re-evaluated 2026-05-09):**
+**Why deferred (re-evaluated 2026-05-09, partially advanced post-merge of Stage 2 JWT migration):**
 
-The platform is mid-migration between two parallel agent stores:
+Stage 2 of the auth migration (PR #2, merged 2026-05-09) moved `/me/agents` and
+`/agents/invites` to JWT + Postgres. The remaining cookie/SQLite routes are
+poker tables, werewolf-games, simulate, and auth itself. Updated table:
 
-| Path | Store | Protocol |
-|---|---|---|
-| `/me/agents` (CRUD) | SQLite `user_agent_configs` (legacy) | HTTP webhook |
-| `/me/werewolf-agents` (CRUD) | Postgres `agents` (new) | Longpoll only |
-| `/tables/:id/seats/agent` (poker seat) | SQLite `user_agent_configs` | HTTP |
-| `/werewolf-games/:id/seats/:idx/invite-agent` (werewolf seat) | SQLite `user_agent_configs` | HTTP |
+| Path | Store | Protocol | Auth |
+|---|---|---|---|
+| `/me/agents` (CRUD) | Postgres `agents` ✅ | HTTP webhook | JWT ✅ |
+| `/agents/invites/*` (manage) + `/agents/invites/:token/register` (public) | Postgres `agents` + `agent_invites` ✅ | HTTP | JWT (mgmt) / public (register) ✅ |
+| `/me/werewolf-agents` (CRUD) | Postgres `agents` ✅ | Longpoll only | Cookie (legacy) |
+| `/tables/:id/seats/agent` (poker seat) | SQLite `user_agent_configs` (legacy) | HTTP | Cookie (legacy) |
+| `/werewolf-games/:id/seats/:idx/invite-agent` (werewolf seat) | SQLite `user_agent_configs` (legacy) | HTTP | Cookie (legacy) |
 
-Per the Phase 1 comment in `apps/api/src/routes/me-werewolf-agents.ts:6`:
-
-> "The two stores are independent during Phase 1; Phase 2 will collapse them once auth migrates to Supabase Auth and the agents table FKs back to auth.users."
+The seat-time routes are the load-bearing case for `supportedGames` and they
+still read SQLite. Building `supportedGames` on SQLite now and re-doing it
+when those routes flip to Postgres is the same waste the original deferral
+called out — the call is unchanged.
 
 The cross-game seating bug is real (werewolf invite-agent uses the SQLite store with no game-type guard, so a poker-shaped HTTP agent seated in werewolf gets `WerewolfDecisionRequest` payloads and Zod-fails into the fallback path), but:
 

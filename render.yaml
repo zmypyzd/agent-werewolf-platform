@@ -33,6 +33,15 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      # Vite build-time mirrors of the public Supabase URL + anon key.
+      # Required when bundling the SPA into the API container (see
+      # docs/deployment.md Section 2.5). Mirror the values of SUPABASE_URL
+      # and SUPABASE_ANON_KEY above — only the anon key reaches the browser,
+      # never the service-role key.
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
       # Optional operational toggles. The API works without them; flip
       # them on for production.
       - key: WEREWOLF_BRIEFING_ENABLED
