@@ -7,6 +7,13 @@
 // on different origins). Default empty → relative paths, which work
 // when the SPA is served same-origin with the API or when an upstream
 // proxy / Vercel rewrite handles the indirection.
+//
+// When a Supabase session is present, an Authorization: Bearer <jwt>
+// header is also attached so JWT-protected routes (external-contributor
+// path) authenticate correctly alongside the legacy cookie path.
+import { supabase } from './supabase.js';
+import { signOut } from './auth.js';
+
 const API_ROOT = import.meta.env?.VITE_API_BASE_URL ?? '';
 const BASE = `${API_ROOT}/api/v1`;
 
@@ -99,6 +106,13 @@ async function call<T>(method: string, path: string, opts: ApiOptions = {}): Pro
     body = JSON.stringify(opts.body);
   }
 
+  // Attach Supabase JWT when a session exists (JWT path for external-contributor
+  // routes). Cookie path (credentials: 'include') stays active for legacy routes.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    headers['Authorization'] = `Bearer ${session.access_token}`;
+  }
+
   const init: RequestInit = {
     method,
     headers,
@@ -108,6 +122,19 @@ async function call<T>(method: string, path: string, opts: ApiOptions = {}): Pro
   };
 
   const res = await fetch(`${BASE}${path}`, init);
+
+  if (res.status === 401) {
+    // Only react with sign-out + redirect when we had a JWT session.
+    // Cookie-auth 401s are handled by the existing flow (no redirect).
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    if (currentSession) {
+      await signOut();
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
+    // Fall through to throw via the existing error pipeline below.
+  }
 
   if (!res.ok) {
     let code = 'UNKNOWN';
