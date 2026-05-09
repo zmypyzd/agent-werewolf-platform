@@ -102,13 +102,22 @@ export async function agentInvitesRoutes(app: FastifyInstance, opts: AgentInvite
         expiresAt: Date.now() + body.ttlSec * 1000,
       });
 
-      reply.status(201).send({
-        data: {
-          token: rawToken,
-          expiresAt: invite.expiresAt,
-          registerUrl: registerUrlFor(req, rawToken),
-        },
-      });
+      // The rawToken is shown to the operator exactly once — only sha256
+      // is persisted. Forbid intermediary caching so the response can't
+      // outlive the legitimate read (CDN POST cache, browser bfcache,
+      // reverse-proxy `proxy_cache_methods POST`, dev-tools "preserve
+      // log" replay). Same defense as me-werewolf-agents.
+      reply
+        .header('Cache-Control', 'no-store')
+        .header('Pragma', 'no-cache')
+        .status(201)
+        .send({
+          data: {
+            token: rawToken,
+            expiresAt: invite.expiresAt,
+            registerUrl: registerUrlFor(req, rawToken),
+          },
+        });
     },
   );
 
