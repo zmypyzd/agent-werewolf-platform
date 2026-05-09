@@ -46,6 +46,16 @@ interface ServerLobbyEntry {
     side: WerewolfSide;
     alive: boolean;
   }>;
+  // Phase backfill — present once status flips to 'running'/'completed' so
+  // late-joining or reloading spectators don't have to wait for the next
+  // phase.changed SSE event to know what's happening. Absent pre-start to
+  // preserve the info-isolation invariant pinned in
+  // werewolf-games-info-isolation.test.ts. The reducer treats these as
+  // best-effort backfill — once SSE has set currentPhase to a real phase,
+  // a subsequent poll must not stomp it with a stale value.
+  currentPhase?: string;
+  dayNumber?: number;
+  nightNumber?: number;
 }
 
 export type WerewolfRoomAction =
@@ -141,11 +151,40 @@ export function werewolfRoomReducer(
         ...(side ? { revealedSide: side } : {}),
       };
     });
+    // Phase backfill: the server-side lobby entry carries currentPhase /
+    // dayNumber / nightNumber once status flips to 'running' / 'completed'.
+    // Apply them ONLY while the local state is still at its initial
+    // 'pre-match' value — once an SSE phase.changed has set a real phase,
+    // subsequent polls might reflect a stale snapshot (the GET was issued
+    // before the latest transition) and would otherwise overwrite the
+    // fresher SSE-delivered reading. After SSE takes over, the
+    // running-unknown-phase fallback in WerewolfPhaseIndicator stops
+    // firing and the precise day/night reading shows from t=0 of any
+    // reload — which is the whole point of this backfill.
+    const isInitialPhase =
+      state.currentPhase === 'pre-match' || state.currentPhase === undefined;
+    const phaseFromLobby: Partial<
+      Pick<WerewolfRoomState, 'currentPhase' | 'dayNumber' | 'nightNumber'>
+    > = isInitialPhase
+      ? {
+          ...(typeof action.entry.currentPhase === 'string' &&
+          action.entry.currentPhase !== 'pre-match'
+            ? { currentPhase: action.entry.currentPhase as WerewolfPhase }
+            : {}),
+          ...(typeof action.entry.dayNumber === 'number'
+            ? { dayNumber: action.entry.dayNumber }
+            : {}),
+          ...(typeof action.entry.nightNumber === 'number'
+            ? { nightNumber: action.entry.nightNumber }
+            : {}),
+        }
+      : {};
     return {
       ...state,
       gameId: action.entry.gameId,
       status: action.entry.status,
       seats,
+      ...phaseFromLobby,
       ...(action.entry.failureReason
         ? { failureReason: action.entry.failureReason }
         : {}),
