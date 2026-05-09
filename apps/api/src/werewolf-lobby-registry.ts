@@ -7,6 +7,7 @@ import {
 import {
   AgentInUseError,
   AppError,
+  ForbiddenError,
   WerewolfGameNotFoundError,
   WerewolfSeatOccupiedError,
   WerewolfGameNotReadyError,
@@ -161,6 +162,16 @@ interface InternalSeatInfo extends Omit<WerewolfSeatInfo, 'occupant'> {
 interface InternalEntry extends Omit<WerewolfLobbyEntry, 'seats'> {
   seats: InternalSeatInfo[];
   seed: string;
+  // The session-authenticated user that called POST /werewolf-games to
+  // create this lobby. Used to gate "host-only" operations (start the
+  // match, seat NPCs, fill-with-npcs). NULL is reserved for unit-test
+  // fixtures that exercise the registry without a real auth layer; live
+  // routes always supply a value because the create endpoint is behind
+  // requireAuth. Inviting your OWN registered HTTP agent into someone
+  // else's lobby is intentionally NOT gated by this — that's the
+  // multi-host design intent (multiple users can field agents in the
+  // same game). Starting and seating bots is the host's call alone.
+  creatorUserId: string | null;
   // Roster cached at createMatch time (engine assigns roles deterministically
   // from the seed at that point). Used to enrich the public seats when the
   // match has started — see publicEntry.
@@ -274,7 +285,7 @@ export class WerewolfLobbyRegistry {
 
   constructor(private readonly options: WerewolfLobbyRegistryOptions) {}
 
-  create(input: { name?: string; seed?: string }): WerewolfLobbyEntry {
+  create(input: { name?: string; seed?: string; creatorUserId?: string }): WerewolfLobbyEntry {
     const gameId = randomUUID();
     const seed = input.seed ?? randomUUID();
     const name =
@@ -298,6 +309,7 @@ export class WerewolfLobbyRegistry {
       seed,
       rosterByPlayerId,
       deathsByPlayerId: new Map(),
+      creatorUserId: input.creatorUserId ?? null,
     };
     this.entries.set(gameId, entry);
     return publicEntry(entry);
@@ -348,8 +360,10 @@ export class WerewolfLobbyRegistry {
     gameId: string,
     seatIndex: number,
     displayName?: string,
+    requesterUserId?: string,
   ): WerewolfLobbyEntry {
     const entry = this.requireEntry(gameId);
+    this.assertCreatorOnly(entry, requesterUserId, 'invite NPC');
     if (entry.status !== 'waiting') {
       throw new WerewolfGameNotReadyError(gameId, entry.status);
     }
@@ -455,22 +469,27 @@ export class WerewolfLobbyRegistry {
     return publicEntry(entry, ownerUserId);
   }
 
-  fillWithNpcs(gameId: string): WerewolfLobbyEntry {
+  fillWithNpcs(gameId: string, requesterUserId?: string): WerewolfLobbyEntry {
     const entry = this.requireEntry(gameId);
+    this.assertCreatorOnly(entry, requesterUserId, 'fill with NPCs');
     if (entry.status === 'ready') return publicEntry(entry);
     if (entry.status !== 'waiting') {
       throw new WerewolfGameNotReadyError(gameId, entry.status);
     }
     for (let i = 0; i < TOTAL_SEATS; i++) {
       if (entry.seats[i]!.occupant.kind === 'empty') {
-        this.inviteNpc(gameId, i);
+        // Bypass the per-seat ownership check here — we already validated
+        // requesterUserId once at the top. Avoid re-running the check N times
+        // (and avoid the cost of a redundant assertion in the hot loop).
+        this.inviteNpc(gameId, i, undefined, requesterUserId);
       }
     }
     return publicEntry(entry);
   }
 
-  start(gameId: string): Promise<void> {
+  start(gameId: string, requesterUserId?: string): Promise<void> {
     const entry = this.requireEntry(gameId);
+    this.assertCreatorOnly(entry, requesterUserId, 'start match');
     if (entry.status === 'running' || entry.status === 'completed') {
       throw new WerewolfGameAlreadyStartedError(gameId);
     }
@@ -602,5 +621,28 @@ export class WerewolfLobbyRegistry {
     const entry = this.entries.get(gameId);
     if (!entry) throw new WerewolfGameNotFoundError(gameId);
     return entry;
+  }
+
+  // Host-only gate. Throws ForbiddenError if requesterUserId does not match
+  // the lobby creator. Two cases bypass the gate intentionally:
+  //   - entry.creatorUserId === null: legacy / test fixtures that constructed
+  //     a lobby without a creator. Backward compatible — pre-PR tests still
+  //     work because they don't pass a requester either.
+  //   - requesterUserId === undefined: the call originated inside the registry
+  //     itself (fillWithNpcs delegating to inviteNpc) AFTER the outer call
+  //     already validated. Internal call sites pass the original requester
+  //     explicitly when they want the inner check; passing undefined skips it.
+  private assertCreatorOnly(
+    entry: InternalEntry,
+    requesterUserId: string | undefined,
+    actionLabel: string,
+  ): void {
+    if (entry.creatorUserId === null) return;
+    if (requesterUserId === undefined) return;
+    if (entry.creatorUserId !== requesterUserId) {
+      throw new ForbiddenError(
+        `only the lobby creator may ${actionLabel} for game ${entry.gameId}`,
+      );
+    }
   }
 }

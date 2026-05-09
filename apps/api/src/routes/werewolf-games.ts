@@ -59,7 +59,9 @@ export async function werewolfGamesRoutes(
     { preHandler: [app.requireAuth, app.requireCsrf] },
     async (req, reply) => {
       const body = parseBody(CreateGameBody, req.body);
-      const createInput: { name?: string; seed?: string } = {};
+      const createInput: { name?: string; seed?: string; creatorUserId: string } = {
+        creatorUserId: req.user!.userId,
+      };
       if (body.name !== undefined) createInput.name = body.name;
       if (body.seed !== undefined) createInput.seed = body.seed;
       const entry = registry.create(createInput);
@@ -97,7 +99,9 @@ export async function werewolfGamesRoutes(
     async (req, reply) => {
       const { gameId, seatIndex } = parseBody(SeatParams, req.params);
       const body = parseBody(InviteNpcBody, req.body);
-      const entry = registry.inviteNpc(gameId, seatIndex, body.displayName);
+      // Host-only — see registry.assertCreatorOnly. Without this, any
+      // logged-in user could seat bots into another user's lobby.
+      const entry = registry.inviteNpc(gameId, seatIndex, body.displayName, req.user!.userId);
       reply.send({ data: entry });
     },
   );
@@ -128,7 +132,8 @@ export async function werewolfGamesRoutes(
     '/werewolf-games/:gameId/fill-with-npcs',
     { preHandler: [app.requireAuth, app.requireCsrf] },
     async (req, reply) => {
-      const entry = registry.fillWithNpcs(req.params.gameId);
+      // Host-only — same authorization model as invite-npc.
+      const entry = registry.fillWithNpcs(req.params.gameId, req.user!.userId);
       reply.send({ data: entry });
     },
   );
@@ -141,8 +146,10 @@ export async function werewolfGamesRoutes(
       // start() returns the run-promise; we deliberately do NOT await it.
       // Errors during runMatch land in the registry's internal handler and
       // flip status to 'failed'. Attach a no-op catch so unhandled rejection
-      // warnings don't fire.
-      const promise = registry.start(req.params.gameId);
+      // warnings don't fire. Host-only — see registry.assertCreatorOnly;
+      // before this gate, any logged-in user could start any lobby they
+      // discovered in the public list endpoint.
+      const promise = registry.start(req.params.gameId, req.user!.userId);
       promise.catch(() => {
         /* recorded in registry */
       });
