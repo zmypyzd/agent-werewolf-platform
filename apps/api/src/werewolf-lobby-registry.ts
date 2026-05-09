@@ -588,9 +588,40 @@ export class WerewolfLobbyRegistry {
         alive: p.alive,
       }));
     } catch (err) {
-      entry.status = 'failed';
-      entry.completedAt = Date.now();
-      entry.failureReason = err instanceof Error ? err.message : String(err);
+      // Distinguish "game loop failed" from "post-game persistence failed".
+      // The orchestrator (orchestrator.ts:170-179) intentionally lets persist
+      // errors bubble up while keeping its own status='completed' — a
+      // saveMatchArtifact failure (size cap, transient I/O, missing GRANT)
+      // is a different fault domain from a game-loop failure, and conflating
+      // them would block a legitimately completed match from being read. If
+      // the orchestrator already has a summary cached, the match itself
+      // succeeded; treat this as completed-with-warning, not failed.
+      const orchestratorSummary = this.options.orchestrator.getMatchSummary(gameId);
+      const message = err instanceof Error ? err.message : String(err);
+      if (orchestratorSummary !== null) {
+        entry.status = 'completed';
+        entry.completedAt = orchestratorSummary.completedAt;
+        entry.winner = orchestratorSummary.winner;
+        entry.finalPlayers = orchestratorSummary.finalPlayers.map((p) => ({
+          id: p.id,
+          seatIndex: p.seatIndex,
+          name: p.name,
+          role: p.role,
+          side: p.side,
+          alive: p.alive,
+        }));
+        // Surface the failure via console.error so ops sees it, but don't
+        // mark the lobby as failed — the in-memory result is still
+        // accessible via the orchestrator and the spectator UI should
+        // render the completed match.
+        console.error(
+          `werewolf-lobby: match ${gameId} completed but post-game persistence failed: ${message}`,
+        );
+      } else {
+        entry.status = 'failed';
+        entry.completedAt = Date.now();
+        entry.failureReason = message;
+      }
     } finally {
       phaseUnsubscribe();
       if (replayUnsubscribe) replayUnsubscribe();
