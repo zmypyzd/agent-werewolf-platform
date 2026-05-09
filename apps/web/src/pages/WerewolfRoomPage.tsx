@@ -22,6 +22,12 @@ type ServerLobbyEntry = Extract<
 
 const POLL_WAITING_MS = 2000;
 const POLL_RUNNING_MS = 5000;
+// Auto-dismiss the page-level error banner so a transient invite failure
+// (e.g., "Seat X in game Y is already occupied" when two users race for the
+// same empty seat) doesn't pin a stale red box on the room for the rest of
+// the session. 5s is long enough to read the message; the × button below
+// lets users dismiss faster.
+const ERROR_AUTO_DISMISS_MS = 5000;
 
 export function WerewolfRoomPage() {
   const { gameId = '' } = useParams<{ gameId: string }>();
@@ -56,6 +62,15 @@ export function WerewolfRoomPage() {
   useEffect(() => {
     void fetchEntry();
   }, [fetchEntry]);
+
+  // Auto-dismiss the error banner. Setting `error` again resets the timer
+  // so the latest message gets the full read window. Manual × dismiss is
+  // wired below.
+  useEffect(() => {
+    if (!error) return;
+    const t = window.setTimeout(() => setError(null), ERROR_AUTO_DISMISS_MS);
+    return () => window.clearTimeout(t);
+  }, [error]);
 
   useEffect(() => {
     if (state.status === 'completed' || state.status === 'failed') return;
@@ -147,7 +162,19 @@ export function WerewolfRoomPage() {
 
       <WerewolfPhaseIndicator state={state} />
 
-      {error ? <div className="ww-error">{error}</div> : null}
+      {error ? (
+        <div className="ww-error" role="alert">
+          <span className="ww-error-text">{error}</span>
+          <button
+            type="button"
+            className="ww-error-dismiss"
+            aria-label="关闭错误提示"
+            onClick={() => setError(null)}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
 
       {isLive ? (
         <div className="ww-game-area">

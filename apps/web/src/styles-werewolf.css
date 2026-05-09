@@ -228,6 +228,26 @@
   font-size: 13px;
   color: var(--ww-death);
   font-family: 'JetBrains Mono', monospace;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ww-error-text {
+  flex: 1;
+}
+.ww-error-dismiss {
+  background: transparent;
+  border: none;
+  color: var(--ww-death);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 6px;
+  font-family: inherit;
+  opacity: 0.75;
+}
+.ww-error-dismiss:hover {
+  opacity: 1;
 }
 
 /* ── Game area (running) ────────────────────────────────── */
