@@ -297,6 +297,17 @@ export function werewolfRoomReducer(
             })
           : next.seats;
 
+      // Keep currentSpeech across day-speeches → day-vote transitions so the
+      // LAST speaker remains visible on the broadcast booth while voting
+      // starts. Previously this branch unconditionally cleared currentSpeech
+      // on every phase.changed; combined with the orchestrator emitting
+      // agent.action_received → phase.changed back-to-back when the final
+      // speaker triggers startDayVote (engine apply-action.ts:188-190), the
+      // last speaker's card was set and cleared in the same render batch and
+      // appeared "skipped" on the speech board even though their line was
+      // still in the timeline. PK-revote phase.changed events keep
+      // newPhase === 'day-vote' too (match-runner.ts:362), so this also
+      // preserves the speech across PK rounds.
       next = {
         ...next,
         currentPhase: newPhase,
@@ -311,7 +322,7 @@ export function werewolfRoomReducer(
             : next.dayNumber,
         thinkingActor: undefined,
         speakingActor: undefined,
-        currentSpeech: undefined,
+        ...(newPhase === 'day-vote' ? {} : { currentSpeech: undefined }),
       };
     }
   }
