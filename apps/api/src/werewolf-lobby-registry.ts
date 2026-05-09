@@ -232,57 +232,87 @@ function projectSeat(s: InternalSeatInfo, viewerUserId?: string): WerewolfSeatIn
   return s as WerewolfSeatInfo;
 }
 
+// The full set of fields that may cross the API boundary on a public entry.
+// Adding a new internal field to InternalEntry is now a no-op for the public
+// projection — the new field is invisible at the boundary unless its name is
+// added here AND the build below explicitly copies it. This inverts the
+// previous "destructure-and-omit" pattern, which kept biting: adding
+// creatorUserId to InternalEntry for host-only authorization quietly leaked
+// it to spectators because the omit list wasn't updated. Allowlist-style
+// projection means new fields are private by default; making one public
+// requires deliberate code change in this file.
+//
+// The TypeScript `satisfies` clause at the build site below pins this list
+// against WerewolfLobbyEntry's keys, so the two stay in lockstep.
+const PUBLIC_ENTRY_FIELDS = [
+  'gameId',
+  'name',
+  'status',
+  'seats',
+  'createdAt',
+  'startedAt',
+  'completedAt',
+  'winner',
+  'failureReason',
+  'finalPlayers',
+  'currentPhase',
+  'dayNumber',
+  'nightNumber',
+] as const satisfies ReadonlyArray<keyof WerewolfLobbyEntry>;
+
+// Compile-time check: PUBLIC_ENTRY_FIELDS must cover every key of
+// WerewolfLobbyEntry. If a new public field is added to the entry shape but
+// not to this list, this assignment fails to type-check. (Removing fields
+// from WerewolfLobbyEntry while leaving them in this list is a runtime no-op
+// since the projection below skips fields that aren't on the source object.)
+type _AllPublicFieldsCovered =
+  Exclude<keyof WerewolfLobbyEntry, (typeof PUBLIC_ENTRY_FIELDS)[number]> extends never
+    ? true
+    : never;
+const _publicEntryCoverage: _AllPublicFieldsCovered = true;
+void _publicEntryCoverage;
+
 function publicEntry(entry: InternalEntry, viewerUserId?: string): WerewolfLobbyEntry {
-  // Defense-in-depth: explicit destructure-and-omit prevents internal fields
-  // like `seed`, `rosterByPlayerId`, `deathsByPlayerId`, `matchPk`, and
-  // `creatorUserId` from leaking via spread. matchPk is the internal uuid for
-  // werewolf_matches.id (not catastrophic if exposed — RLS still gates the
-  // row — but no business crossing the API boundary). creatorUserId is the
-  // host's session userId; exposing it would let any spectator pivot from
-  // the public lobby list to a per-host enumeration ("which lobbies belong
-  // to user X?"). The `creatorUserId` field was introduced when host-only
-  // authorization landed (overnight-qa/lobby-creator-only-start); this
-  // destructure closes the matching projection gap.
-  const {
-    seed: _seed,
-    rosterByPlayerId,
-    deathsByPlayerId,
-    matchPk: _matchPk,
-    creatorUserId: _creatorUserId,
-    currentPhase,
-    dayNumber,
-    nightNumber,
-    ...rest
-  } = entry;
   // Reveal role/side/alive only once the match has started. Pre-start statuses
   // (waiting / ready) keep the existing isolation invariant — a viewer of
   // the lobby endpoint cannot derive the roster before the game begins.
-  const reveal = rest.status === 'running' || rest.status === 'completed';
-  const projected = rest.seats.map((s) => projectSeat(s, viewerUserId));
+  const reveal = entry.status === 'running' || entry.status === 'completed';
+  const projectedBase = entry.seats.map((s) => projectSeat(s, viewerUserId));
+  const seats: WerewolfSeatInfo[] = reveal
+    ? projectedBase.map((s, i) => {
+        const internal = entry.seats[i]!;
+        const r = entry.rosterByPlayerId.get(internal.playerId);
+        const d = entry.deathsByPlayerId.get(internal.playerId);
+        return {
+          ...s,
+          ...(r ? { role: r.role, side: r.side } : {}),
+          alive: d === undefined,
+          ...(d ? { causeOfDeath: d.cause } : {}),
+        };
+      })
+    : projectedBase;
+
   // Pre-start: phase metadata stays internal-only. start() never sets these
-  // until status flips to 'running', but the destructure above also drops
-  // them defensively for any future writer that violates the invariant.
-  if (!reveal) return { ...rest, seats: projected };
-  const phaseFields: Pick<
-    WerewolfLobbyEntry,
-    'currentPhase' | 'dayNumber' | 'nightNumber'
-  > = {
-    ...(currentPhase !== undefined ? { currentPhase } : {}),
-    ...(dayNumber !== undefined ? { dayNumber } : {}),
-    ...(nightNumber !== undefined ? { nightNumber } : {}),
-  };
-  const seats: WerewolfSeatInfo[] = projected.map((s, i) => {
-    const internal = rest.seats[i]!;
-    const r = rosterByPlayerId.get(internal.playerId);
-    const d = deathsByPlayerId.get(internal.playerId);
-    return {
-      ...s,
-      ...(r ? { role: r.role, side: r.side } : {}),
-      alive: d === undefined,
-      ...(d ? { causeOfDeath: d.cause } : {}),
-    };
-  });
-  return { ...rest, seats, ...phaseFields };
+  // until status flips to 'running', but the allowlist also drops them
+  // defensively for any future writer that violates the invariant.
+  const includePhase = reveal;
+
+  // Build the output by explicit field copy from the allowlist. Treating
+  // `entry` as Record<string, unknown> keeps the loop generic; the static
+  // PUBLIC_ENTRY_FIELDS list has already been type-checked against
+  // WerewolfLobbyEntry's keys above.
+  const src = entry as unknown as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const k of PUBLIC_ENTRY_FIELDS) {
+    if (!includePhase && (k === 'currentPhase' || k === 'dayNumber' || k === 'nightNumber')) {
+      continue;
+    }
+    if (k === 'seats') continue; // computed above
+    const v = src[k];
+    if (v !== undefined) out[k] = v;
+  }
+  out['seats'] = seats;
+  return out as unknown as WerewolfLobbyEntry;
 }
 
 export class WerewolfLobbyRegistry {
