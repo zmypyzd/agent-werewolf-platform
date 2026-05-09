@@ -168,7 +168,6 @@ export function buildServer(opts: BuildServerOptions = {}) {
     app.register(fastifyStatic, {
       root: publicPath,
       prefix: '/',
-      decorateReply: false,
     });
 
     // SPA history fallback: any non-/api 404 returns index.html
