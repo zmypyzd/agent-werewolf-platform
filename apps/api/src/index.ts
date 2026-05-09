@@ -7,7 +7,9 @@ import { createPostgresWerewolfBundle } from './postgres-werewolf-bundle.js';
 // other subsystems (auth sessions, poker tables) continue on SQLite for
 // now (Phase 1 keeps the user-facing UI flow stable).
 
-const opts: BuildServerOptions = {};
+const opts: BuildServerOptions = {
+  publicDir: process.env['PUBLIC_DIR'] ?? 'apps/api/public',
+};
 const bundle = createPostgresWerewolfBundle();
 if (bundle) {
   opts.werewolfMatchArtifactStore = bundle.artifactStore;
