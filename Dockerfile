@@ -52,6 +52,14 @@ COPY apps apps
 COPY packages packages
 COPY examples examples
 
+# Web build needs Supabase env vars (Vite inlines them at build time).
+# Empty defaults are acceptable for Stage 1 smoke tests; Stage 3 supplies
+# real values via --build-arg.
+ARG VITE_SUPABASE_URL=""
+ARG VITE_SUPABASE_ANON_KEY=""
+ENV VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+ENV VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+
 RUN pnpm build
 
 # ─── Stage 3: runner ───────────────────────────────────────────────────
@@ -92,6 +100,9 @@ COPY --from=builder /app/packages/shared/dist                          packages/
 COPY --from=builder /app/packages/table-orchestrator/dist              packages/table-orchestrator/dist
 COPY --from=builder /app/packages/werewolf-engine/dist                 packages/werewolf-engine/dist
 COPY --from=builder /app/packages/werewolf-orchestrator/dist           packages/werewolf-orchestrator/dist
+
+# SPA dist served by @fastify/static at /
+COPY --from=builder /app/apps/web/dist /app/apps/api/public
 
 # Render and Fly inject the actual port via $PORT. Listen on 0.0.0.0 so
 # the platform's reverse proxy can reach the container.

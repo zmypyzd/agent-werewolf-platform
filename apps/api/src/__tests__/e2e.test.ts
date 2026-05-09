@@ -2,7 +2,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
 import { WebSocket } from 'ws';
+import { randomUUID } from 'crypto';
 import { buildServer } from '../server.js';
+import {
+  openDatabase,
+  SqliteUserStore,
+  SqliteSessionStore,
+  SqliteUserAgentConfigStore,
+  SqliteAgentInviteStore,
+} from '@agent-poker/persistence';
 
 vi.mock('@agent-poker/table-orchestrator', async () => import('../../../../packages/table-orchestrator/src/index.js'));
 
@@ -64,9 +72,18 @@ let app: FastifyInstance;
 let baseUrl: string;
 let wsBaseUrl: string;
 let stub: AgentStub;
+// Pre-built stores shared between buildServer and the test body so the test
+// can directly create agent configs without going through the /me/agents route
+// (which now requires Supabase Postgres and rejects without a supabaseConfig).
+let agentConfigStore: SqliteUserAgentConfigStore;
 
 beforeEach(async () => {
-  app = buildServer();
+  const authDb = openDatabase(':memory:');
+  const userStore = new SqliteUserStore(authDb);
+  const sessionStore = new SqliteSessionStore(authDb);
+  agentConfigStore = new SqliteUserAgentConfigStore(authDb);
+  const agentInviteStore = new SqliteAgentInviteStore(authDb);
+  app = buildServer({ userStore, sessionStore, agentConfigStore, agentInviteStore });
   await app.listen({ host: '127.0.0.1', port: 0 });
   const addr = app.server.address();
   if (!addr || typeof addr === 'string') throw new Error('server listen failed');
@@ -80,7 +97,7 @@ afterEach(async () => {
   await app.close();
 });
 
-async function registerAs(email: string): Promise<string> {
+async function registerAs(email: string): Promise<{ sid: string; userId: string }> {
   const res = await fetch(`${baseUrl}/api/v1/auth/register`, {
     method: 'POST',
     headers: CSRF,
@@ -89,7 +106,8 @@ async function registerAs(email: string): Promise<string> {
   if (res.status !== 201) throw new Error(`register ${email}: ${await res.text()}`);
   const sid = /apk_sid=([^;]+)/.exec(res.headers.get('set-cookie') ?? '')?.[1];
   if (!sid) throw new Error('no apk_sid cookie');
-  return sid;
+  const body = await res.json() as { data: { user: { userId: string } } };
+  return { sid, userId: body.data.user.userId };
 }
 
 async function postJson(path: string, sid: string, body: unknown): Promise<Response> {
@@ -146,11 +164,16 @@ function awaitMessage(
 
 describe('Backend e2e — full demo flow (M11)', () => {
   it('Alice (human) + Bob\'s HTTP agent run a hand to completion via WS + REST', async () => {
-    const aliceSid = await registerAs('alice@e.test');
-    const bobSid = await registerAs('bob@e.test');
+    const { sid: aliceSid } = await registerAs('alice@e.test');
+    const { sid: bobSid, userId: bobUserId } = await registerAs('bob@e.test');
 
     // Bob registers an HTTP agent config pointing at our stub.
-    const cfgRes = await postJson('/api/v1/me/agents', bobSid, {
+    // /api/v1/me/agents now requires Supabase Postgres (requireJwtAuth + supabaseConfig),
+    // so we bypass the route and write the config directly into the shared SQLite store.
+    const agentConfigId = `cfg-${randomUUID().slice(0, 8)}`;
+    await agentConfigStore.create({
+      agentConfigId,
+      userId: bobUserId,
       agentName: 'BobBot',
       endpointUrl: stub.url,
       authHeaderName: null,
@@ -158,8 +181,6 @@ describe('Backend e2e — full demo flow (M11)', () => {
       timeoutMs: 5000,
       description: null,
     });
-    expect(cfgRes.status).toBe(201);
-    const agentConfigId = (await cfgRes.json() as { data: { agentConfigId: string } }).data.agentConfigId;
 
     // Alice opens a WS and subscribes to lobby BEFORE the table is created so
     // she observes lobby.table_created.

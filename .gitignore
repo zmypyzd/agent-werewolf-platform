@@ -5,6 +5,8 @@ examples/local-simulation/output/**/*.jsonl
 examples/local-simulation/output/**/*.json
 !examples/local-simulation/output/.gitkeep
 .env
+.env.local
+.env.*.local
 coverage/
 .DS_Store
 .claude/

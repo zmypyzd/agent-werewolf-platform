@@ -6,3 +6,5 @@ export * from './cookie.js';
 export * from './csrf.js';
 export * from './fastify-plugin.js';
 export * from './rate-limit.js';
+export { MockAuthService, SupabaseAuthService } from './auth-service.js';
+export type { IAuthService } from './auth-service.js';

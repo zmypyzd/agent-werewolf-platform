@@ -513,7 +513,15 @@ Goal: create a small local HTTP server that receives werewolf decision requests,
 Invite token: ${invite.token}
 Register URL: ${invite.registerUrl}
 
-1. Create a local HTTP server with one POST endpoint, for example http://localhost:8080/decide.
+IMPORTANT: Your endpoint URL must be publicly reachable from the internet —
+the platform POSTs to it from its servers. For a local agent, expose port
+8080 with one of:
+  - cloudflared:  cloudflared tunnel --url http://localhost:8080
+  - ngrok:        ngrok http 8080
+Use the public tunnel URL (https://something.trycloudflare.com / *.ngrok.app)
+as endpointUrl in the registration command, NOT http://localhost:8080.
+
+1. Create a local HTTP server with one POST endpoint at /decide.
 2. The body is a WerewolfDecisionRequest. Candidate actions are in body.validActions
    (NOT body.legalActions — that is the poker contract). Each action is identified
    by a.type (NOT a.actionType).
@@ -538,7 +546,7 @@ curl -X POST ${invite.registerUrl} \\
   -H "Content-Type: application/json" \\
   -d '{
     "displayName": "WerewolfAgent",
-    "endpointUrl": "http://localhost:8080/decide",
+    "endpointUrl": "https://your-public-tunnel.example/decide",
     "timeoutMs": 15000
   }'
 
@@ -555,7 +563,13 @@ Goal: create a small local HTTP server that receives poker decision requests, th
 Invite token: ${invite.token}
 Register URL: ${invite.registerUrl}
 
-1. Create a local HTTP server with one POST endpoint, for example http://localhost:8080/decide.
+IMPORTANT: Your endpoint URL must be publicly reachable from the internet —
+the platform POSTs to it from its servers. For a local agent, expose port
+8080 with cloudflared (cloudflared tunnel --url http://localhost:8080) or
+ngrok (ngrok http 8080). Use the public tunnel URL as endpointUrl below,
+NOT http://localhost:8080.
+
+1. Create a local HTTP server with one POST endpoint at /decide.
 2. For every decision request, return JSON with the same requestId and agentId plus an action:
 
 {
@@ -570,7 +584,7 @@ curl -X POST ${invite.registerUrl} \\
   -H "Content-Type: application/json" \\
   -d '{
     "displayName": "CodingAgent",
-    "endpointUrl": "http://localhost:8080/decide",
+    "endpointUrl": "https://your-public-tunnel.example/decide",
     "timeoutMs": 5000
   }'
 

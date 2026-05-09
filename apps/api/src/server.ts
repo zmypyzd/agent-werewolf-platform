@@ -1,5 +1,8 @@
 import Fastify from 'fastify';
 import fastifyWebsocket from '@fastify/websocket';
+import fastifyStatic from '@fastify/static';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { TableOrchestrator } from '@agent-poker/table-orchestrator';
 import {
   MemoryTableStore,
@@ -35,8 +38,9 @@ import {
   RateLimitedError,
   buildDefaultWerewolfBriefing,
 } from '@agent-poker/shared';
-import { RateLimiter, authPlugin } from '@agent-poker/auth';
-import type { RateLimiterConfig, RuntimeEnv } from '@agent-poker/auth';
+import { RateLimiter, authPlugin, MockAuthService } from '@agent-poker/auth';
+import type { RateLimiterConfig, RuntimeEnv, IAuthService } from '@agent-poker/auth';
+import { registerJwtAuthMiddleware } from './middleware/auth.js';
 import { RealtimeHub } from '@agent-poker/realtime';
 import { tablesRoutes } from './routes/tables.js';
 import { simulateRoutes } from './routes/simulate.js';
@@ -54,7 +58,7 @@ import { healthRoutes } from './routes/health.js';
 import { werewolfMailboxRoutes } from './routes/werewolf-mailbox.js';
 import { meWerewolfAgentsRoutes } from './routes/me-werewolf-agents.js';
 import { werewolfStreamRoutes } from './routes/werewolf-stream.js';
-import type { IAgentStore, IWerewolfDecisionMailbox } from '@agent-poker/persistence';
+import type { IAgentStore, IWerewolfDecisionMailbox, SupabaseClientConfig } from '@agent-poker/persistence';
 import { createMatchArtifactStore } from './match-artifact-store-factory.js';
 import { createWerewolfMatchArtifactStore } from './werewolf-match-artifact-store-factory.js';
 
@@ -101,6 +105,13 @@ export interface BuildServerOptions {
   // these from the Supabase-backed bootstrap in index.ts.
   werewolfAgentStore?: IAgentStore;
   werewolfMailbox?: IWerewolfDecisionMailbox;
+  publicDir?: string;  // Absolute path or repo-relative path to SPA dist directory
+  // When provided, JWT-based requireJwtAuth decorator uses this implementation.
+  // Defaults to MockAuthService('test-user-default') so existing tests are unaffected.
+  authService?: IAuthService;
+  // When provided, agent-invites routes use Postgres-backed stores with RLS.
+  // Without this, all agent-invites endpoints return 501 (not configured).
+  supabaseConfig?: SupabaseClientConfig;
 }
 
 export function buildServer(opts: BuildServerOptions = {}) {
@@ -155,6 +166,33 @@ export function buildServer(opts: BuildServerOptions = {}) {
   const authRateLimiter = opts.authRateLimit ? new RateLimiter(opts.authRateLimit) : undefined;
 
   const app = Fastify({ logger: false });
+
+  // Register JWT-based auth decorator alongside the existing cookie auth plugin.
+  // Uses a distinct name (requireJwtAuth) to avoid colliding with requireAuth from
+  // authPlugin. Tasks 10-11 (agent-invites, me-agents) reference requireJwtAuth.
+  // Task 14 will delete the cookie plugin and rename this to requireAuth.
+  const authService = opts.authService ?? new MockAuthService('test-user-default');
+  registerJwtAuthMiddleware(app, authService);
+
+  if (opts.publicDir) {
+    // Resolve publicDir to an absolute path (relative paths are resolved against repo root)
+    const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../..');
+    const publicPath = opts.publicDir.startsWith('/') ? opts.publicDir : join(repoRoot, opts.publicDir);
+
+    app.register(fastifyStatic, {
+      root: publicPath,
+      prefix: '/',
+    });
+
+    // SPA history fallback: any non-/api 404 returns index.html
+    app.setNotFoundHandler((req, reply) => {
+      if (req.url.startsWith('/api')) {
+        reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Route not found' } });
+        return;
+      }
+      reply.sendFile('index.html');
+    });
+  }
 
   // Allow empty JSON bodies on routes that don't need one (e.g. POST /auth/logout
   // sent with `Content-Type: application/json` but no payload).
@@ -303,8 +341,15 @@ export function buildServer(opts: BuildServerOptions = {}) {
       prefix: '/api/v1',
       registry: werewolfLobbyRegistry,
     });
-    await scope.register(meAgentsRoutes, { prefix: '/api/v1', agentConfigStore, agentConfigUsage });
-    await scope.register(agentInvitesRoutes, { prefix: '/api/v1', agentInviteStore, agentConfigStore });
+    await scope.register(meAgentsRoutes, {
+      prefix: '/api/v1',
+      agentConfigUsage,
+      ...(opts.supabaseConfig ? { supabaseConfig: opts.supabaseConfig } : {}),
+    });
+    await scope.register(agentInvitesRoutes, {
+      prefix: '/api/v1',
+      ...(opts.supabaseConfig ? { supabaseConfig: opts.supabaseConfig } : {}),
+    });
     await scope.register(werewolfDocsRoutes, { prefix: '/api/v1' });
     if (opts.werewolfAgentStore) {
       await scope.register(meWerewolfAgentsRoutes, {

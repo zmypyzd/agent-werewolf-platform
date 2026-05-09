@@ -1,13 +1,27 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import {
+  openDatabase,
+  SqliteUserAgentConfigStore,
+  SqliteUserStore,
+  SqliteSessionStore,
+  SqliteAgentInviteStore,
+} from '@agent-poker/persistence';
 import { buildServer } from '../server.js';
 
 describe('werewolf-games routes', () => {
   let app: FastifyInstance;
   let cookie: string;
+  let agentConfigStore: SqliteUserAgentConfigStore;
 
   beforeEach(async () => {
-    app = await buildServer();
+    // Share one :memory: SQLite so FOREIGN KEY user_id → users.user_id holds.
+    const authDb = openDatabase(':memory:');
+    const userStore = new SqliteUserStore(authDb);
+    const sessionStore = new SqliteSessionStore(authDb);
+    agentConfigStore = new SqliteUserAgentConfigStore(authDb);
+    const agentInviteStore = new SqliteAgentInviteStore(authDb);
+    app = await buildServer({ userStore, sessionStore, agentConfigStore, agentInviteStore });
     await app.ready();
     // D1=A — all mutating werewolf routes require auth. Register a user once
     // per test so the inject() helper can attach the resulting session cookie.
@@ -180,21 +194,26 @@ describe('werewolf-games routes', () => {
   // ---- POST /werewolf-games/:id/seats/:i/invite-agent --------------------
 
   async function createCfgForCurrentUser() {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/v1/me/agents',
-      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
+    // /me/agents is now JWT-only (Task 11). Inject directly into the shared
+    // SqliteUserAgentConfigStore so werewolf invite-agent tests still exercise
+    // the registry.inviteAgent ownership path without going through Postgres.
+    const meRes = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
       cookies: { apk_sid: cookie },
-      payload: JSON.stringify({
-        agentName: 'MyWolfBot',
-        endpointUrl: 'https://example.test/wolf',
-        authHeaderName: null,
-        authHeaderValue: null,
-        timeoutMs: 5000,
-        description: null,
-      }),
     });
-    return res.json().data.agentConfigId as string;
+    const userId = (meRes.json() as { data: { user: { userId: string } } }).data.user.userId;
+    const cfg = await agentConfigStore.create({
+      agentConfigId: `cfg-${Math.random().toString(36).slice(2)}`,
+      userId,
+      agentName: 'MyWolfBot',
+      endpointUrl: 'https://example.test/wolf',
+      authHeaderName: null,
+      authHeaderValue: null,
+      timeoutMs: 5000,
+      description: null,
+    });
+    return cfg.agentConfigId;
   }
 
   it('invite-agent happy path: seat fills as kind:agent with isMine for owner', async () => {

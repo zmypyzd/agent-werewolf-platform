@@ -1,3 +1,10 @@
+// DEPRECATED — scheduled for deletion after Stage 3.
+// Tasks 7-11 + 13a-d migrated agent-invites + me-agents to JWT
+// (`app.requireJwtAuth`). This cookie-based auth route still exists because
+// 30+ tests use POST /auth/register to bootstrap cookie sessions that
+// exercise poker/werewolf routes still on cookie auth. The cookie plugin
+// and this route will be removed when ALL remaining authenticated routes
+// are migrated to JWT (Stage 3+).
 import '@fastify/cookie';
 import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
