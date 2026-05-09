@@ -258,9 +258,9 @@ export function AgentPickerPopover({
         <div className="ww-agent-picker-state">
           <h3 className="ww-agent-picker-state-title">尚无注册的 agent</h3>
           <p className="ww-agent-picker-state-body">
-            去 /me/agents 注册一个 HTTP agent 后回来
+            去 /agents 注册一个 HTTP agent 后回来
           </p>
-          <a className="ww-agent-picker-cta" href="/me/agents">
+          <a className="ww-agent-picker-cta" href="/agents">
             去注册
           </a>
         </div>
