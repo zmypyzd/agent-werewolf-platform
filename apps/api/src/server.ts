@@ -1,5 +1,8 @@
 import Fastify from 'fastify';
 import fastifyWebsocket from '@fastify/websocket';
+import fastifyStatic from '@fastify/static';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { TableOrchestrator } from '@agent-poker/table-orchestrator';
 import {
   MemoryTableStore,
@@ -101,6 +104,7 @@ export interface BuildServerOptions {
   // these from the Supabase-backed bootstrap in index.ts.
   werewolfAgentStore?: IAgentStore;
   werewolfMailbox?: IWerewolfDecisionMailbox;
+  publicDir?: string;  // Absolute path or repo-relative path to SPA dist directory
 }
 
 export function buildServer(opts: BuildServerOptions = {}) {
@@ -155,6 +159,27 @@ export function buildServer(opts: BuildServerOptions = {}) {
   const authRateLimiter = opts.authRateLimit ? new RateLimiter(opts.authRateLimit) : undefined;
 
   const app = Fastify({ logger: false });
+
+  if (opts.publicDir) {
+    // Resolve publicDir to an absolute path (relative paths are resolved against repo root)
+    const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../..');
+    const publicPath = opts.publicDir.startsWith('/') ? opts.publicDir : join(repoRoot, opts.publicDir);
+
+    app.register(fastifyStatic, {
+      root: publicPath,
+      prefix: '/',
+      decorateReply: false,
+    });
+
+    // SPA history fallback: any non-/api 404 returns index.html
+    app.setNotFoundHandler((req, reply) => {
+      if (req.url.startsWith('/api')) {
+        reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Route not found' } });
+        return;
+      }
+      reply.sendFile('index.html');
+    });
+  }
 
   // Allow empty JSON bodies on routes that don't need one (e.g. POST /auth/logout
   // sent with `Content-Type: application/json` but no payload).
