@@ -661,6 +661,36 @@
   opacity: 0.88;
 }
 
+/* ── Fill-with-NPCs convenience button ──────────────────── */
+/* Lighter visual weight than ww-start: this is a setup-time
+   shortcut for seating bots, not the climactic action. Outlined
+   instead of filled, indigo-tinted to sit in the night palette
+   without competing with the start button when both are visible. */
+.ww-fill-npcs {
+  display: block;
+  margin: 8px auto;
+  padding: 9px 22px;
+  background: transparent;
+  color: var(--ww-night-raw);
+  border: 1px solid var(--ww-night-raw);
+  border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 150ms, color 150ms, opacity 150ms;
+}
+
+.ww-fill-npcs:hover:not(:disabled) {
+  background: var(--ww-night-raw);
+  color: #fff;
+}
+
+.ww-fill-npcs:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
 /* ── Event timeline ─────────────────────────────────────── */
 .ww-timeline {
   background: var(--ww-surface);

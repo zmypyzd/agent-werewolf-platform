@@ -31,4 +31,14 @@ describe('WerewolfRoomPage (SSR smoke)', () => {
     // No "开始对局" button until status flips to 'ready' (which requires a server fetch).
     expect(html).not.toContain('开始对局');
   });
+
+  it('exposes a one-click "fill 9 NPCs" button while the lobby has empty seats', () => {
+    // Initial state: status='waiting', 9 empty seats. Backend exposes
+    // POST /werewolf-games/:id/fill-with-npcs (apps/api/src/routes/
+    // werewolf-games.ts:127) for batch seating; this test pins the
+    // matching UI affordance so it doesn't silently regress to the
+    // "click 9 times" workflow.
+    const html = renderRoom('abc123ef-aa');
+    expect(html).toMatch(/一键邀请\s*9\s*个\s*NPC/);
+  });
 });
