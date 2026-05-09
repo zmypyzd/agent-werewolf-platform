@@ -96,6 +96,7 @@
 - **PR #20** — *P1 info leak*. Action validator's error message embedded `JSON.stringify(action)`; that string was broadcast on the public SSE topic via `agent.invalid_action.reason`. A spectator parsing it could identify wolves from the voterId of any malformed `werewolf-vote`. Reason now includes only `action.type`.
 - **PR #21** — *input validation*. `authHeaderName` / `authHeaderValue` had only length bounds. RFC 7230 token / visible-ASCII regexes added so CR/LF/NUL injection is rejected at the API edge instead of crashing undici mid-decision.
 - **PR #22** — *follow-up to #14*. `creatorUserId` was added to `InternalEntry` for host-only auth but `publicEntry()` projection wasn't updated to strip it; spectators polling the public lobby list could enumerate hosts. Added to the destructure-and-omit list. Depends on PR #14 (merge order).
+- **PR #23** — *root-cause structural fix, supersedes #22*. Inverts `publicEntry()` from destructure-and-omit to allowlist projection. Adding a new `InternalEntry` field is now invisible at the public boundary by default. Two TypeScript-level guards (`satisfies ReadonlyArray<keyof WerewolfLobbyEntry>` + a covering type-level assertion) keep the allowlist honest at compile time. Both guards verified in-branch by temporarily adding a sentinel field that fails to type-check. PR #22 still goes in for git-history breadcrumb; #23 removes the destructure-and-omit pattern entirely.
 
 ### Round 3 (19:55Z – ~20:25Z)
 
@@ -128,7 +129,7 @@
 
 ## Final stats
 
-- **19 PRs opened** (this doc is #13), all on `overnight-qa/*` branches, none merged (waiting on user review).
+- **20 PRs opened** (this doc is #13), all on `overnight-qa/*` branches, none merged (waiting on user review).
 - **0 changes to `main`**.
 - **0 production data touched**.
 - **All local tests still pass** at end of each shipped commit (1064 → 1075 across the branch set).
@@ -155,12 +156,13 @@
 | #20 | validator reason no longer leaks night-action IDs                    | **P1 sec** | no |
 | #21 | RFC 7230 validation on authHeader{Name,Value}                        | hardening  | no |
 | #22 | strip creatorUserId from publicEntry projection (depends on #14)     | privacy    | no |
+| #23 | invert publicEntry to allowlist projection (root-cause; supersedes #22) | structural | no |
 
 ## Operator action checklist
 
 When you wake up:
 
-1. `gh pr list --search "[overnight-qa]"` — see all 19 PRs.
+1. `gh pr list --search "[overnight-qa]"` — see all 20 PRs.
 2. Review them in roughly the listed order (#4 first; that's the only prod-impacting one that needs an action beyond merge).
 3. After merging #4: run `supabase db push` against the production Supabase project. The new migration `20260510000000_werewolf_public_view_regrant.sql` re-asserts SELECT grants to anon/authenticated on the public match views. Without that step the API still returns 503 (better than 500, but still broken).
 4. After merging #9: the next Render deploy will include the agent-guide markdown so `/api/v1/docs/werewolf-agent-guide` stops 404-ing.
