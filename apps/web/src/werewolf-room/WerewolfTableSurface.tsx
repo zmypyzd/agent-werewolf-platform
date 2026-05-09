@@ -220,12 +220,15 @@ export function WerewolfTableSurface({
     typeof state.currentPhase === 'string' &&
     state.currentPhase.startsWith('night-');
 
-  // Sticky version of currentSpeech so the seat replay glow stays in lockstep
-  // with the broadcast booth (which uses the same hook with the same hold).
-  // The reducer clears state.currentSpeech on every phase.changed; this
-  // hook bridges the visual gap so the LAST day-speech speaker's glow
-  // doesn't drop out a frame before the booth fades.
-  const stickySpeech = useStickyValue(state.currentSpeech, SEAT_REPLAY_STICKY_MS);
+  // Mirror the booth's display logic: live speech wins (live glow), else
+  // fade lastSpeech for the same window so the seat-glow tracks the booth.
+  // Reading lastSpeech (not currentSpeech) sidesteps the React-18-batching
+  // case where the LAST day-speech speaker's currentSpeech is set and
+  // cleared in one render — the reducer captures lastSpeech sequentially
+  // even when renders collapse. See WerewolfSpeechBoard for the full
+  // rationale.
+  const fadingLast = useStickyValue(state.lastSpeech, SEAT_REPLAY_STICKY_MS);
+  const replaySpeech = state.currentSpeech ?? fadingLast;
 
   return (
     <div className={`ww-board-wrapper${isNight ? '' : ' is-day'}`}>
@@ -241,7 +244,7 @@ export function WerewolfTableSurface({
           // seat-glow always points at the same person the center panel is
           // showing.
           const isReplay =
-            !state.speakingActor && stickySpeech?.actorId === seat.playerId;
+            !state.speakingActor && replaySpeech?.actorId === seat.playerId;
           return (
             <SeatCard
               key={seat.seatIndex}

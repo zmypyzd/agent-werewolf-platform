@@ -210,6 +210,7 @@ export function werewolfRoomReducer(
       thinkingActor: undefined,
       speakingActor: undefined,
       currentSpeech: undefined,
+      lastSpeech: undefined,
       seats,
     };
   }
@@ -340,11 +341,24 @@ export function werewolfRoomReducer(
         ...(actionData.performance ? { performance: actionData.performance } : {}),
         ...(reasoning?.intent ? { intent: reasoning.intent } : {}),
       };
+      // lastSpeech mirrors currentSpeech but survives phase.changed. The
+      // engine fires startDayVote inside applySpeak the moment
+      // pendingDaySpeeches.length === aliveCount, so the orchestrator emits
+      // agent.action_received(speak) and phase.changed(day-vote) in the
+      // same SSE network frame. React 18 batches both into a single render
+      // with currentSpeech already cleared, so any UI hook reading
+      // currentSpeech misses the LAST speaker entirely. Capturing the
+      // speech here in reducer-land sidesteps the batching: the reducer
+      // sees every action sequentially and lastSpeech survives intact for
+      // the component layer to display with a fade window. Reference-
+      // equal to currentSpeech to keep useEffect deps stable across
+      // unrelated re-renders.
       next = {
         ...next,
         thinkingActor: undefined,
         speakingActor: pid,
         currentSpeech: speech,
+        lastSpeech: speech,
       };
     } else {
       // Non-speak action (vote, etc.) — clear speakingActor but KEEP currentSpeech
@@ -364,6 +378,7 @@ export function werewolfRoomReducer(
         thinkingActor: undefined,
         speakingActor: undefined,
         currentSpeech: undefined,
+        lastSpeech: undefined,
         winner: w,
       };
     }

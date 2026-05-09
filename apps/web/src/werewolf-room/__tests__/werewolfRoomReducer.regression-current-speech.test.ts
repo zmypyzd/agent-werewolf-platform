@@ -121,6 +121,176 @@ describe('werewolfRoomReducer — currentSpeech', () => {
     expect(afterVote.currentSpeech?.text).toBe('I vote P9.');
   });
 
+  it('agent.action_received (speak) populates lastSpeech alongside currentSpeech', () => {
+    // lastSpeech mirrors currentSpeech at speak time so the broadcast
+    // booth can survive React-18 batching of action_received +
+    // phase.changed for the LAST day-speeches speaker.
+    const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+    const after = werewolfRoomReducer(seeded, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'agent.action_received',
+        data: {
+          phase: 'day-speeches',
+          playerId: 'p9',
+          action: { type: 'speak', playerId: 'p9', inner: '', performance: '', speech: 'Closing argument.' },
+        },
+      }),
+    });
+    expect(after.lastSpeech).toBeDefined();
+    expect(after.lastSpeech?.actorId).toBe('p9');
+    expect(after.lastSpeech?.text).toBe('Closing argument.');
+    // Reference equality with currentSpeech keeps useEffect deps stable.
+    expect(after.lastSpeech).toBe(after.currentSpeech);
+  });
+
+  it('REGRESSION: last day-speech speaker survives the action_received → phase.changed batch', () => {
+    // Simulates the exact orchestrator emit pattern in
+    // packages/werewolf-orchestrator/src/match-runner.ts when the LAST
+    // living player speaks: applySpeak fires startDayVote in the same
+    // call, so the runner emits agent.action_received(P9 speak) and
+    // immediately phase.changed(day-vote). SSE delivers them in one
+    // network frame and React 18 collapses both dispatches into a single
+    // render. The reducer must, by the END of that pair, expose
+    // lastSpeech=P9 even though currentSpeech has already been cleared
+    // by phase.changed. Without this, no UI hook can recover the speech.
+    const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+    const step1 = werewolfRoomReducer(seeded, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'agent.action_received',
+        data: {
+          phase: 'day-speeches',
+          playerId: 'p9',
+          action: { type: 'speak', playerId: 'p9', inner: '', performance: '', speech: 'Closing.' },
+        },
+      }),
+    });
+    const step2 = werewolfRoomReducer(step1, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'phase.changed',
+        data: { phase: 'day-vote', dayNumber: 1 },
+      }),
+    });
+    expect(step2.currentSpeech).toBeUndefined();
+    expect(step2.lastSpeech?.actorId).toBe('p9');
+    expect(step2.lastSpeech?.text).toBe('Closing.');
+    expect(step2.currentPhase).toBe('day-vote');
+  });
+
+  it('phase.changed does NOT clear lastSpeech (the whole point of lastSpeech)', () => {
+    // Regression for the day-vote disappearing-P9 bug: SSE delivers
+    // action_received(P9) + phase.changed(day-vote) inside one network
+    // frame; React 18 batches them, the rendered state has
+    // currentSpeech=undefined but lastSpeech must stay at P9 so the
+    // booth can fade it out gracefully instead of skipping it entirely.
+    const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+    const afterSpeech = werewolfRoomReducer(seeded, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'agent.action_received',
+        data: {
+          phase: 'day-speeches',
+          playerId: 'p9',
+          action: { type: 'speak', playerId: 'p9', inner: '', performance: '', speech: 'Last word.' },
+        },
+      }),
+    });
+    expect(afterSpeech.lastSpeech?.actorId).toBe('p9');
+
+    const afterDayVote = werewolfRoomReducer(afterSpeech, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'phase.changed',
+        data: { phase: 'day-vote', dayNumber: 1 },
+      }),
+    });
+    expect(afterDayVote.currentSpeech).toBeUndefined();
+    expect(afterDayVote.lastSpeech?.actorId).toBe('p9');
+    expect(afterDayVote.lastSpeech?.text).toBe('Last word.');
+
+    const afterNight = werewolfRoomReducer(afterDayVote, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'phase.changed',
+        data: { phase: 'night-werewolf-vote', nightNumber: 2 },
+      }),
+    });
+    // Even crossing into night, lastSpeech holds — the component-layer
+    // fade is what eventually drops it; the reducer must not.
+    expect(afterNight.lastSpeech?.actorId).toBe('p9');
+  });
+
+  it('match.completed event clears lastSpeech (game ended, fresh booth)', () => {
+    const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+    const afterSpeech = werewolfRoomReducer(seeded, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'agent.action_received',
+        data: {
+          phase: 'day-speeches',
+          playerId: 'p1',
+          action: { type: 'speak', playerId: 'p1', inner: '', performance: '', speech: 'Final.' },
+        },
+      }),
+    });
+    const ended = werewolfRoomReducer(afterSpeech, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'match.completed',
+        data: { winner: 'good' },
+      }),
+    });
+    expect(ended.lastSpeech).toBeUndefined();
+  });
+
+  it('match-completed action (REST poll) clears lastSpeech too', () => {
+    const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+    const afterSpeech = werewolfRoomReducer(seeded, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'agent.action_received',
+        data: {
+          phase: 'day-speeches',
+          playerId: 'p1',
+          action: { type: 'speak', playerId: 'p1', inner: '', performance: '', speech: 'Final.' },
+        },
+      }),
+    });
+    const after = werewolfRoomReducer(afterSpeech, {
+      type: 'match-completed',
+      winner: 'good',
+      finalPlayers: [],
+    });
+    expect(after.lastSpeech).toBeUndefined();
+  });
+
+  it('night-phase speak does NOT populate lastSpeech (info isolation)', () => {
+    // Wolf chat / private night speech must not leak through the
+    // lastSpeech channel any more than it does through currentSpeech.
+    const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
+    const inNight = werewolfRoomReducer(seeded, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'phase.changed',
+        data: { phase: 'night-werewolf-vote', nightNumber: 1 },
+      }),
+    });
+    const after = werewolfRoomReducer(inNight, {
+      type: 'replay-event',
+      event: makeEvent({
+        eventType: 'agent.action_received',
+        data: {
+          phase: 'night-werewolf-vote',
+          playerId: 'p7',
+          action: { type: 'speak', playerId: 'p7', inner: '', performance: '', speech: 'WOLF CHAT' },
+        },
+      }),
+    });
+    expect(after.lastSpeech).toBeUndefined();
+  });
+
   it('phase.changed to a night phase clears currentSpeech (info-isolation + new round)', () => {
     const seeded = werewolfRoomReducer(emptyRoomState('g1'), SEEDED_LOBBY);
     const afterSpeech = werewolfRoomReducer(seeded, {

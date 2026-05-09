@@ -105,6 +105,18 @@ export interface WerewolfRoomState {
   thinkingActor?: string | undefined;   // set on agent.action_requested, cleared on action_received
   speakingActor?: string | undefined;   // set on agent.action_received (speak), cleared on phase.changed
   currentSpeech?: CurrentSpeech | undefined;
+  // The most recent day-phase speech, captured by the reducer at
+  // agent.action_received(speak) time and NOT cleared by phase.changed.
+  // Exists separately from currentSpeech because SSE delivers the LAST
+  // speaker's action_received and the immediately-following phase.changed
+  // (day-speeches → day-vote, fired by the engine inside applySpeak when
+  // pendingDaySpeeches reaches aliveCount) in the same network frame, so
+  // React 18 batches both into one render. Without lastSpeech, the
+  // intermediate currentSpeech=last-speaker state never makes it to a paint
+  // and the broadcast booth appears to "skip" them. Components combine
+  // currentSpeech (live) with a fading lastSpeech (replay) for display.
+  // Cleared on match completion.
+  lastSpeech?: CurrentSpeech | undefined;
   timeline: WerewolfTimelineLine[];
   winner?: WerewolfSide;
   failureReason?: string;

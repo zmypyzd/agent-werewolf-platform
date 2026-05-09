@@ -1,38 +1,77 @@
 import { useEffect, useState } from 'react';
 
-// Display-layer "stickiness": when `value` flips from defined → undefined,
-// keep returning the last defined value for `holdMs` more milliseconds, then
-// clear. New defined values always replace the sticky value immediately and
-// cancel any pending clear.
+// Display-layer fade timer for the broadcast booth's last-speech replay.
 //
-// Used by the werewolf broadcast booth (WerewolfSpeechBoard) and the seat
-// replay glow (WerewolfTableSurface) so the LAST day-speech speaker stays
-// visible long enough to read after the engine fires phase.changed →
-// day-vote. The reducer clears state.currentSpeech the moment phase changes
-// (see werewolfRoomReducer.ts); without this hook the last speaker would
-// flash for less than a frame and appear "skipped" on the speech board even
-// though their line is in the timeline. Keeping the timing in the
-// presentation layer leaves the reducer pure and avoids the previous fix's
-// failure mode where currentSpeech lingered on the booth for the entire
-// voting phase (potentially 60s+).
+// Latches `value` SYNCHRONOUSLY during render (via React 18's allowed
+// pattern of setState-during-render) so a brand-new value paints on the
+// same frame instead of a render later. Without the synchronous latch the
+// booth would flash the previous value for one render before catching up
+// — invisible for most transitions but becomes the "skip" the user
+// reported on the LAST day-speech speaker, where the orchestrator emits
+// agent.action_received and phase.changed back-to-back inside one SSE
+// frame and React 18 batches both into a single render that already
+// shows currentSpeech=undefined.
 //
-// SSR-safe: the initial useState picks up `value` directly, and the
-// setTimeout only runs inside useEffect (browser-only). renderToString /
-// renderToStaticMarkup tests therefore see the live value with no hold.
+// Each new latched value displays for `holdMs` then fades to undefined.
+// New values cancel the pending fade and restart the window; the parent
+// passing `value === undefined` (e.g. match completion clearing
+// state.lastSpeech) clears immediately.
+//
+// `latchedValue` is what the hook last accepted from the parent. Tracking
+// it separately from `visible` is what prevents the post-fade re-latch
+// loop (after the timer clears `visible` to undefined, the next render
+// must NOT treat `value` as "new" again — it's the same speech we already
+// displayed and let fade).
+//
+// SSR-safe: the useState initializer passes `value` through, and
+// setTimeout only runs inside useEffect (browser-only). renderToString
+// tests see the live value without a fade window.
 export function useStickyValue<T>(
   value: T | undefined,
   holdMs: number,
 ): T | undefined {
-  const [sticky, setSticky] = useState<T | undefined>(value);
+  const [{ visible, latchedValue, expiresAt }, setState] = useState<{
+    visible: T | undefined;
+    latchedValue: T | undefined;
+    expiresAt: number;
+  }>(() => ({
+    visible: value,
+    latchedValue: value,
+    expiresAt: value !== undefined ? Date.now() + holdMs : 0,
+  }));
+
+  if (value !== undefined && value !== latchedValue) {
+    // New speech arrived — latch and (re)start the fade window.
+    setState({
+      visible: value,
+      latchedValue: value,
+      expiresAt: Date.now() + holdMs,
+    });
+  } else if (value === undefined && latchedValue !== undefined) {
+    // Parent explicitly cleared (match completion). Drop the sticky.
+    setState({ visible: undefined, latchedValue: undefined, expiresAt: 0 });
+  }
 
   useEffect(() => {
-    if (value !== undefined) {
-      setSticky(value);
+    if (visible === undefined || expiresAt === 0) return undefined;
+    const remaining = expiresAt - Date.now();
+    if (remaining <= 0) {
+      setState((s) =>
+        s.visible === undefined
+          ? s
+          : { ...s, visible: undefined, expiresAt: 0 },
+      );
       return undefined;
     }
-    const timer = window.setTimeout(() => setSticky(undefined), holdMs);
+    const timer = window.setTimeout(() => {
+      setState((s) =>
+        s.visible === undefined
+          ? s
+          : { ...s, visible: undefined, expiresAt: 0 },
+      );
+    }, remaining);
     return () => window.clearTimeout(timer);
-  }, [value, holdMs]);
+  }, [visible, expiresAt]);
 
-  return sticky;
+  return visible;
 }

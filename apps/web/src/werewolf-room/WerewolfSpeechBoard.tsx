@@ -47,7 +47,16 @@ function speakerDisplayName(seat: SeatVM | undefined, fallback: string): string 
 }
 
 export function WerewolfSpeechBoard({ state }: WerewolfSpeechBoardProps) {
-  const speech = useStickyValue(state.currentSpeech, SPEECH_STICKY_MS);
+  // Read lastSpeech through the fade hook so the LAST day-speech speaker
+  // shows for the same window as everyone else (~4s) before the booth
+  // clears. lastSpeech is captured by the reducer at action_received time
+  // and survives the immediate phase.changed → day-vote that React 18
+  // batches into one render — currentSpeech alone misses that case
+  // because the batched render already has it cleared. Live speech
+  // (currentSpeech) wins when present so the "ON AIR" badge stays
+  // accurate for the in-progress speaker.
+  const fadingLast = useStickyValue(state.lastSpeech, SPEECH_STICKY_MS);
+  const speech = state.currentSpeech ?? fadingLast;
   if (!speech) return null;
 
   const seat = findSeatByPlayerId(state.seats, speech.actorId);
