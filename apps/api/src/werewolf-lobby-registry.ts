@@ -415,9 +415,28 @@ export class WerewolfLobbyRegistry {
     if (!cfg) {
       throw new AppError('AGENT_NOT_FOUND', `Agent config ${agentConfigId} not found`);
     }
+    // Re-check seat occupancy AFTER the await. Two concurrent inviteAgent
+    // calls for the same empty seat would both pass the line-411 check,
+    // both await `agentConfigStore.get`, and both proceed to the write
+    // below — the second silently clobbering the first while still
+    // returning 200 OK to its caller, leaving the "loser" with the
+    // illusion of a successful invite. This synchronous re-read sits in
+    // the same atomic block as the write, so the loser now sees a
+    // SEAT_TAKEN at this point. Same defense applied to the
+    // already-seated-cfg check below.
+    const seatNow = entry.seats[seatIndex];
+    if (!seatNow || seatNow.occupant.kind !== 'empty') {
+      throw new WerewolfSeatOccupiedError(gameId, seatIndex);
+    }
+    if (entry.status !== 'waiting') {
+      throw new WerewolfGameNotReadyError(gameId, entry.status);
+    }
     // Within-game guard. Cross-game (poker + werewolf) is checked one layer
     // up by AgentConfigUsageService; here we only need to prevent two seats
-    // in THIS lobby from holding the same cfg.
+    // in THIS lobby from holding the same cfg. Recompute against the latest
+    // seats array — see the post-await rationale above; if a concurrent
+    // inviteAgent already seated this cfg in another seat, this loop now
+    // catches it.
     for (const s of entry.seats) {
       if (
         s.occupant.kind === 'agent' &&
@@ -426,7 +445,7 @@ export class WerewolfLobbyRegistry {
         throw new AgentInUseError(agentConfigId);
       }
     }
-    const playerId = seat.playerId;
+    const playerId = seatNow.playerId;
     const agentId = `agent-${playerId}`;
     const finalDisplayName = displayName?.trim() || cfg.agentName;
     const adapter = new WerewolfHttpAgentAdapter({
