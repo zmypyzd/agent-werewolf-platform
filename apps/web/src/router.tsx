@@ -2,6 +2,7 @@ import { Navigate, createBrowserRouter, useLocation } from 'react-router-dom';
 import type { RouteObject } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useAuth } from './auth/AuthContext.js';
+import { useSession } from './lib/auth.js';
 import { AppShell } from './components/AppShell.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { RegisterPage } from './pages/RegisterPage.js';
@@ -16,10 +17,14 @@ import { WerewolfLobbyPage } from './pages/WerewolfLobbyPage.js';
 import { WerewolfRoomPage } from './pages/WerewolfRoomPage.js';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
+  // Accept EITHER a cookie session (legacy useAuth) OR a Supabase JWT session.
+  // During the auth migration, both paths coexist; either signal counts as
+  // logged-in. Once cookie auth is fully retired, the useAuth() branch goes.
+  const { user: cookieUser, loading: cookieLoading } = useAuth();
+  const { user: supabaseUser, isLoading: supabaseLoading } = useSession();
   const location = useLocation();
-  if (loading) return <div style={{ padding: 16 }}>Loading…</div>;
-  if (!user) {
+  if (cookieLoading || supabaseLoading) return <div style={{ padding: 16 }}>Loading…</div>;
+  if (!cookieUser && !supabaseUser) {
     const next = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?next=${next}`} replace />;
   }
