@@ -1,8 +1,32 @@
 import {
   ArtifactLimitExceededError,
+  ServiceUnavailableError,
   type WerewolfReplayEvent,
   type WerewolfSide,
 } from '@agent-poker/shared';
+
+// PostgREST surfaces Postgres-level errors via `error.code`. 42501 is
+// `insufficient_privilege` — the API role lacks GRANT on the target table or
+// view. In production this manifests when the werewolf migrations are present
+// in the repo but `supabase db push` was never run on the target database, or
+// when the grants were rolled back. Map to 503 SERVICE_UNAVAILABLE so callers
+// see a clear, retriable status rather than a generic 500.
+const PG_INSUFFICIENT_PRIVILEGE = '42501';
+
+export function rewrapPostgresError(
+  prefix: string,
+  err: { code?: string; message: string },
+): never {
+  if (
+    err.code === PG_INSUFFICIENT_PRIVILEGE ||
+    /permission denied/i.test(err.message)
+  ) {
+    throw new ServiceUnavailableError(
+      `${prefix}: backing database is not provisioned for this role (apply pending Supabase migrations)`,
+    );
+  }
+  throw new Error(`${prefix}: ${err.message}`);
+}
 import { safePathSegment } from '../match-artifact-serialization.js';
 import {
   buildWerewolfArtifact,
@@ -101,7 +125,7 @@ export class PostgresWerewolfMatchArtifactStore implements IWerewolfMatchArtifac
       .update(matchUpdate)
       .eq('id', matchPk);
     if (matchErr) {
-      throw new Error(`saveMatchArtifact: update werewolf_matches failed: ${matchErr.message}`);
+      rewrapPostgresError('saveMatchArtifact: update werewolf_matches failed', matchErr);
     }
 
     // PostgREST's upsert (Prefer: resolution=merge-duplicates) does NOT
@@ -128,7 +152,7 @@ export class PostgresWerewolfMatchArtifactStore implements IWerewolfMatchArtifac
         .from('werewolf_seats')
         .upsert(seatRows, { onConflict: 'match_id,seat_index' });
       if (seatErr) {
-        throw new Error(`saveMatchArtifact: upsert werewolf_seats failed: ${seatErr.message}`);
+        rewrapPostgresError('saveMatchArtifact: upsert werewolf_seats failed', seatErr);
       }
     }
 
@@ -149,7 +173,7 @@ export class PostgresWerewolfMatchArtifactStore implements IWerewolfMatchArtifac
         { onConflict: 'match_id' },
       );
     if (summaryErr) {
-      throw new Error(`saveMatchArtifact: upsert werewolf_match_summaries failed: ${summaryErr.message}`);
+      rewrapPostgresError('saveMatchArtifact: upsert werewolf_match_summaries failed', summaryErr);
     }
 
     return record;
@@ -168,7 +192,7 @@ export class PostgresWerewolfMatchArtifactStore implements IWerewolfMatchArtifac
       .select('match_id, summary, created_at')
       .eq('match_id', matchPk)
       .maybeSingle();
-    if (summaryErr) throw new Error(`getMatchArtifact: ${summaryErr.message}`);
+    if (summaryErr) rewrapPostgresError('getMatchArtifact', summaryErr);
     if (!summaryData) return null;
     const summaryRow = summaryData as unknown as SummaryRow;
 
@@ -214,7 +238,7 @@ export class PostgresWerewolfMatchArtifactStore implements IWerewolfMatchArtifac
       .select('id, game_id, status, winner, started_at, completed_at')
       .order('completed_at', { ascending: false, nullsFirst: false })
       .limit(this.limits.maxIndexEntries);
-    if (error) throw new Error(`listMatchArtifacts: ${error.message}`);
+    if (error) rewrapPostgresError('listMatchArtifacts', error);
 
     const rows = (data ?? []) as MatchPublicRow[];
     if (rows.length === 0) return [];
@@ -224,7 +248,7 @@ export class PostgresWerewolfMatchArtifactStore implements IWerewolfMatchArtifac
       .from('werewolf_match_summaries')
       .select('match_id, created_at')
       .in('match_id', ids);
-    if (sumErr) throw new Error(`listMatchArtifacts: summaries: ${sumErr.message}`);
+    if (sumErr) rewrapPostgresError('listMatchArtifacts: summaries', sumErr);
 
     const summaryByMatch = new Map<string, number>();
     for (const row of (summaryRows ?? []) as Array<{ match_id: string; created_at: string }>) {
@@ -283,7 +307,7 @@ export class PostgresWerewolfMatchArtifactStore implements IWerewolfMatchArtifac
       .from('werewolf_matches')
       .delete()
       .eq('id', matchPk);
-    if (error) throw new Error(`deleteMatchArtifact: ${error.message}`);
+    if (error) rewrapPostgresError('deleteMatchArtifact', error);
   }
 
   private assertWithinLimits(summaryRaw: string, replayRaw: string, decisionTraceRaw: string): void {
