@@ -165,7 +165,11 @@ export function buildServer(opts: BuildServerOptions = {}) {
   const env: RuntimeEnv = opts.env ?? (process.env['NODE_ENV'] as RuntimeEnv) ?? 'development';
   const authRateLimiter = opts.authRateLimit ? new RateLimiter(opts.authRateLimit) : undefined;
 
-  const app = Fastify({ logger: false });
+  // trustProxy: true makes Fastify honor X-Forwarded-Proto / X-Forwarded-Host
+  // when computing req.protocol and req.hostname. Render terminates TLS at its
+  // load balancer and forwards to the container as plain HTTP, so without this
+  // the agent-invites registerUrl comes back as http:// even on production.
+  const app = Fastify({ logger: false, trustProxy: true });
 
   // Register JWT-based auth decorator alongside the existing cookie auth plugin.
   // Uses a distinct name (requireJwtAuth) to avoid colliding with requireAuth from
