@@ -38,8 +38,9 @@ import {
   RateLimitedError,
   buildDefaultWerewolfBriefing,
 } from '@agent-poker/shared';
-import { RateLimiter, authPlugin } from '@agent-poker/auth';
-import type { RateLimiterConfig, RuntimeEnv } from '@agent-poker/auth';
+import { RateLimiter, authPlugin, MockAuthService } from '@agent-poker/auth';
+import type { RateLimiterConfig, RuntimeEnv, IAuthService } from '@agent-poker/auth';
+import { registerJwtAuthMiddleware } from './middleware/auth.js';
 import { RealtimeHub } from '@agent-poker/realtime';
 import { tablesRoutes } from './routes/tables.js';
 import { simulateRoutes } from './routes/simulate.js';
@@ -105,6 +106,9 @@ export interface BuildServerOptions {
   werewolfAgentStore?: IAgentStore;
   werewolfMailbox?: IWerewolfDecisionMailbox;
   publicDir?: string;  // Absolute path or repo-relative path to SPA dist directory
+  // When provided, JWT-based requireJwtAuth decorator uses this implementation.
+  // Defaults to MockAuthService('test-user-default') so existing tests are unaffected.
+  authService?: IAuthService;
 }
 
 export function buildServer(opts: BuildServerOptions = {}) {
@@ -159,6 +163,13 @@ export function buildServer(opts: BuildServerOptions = {}) {
   const authRateLimiter = opts.authRateLimit ? new RateLimiter(opts.authRateLimit) : undefined;
 
   const app = Fastify({ logger: false });
+
+  // Register JWT-based auth decorator alongside the existing cookie auth plugin.
+  // Uses a distinct name (requireJwtAuth) to avoid colliding with requireAuth from
+  // authPlugin. Tasks 10-11 (agent-invites, me-agents) reference requireJwtAuth.
+  // Task 14 will delete the cookie plugin and rename this to requireAuth.
+  const authService = opts.authService ?? new MockAuthService('test-user-default');
+  registerJwtAuthMiddleware(app, authService);
 
   if (opts.publicDir) {
     // Resolve publicDir to an absolute path (relative paths are resolved against repo root)
