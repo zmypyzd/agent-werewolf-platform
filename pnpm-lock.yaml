@@ -225,6 +225,9 @@ importers:
       '@fastify/cookie':
         specifier: ^9.3.1
         version: 9.4.0
+      '@supabase/supabase-js':
+        specifier: ^2.45.0
+        version: 2.105.3
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
