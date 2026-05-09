@@ -58,7 +58,7 @@ import { healthRoutes } from './routes/health.js';
 import { werewolfMailboxRoutes } from './routes/werewolf-mailbox.js';
 import { meWerewolfAgentsRoutes } from './routes/me-werewolf-agents.js';
 import { werewolfStreamRoutes } from './routes/werewolf-stream.js';
-import type { IAgentStore, IWerewolfDecisionMailbox } from '@agent-poker/persistence';
+import type { IAgentStore, IWerewolfDecisionMailbox, SupabaseClientConfig } from '@agent-poker/persistence';
 import { createMatchArtifactStore } from './match-artifact-store-factory.js';
 import { createWerewolfMatchArtifactStore } from './werewolf-match-artifact-store-factory.js';
 
@@ -109,6 +109,9 @@ export interface BuildServerOptions {
   // When provided, JWT-based requireJwtAuth decorator uses this implementation.
   // Defaults to MockAuthService('test-user-default') so existing tests are unaffected.
   authService?: IAuthService;
+  // When provided, agent-invites routes use Postgres-backed stores with RLS.
+  // Without this, all agent-invites endpoints return 501 (not configured).
+  supabaseConfig?: SupabaseClientConfig;
 }
 
 export function buildServer(opts: BuildServerOptions = {}) {
@@ -339,7 +342,10 @@ export function buildServer(opts: BuildServerOptions = {}) {
       registry: werewolfLobbyRegistry,
     });
     await scope.register(meAgentsRoutes, { prefix: '/api/v1', agentConfigStore, agentConfigUsage });
-    await scope.register(agentInvitesRoutes, { prefix: '/api/v1', agentInviteStore, agentConfigStore });
+    await scope.register(agentInvitesRoutes, {
+      prefix: '/api/v1',
+      ...(opts.supabaseConfig ? { supabaseConfig: opts.supabaseConfig } : {}),
+    });
     await scope.register(werewolfDocsRoutes, { prefix: '/api/v1' });
     if (opts.werewolfAgentStore) {
       await scope.register(meWerewolfAgentsRoutes, {

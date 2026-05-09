@@ -24,6 +24,9 @@ if (bundle) {
   // never forwarded them to buildServer.
   opts.werewolfMatchRegistry = bundle.registry;
   opts.werewolfReplayEventStore = bundle.replayEventStore;
+  // Forward supabaseConfig so agent-invites routes can create user-scoped
+  // and service-role clients for RLS-aware CRUD.
+  opts.supabaseConfig = bundle.config;
 }
 
 const app = buildServer(opts);
