@@ -79,6 +79,21 @@
 - **PR #4** — `werewolf-matches` 500 → 503 with sanitized message + idempotent regrant migration. (CAND-001)
 - **PR #5** — replay invariant scanner + batch sim runner (QA infra). (CAND-005 supplemental)
 
+### Round 4 (~20:25Z – ~02:35Z next day) — security + race + state-machine
+
+**Targets:**
+- Spawn fresh Explore agent against unreviewed surfaces (mailbox, lobby registry, action validator, SSE).
+- Property-based fuzz over the engine state machine.
+- Engine state-machine corner cases (double-death dedup).
+
+**Shipped:**
+- **PR #14** — *P1 authorization bypass*. `start`, `inviteNpc`, `fillWithNpcs` had no host-only check; any logged-in user could start/grief any lobby they discovered via the public list. Adds `creatorUserId` + `assertCreatorOnly` on those three operations. Multi-user `inviteAgent` deliberately stays open (multi-host design intent).
+- **PR #15** — *P1 race condition*. `inviteAgent` reads seat, awaits agentConfigStore.get, writes seat — two concurrent invites for the same empty seat both passed the empty check and clobbered each other. Adds a synchronous post-await re-check.
+- **PR #16** — *P2 visual*. Phase indicator showed "异常终止" (label) + "WAITING FOR PLAYERS" (subtitle) on a failed pre-start match, and "🌙 夜 0" / "☀️ 天 0" on a phase-prefixed `currentPhase` with sentinel `nightNumber`/`dayNumber=0`. Both fixed; subtitle now driven by status first.
+- **PR #17** — *property fuzz*. 8-seed engine fuzz pinning 7 invariants over full random matches.
+- **PR #18** — *test pinning*. Pins `phases.ts:49` dedup of wolf-kill+witch-poison-same-target so a future change can't silently re-introduce duplicate death entries.
+- **PR #19** — *fault-domain alignment*. Lobby registry was flattening orchestrator's "completed-with-warning" into `failed` whenever `saveMatchArtifact` threw post-game. Now checks `getMatchSummary` post-throw.
+
 ### Round 3 (19:55Z – ~20:25Z)
 
 **Targets:**
@@ -110,10 +125,10 @@
 
 ## Final stats
 
-- **9 PRs opened**, all under 200 lines, all on `overnight-qa/*` branches, none merged (waiting on user review).
+- **16 PRs opened** (this doc is #13), all on `overnight-qa/*` branches, none merged (waiting on user review).
 - **0 changes to `main`**.
 - **0 production data touched**.
-- **All local tests still pass** at end of each shipped commit.
+- **All local tests still pass** at end of each shipped commit (1064 → 1075 across the branch set).
 
 ## PR scorecard
 
@@ -128,12 +143,18 @@
 | #10 | no-store on werewolf-agents token responses                          | security   | no |
 | #11 | no-store on agent-invites token responses                            | security   | no |
 | #12 | match-runner survives decision-trace-store failures                  | P2 fix     | no |
+| #14 | host-only authorization on start/fill-with-npcs/invite-npc           | **P1 sec** | no |
+| #15 | inviteAgent race condition — re-check seat after await               | **P1 fix** | no |
+| #16 | phase indicator subtitle on failed match + 夜 0 / 天 0 cosmetic      | P2 visual  | no |
+| #17 | engine property fuzz with 7 invariant gates                          | infra      | no |
+| #18 | pin wolf-kill+witch-poison same-target dedup                         | test       | no |
+| #19 | lobby registry keeps status=completed when post-game persist fails   | P2 fix     | no |
 
 ## Operator action checklist
 
 When you wake up:
 
-1. `gh pr list --search "[overnight-qa]"` — see all 9 PRs.
+1. `gh pr list --search "[overnight-qa]"` — see all 16 PRs.
 2. Review them in roughly the listed order (#4 first; that's the only prod-impacting one that needs an action beyond merge).
 3. After merging #4: run `supabase db push` against the production Supabase project. The new migration `20260510000000_werewolf_public_view_regrant.sql` re-asserts SELECT grants to anon/authenticated on the public match views. Without that step the API still returns 503 (better than 500, but still broken).
 4. After merging #9: the next Render deploy will include the agent-guide markdown so `/api/v1/docs/werewolf-agent-guide` stops 404-ing.
