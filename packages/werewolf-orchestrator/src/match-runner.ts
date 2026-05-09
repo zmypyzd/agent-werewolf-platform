@@ -353,6 +353,7 @@ export class WerewolfMatchRunner {
       noBanishmentVote && this.state.phase !== 'day-vote';
 
     const pkRoundAfter = this.state.pendingDayVote?.pkRound ?? 0;
+    const pkCandidatesAfter = this.state.pendingDayVote?.pkCandidates ?? [];
     const phaseChanged = this.state.phase !== phaseBefore;
     // PK revote loop: phase stays day-vote but pkRound increments. Surface
     // this as a phase.changed event with pkRound so spectators see the new
@@ -365,14 +366,18 @@ export class WerewolfMatchRunner {
       // Spectator UI consumes `phase`, `nightNumber`, `dayNumber` (see
       // apps/web/src/werewolf-room/werewolfRoomReducer.ts). `from` is omitted
       // because the previous phase is already implied by the prior event stream.
-      // `eliminated`, `pkRound` and `dayVoteOutcome` are present only when
-      // meaningful, so old consumers that ignore them keep working.
+      // `eliminated`, `pkRound`, `pkCandidates` and `dayVoteOutcome` are
+      // present only when meaningful, so old consumers that ignore them
+      // keep working.
       this.emit('phase.changed', {
         phase: this.state.phase,
         nightNumber: this.state.nightNumber,
         dayNumber: this.state.dayNumber,
         ...(eliminated.length > 0 ? { eliminated } : {}),
         ...(pkRoundAfter > 0 ? { pkRound: pkRoundAfter } : {}),
+        ...(pkRoundAfter > 0 && pkCandidatesAfter.length > 0
+          ? { pkCandidates: [...pkCandidatesAfter] }
+          : {}),
         ...(dayVoteFlopped ? { dayVoteOutcome: 'no-banishment' as const } : {}),
       });
     }

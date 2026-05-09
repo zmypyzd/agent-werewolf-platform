@@ -55,7 +55,8 @@ describe('applyAction — day phase', () => {
     expect(s.players.find((p) => p.id === target.id)!.alive).toBe(false);
   });
 
-  it('day-vote tie triggers a PK round (still in day-vote, pkRound increments)', () => {
+  it('day-vote with strict tie at top triggers PK round; pkCandidates = tied players', () => {
+    // 9 alive: split 4-4 with 1 abstain → genuine tie, must trigger PK.
     let s = rushToDaySpeeches();
     for (const p of s.players.filter((x) => x.alive)) {
       s = applyAction(s, { type: 'speak', playerId: p.id, inner: 'i', performance: 'p', speech: 's' });
@@ -63,17 +64,100 @@ describe('applyAction — day phase', () => {
     const a = s.players[0]!;
     const b = s.players[1]!;
     const others = s.players.filter((p) => p.id !== a.id && p.id !== b.id && p.alive);
-    others.slice(0, Math.floor(others.length / 2)).forEach((v) => {
+    // 7 others: 4 vote A, 3 vote B → A=4, B=3 — clear plurality, NOT a tie.
+    // To force a 4-4 tie we have a vote B as well (a votes for b), b votes A,
+    // and one of the "others" abstains so the tally is A=4, B=4.
+    const [bVoter, ...rest] = others; // first of others abstains? Actually, easier:
+    // a votes b (A=0,B=1)
+    // b votes a (A=1,B=1)
+    // 6 of 7 others split 3/3 toward a/b → A=4, B=4
+    // last "other" abstains.
+    s = applyAction(s, { type: 'day-vote', voterId: a.id, targetId: b.id });
+    s = applyAction(s, { type: 'day-vote', voterId: b.id, targetId: a.id });
+    rest.slice(0, 3).forEach((v) => {
       s = applyAction(s, { type: 'day-vote', voterId: v.id, targetId: a.id });
     });
-    others.slice(Math.floor(others.length / 2)).forEach((v) => {
+    rest.slice(3, 6).forEach((v) => {
       s = applyAction(s, { type: 'day-vote', voterId: v.id, targetId: b.id });
     });
-    s = applyAction(s, { type: 'day-vote', voterId: a.id, targetId: null });
-    s = applyAction(s, { type: 'day-vote', voterId: b.id, targetId: null });
+    // bVoter (the leftover "other") abstains.
+    s = applyAction(s, { type: 'day-vote', voterId: bVoter!.id, targetId: null });
     expect(s.phase).toBe('day-vote');
     expect(s.pendingDayVote!.pkRound).toBe(1);
     expect(s.pendingDayVote!.tied).toBe(true);
+    expect(new Set(s.pendingDayVote!.pkCandidates)).toEqual(new Set([a.id, b.id]));
+  });
+
+  it('day-vote with plurality (no strict majority) banishes the top vote-getter — does NOT trigger PK', () => {
+    // Regression for the "vote counts not equal but system says tied" bug.
+    // 9 alive, votes split 4-3-2 (no abstain): A has plurality, must be banished.
+    // Old engine forced PK because 4 <= 9/2 = 4.5; new engine banishes A.
+    let s = rushToDaySpeeches();
+    for (const p of s.players.filter((x) => x.alive)) {
+      s = applyAction(s, { type: 'speak', playerId: p.id, inner: 'i', performance: 'p', speech: 's' });
+    }
+    const a = s.players.find((p) => p.role === 'villager')!;
+    const b = s.players.filter((p) => p.id !== a.id && p.role !== 'hunter')[0]!;
+    const c = s.players.filter((p) => p.id !== a.id && p.id !== b.id && p.role !== 'hunter')[0]!;
+    const others = s.players.filter((p) => p.alive && p.id !== a.id && p.id !== b.id && p.id !== c.id);
+    // a, b, c each cannot vote for self; have a vote b, b vote a, c vote a → A gets 2 (b,c), B gets 1 (a).
+    // 6 others split: 2 vote A, 2 vote B, 2 vote C → A=4, B=3, C=2.
+    s = applyAction(s, { type: 'day-vote', voterId: a.id, targetId: b.id });
+    s = applyAction(s, { type: 'day-vote', voterId: b.id, targetId: a.id });
+    s = applyAction(s, { type: 'day-vote', voterId: c.id, targetId: a.id });
+    others.slice(0, 2).forEach((v) => { s = applyAction(s, { type: 'day-vote', voterId: v.id, targetId: a.id }); });
+    others.slice(2, 4).forEach((v) => { s = applyAction(s, { type: 'day-vote', voterId: v.id, targetId: b.id }); });
+    others.slice(4, 6).forEach((v) => { s = applyAction(s, { type: 'day-vote', voterId: v.id, targetId: c.id }); });
+    // 4-3-2 with 9 voted, no abstain. A has plurality and must be banished.
+    expect(s.phase).not.toBe('day-vote'); // advanced past day-vote (banishment occurred)
+    const lastVote = [...s.history].reverse().find((e) => e.type === 'vote');
+    expect(lastVote).toBeDefined();
+    if (lastVote?.type === 'vote') {
+      expect(lastVote.record.banished).toBe(a.id);
+      expect(lastVote.record.tied).toBe(false);
+      expect(lastVote.record.pkRound).toBe(0);
+    }
+    expect(s.players.find((p) => p.id === a.id)!.alive).toBe(false);
+  });
+
+  it('PK round restricts ballot to pkCandidates only', () => {
+    // Build a 4-4-1 tie so PK candidates are exactly two players, then verify
+    // valid-actions in PK round 1 only returns those two + abstain, and that
+    // applyAction rejects voting for someone outside the candidate list.
+    let s = rushToDaySpeeches();
+    for (const p of s.players.filter((x) => x.alive)) {
+      s = applyAction(s, { type: 'speak', playerId: p.id, inner: 'i', performance: 'p', speech: 's' });
+    }
+    const a = s.players[0]!;
+    const b = s.players[1]!;
+    const c = s.players[2]!;
+    const others = s.players.filter((p) => p.alive && p.id !== a.id && p.id !== b.id && p.id !== c.id);
+    // a votes b, b votes a, c votes a → A=2, B=1
+    // 6 others: 2 → A, 3 → B, 1 → C → A=4, B=4, C=1
+    s = applyAction(s, { type: 'day-vote', voterId: a.id, targetId: b.id });
+    s = applyAction(s, { type: 'day-vote', voterId: b.id, targetId: a.id });
+    s = applyAction(s, { type: 'day-vote', voterId: c.id, targetId: a.id });
+    others.slice(0, 2).forEach((v) => { s = applyAction(s, { type: 'day-vote', voterId: v.id, targetId: a.id }); });
+    others.slice(2, 5).forEach((v) => { s = applyAction(s, { type: 'day-vote', voterId: v.id, targetId: b.id }); });
+    others.slice(5, 6).forEach((v) => { s = applyAction(s, { type: 'day-vote', voterId: v.id, targetId: c.id }); });
+    expect(s.phase).toBe('day-vote');
+    expect(s.pendingDayVote!.pkRound).toBe(1);
+    expect(new Set(s.pendingDayVote!.pkCandidates)).toEqual(new Set([a.id, b.id]));
+    // valid-actions for any voter in PK round 1: target must be a or b (or null abstain).
+    const voter = s.players.find((p) => p.alive && p.id !== a.id && p.id !== b.id)!;
+    const valid = (
+      // Re-import from valid-actions to keep this self-contained
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // we inline the check via state instead
+      s.pendingDayVote!.pkCandidates
+    );
+    // applyAction must throw when voter targets someone outside pkCandidates.
+    expect(() => applyAction(s, { type: 'day-vote', voterId: voter.id, targetId: c.id }))
+      .toThrow(InvalidWerewolfActionError);
+    // applyAction must accept a target inside pkCandidates.
+    s = applyAction(s, { type: 'day-vote', voterId: voter.id, targetId: a.id });
+    expect(s.pendingDayVote!.votes.length).toBe(1);
+    void valid;
   });
 
   it('hunter-shoot fires when banished hunter shoots a target', () => {

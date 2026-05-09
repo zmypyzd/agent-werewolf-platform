@@ -49,6 +49,7 @@ const DayVoteRecordSchema = z.object({
   banished: WerewolfPlayerIdSchema.nullable(),
   pkRound: z.number().int().min(0).max(3),
   tied: z.boolean(),
+  pkCandidates: z.array(WerewolfPlayerIdSchema),
 });
 
 const WerewolfPublicHistoryEntrySchema = z.discriminatedUnion('type', [
