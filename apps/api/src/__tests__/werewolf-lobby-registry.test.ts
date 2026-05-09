@@ -292,6 +292,46 @@ describe('WerewolfLobbyRegistry', () => {
     expect(deadSeats.length).toBe(finalDead.length);
   });
 
+  it('phase backfill: lobby entry tracks currentPhase/dayNumber/nightNumber from phase.changed', async () => {
+    // Late-joining spectators see only the phase metadata that the lobby
+    // poll carries — SSE has no backlog. Pin that the registry mirrors the
+    // last phase.changed payload onto the entry.
+    const realOrch = new WerewolfOrchestrator();
+    const reg = new WerewolfLobbyRegistry({
+      orchestrator: realOrch,
+      attachMatch: vi.fn(),
+      detachMatch: vi.fn(),
+      npcThinkingDelayRange: [0, 0],
+      agentConfigStore: makeMockAgentConfigStore(),
+    });
+
+    // Pre-start: phase metadata absent (matches the info-isolation invariant
+    // pinned in werewolf-games-info-isolation.test.ts).
+    const { gameId } = reg.create({ name: 'phase-track', seed: 'werewolf-seed-001' });
+    reg.fillWithNpcs(gameId);
+    const ready = reg.get(gameId)!;
+    expect(ready).not.toHaveProperty('currentPhase');
+    expect(ready).not.toHaveProperty('dayNumber');
+    expect(ready).not.toHaveProperty('nightNumber');
+
+    // Start the match and let it run to completion — the orchestrator
+    // emits a phase.changed for every transition, so by the end the
+    // entry will have observed many of them.
+    const runPromise = reg.start(gameId);
+    await runPromise;
+    const completed = reg.get(gameId)!;
+    expect(completed.status).toBe('completed');
+    // The final phase a match settles in is 'game-over'. nightNumber and
+    // dayNumber must both be numbers (the engine tracks both throughout
+    // the match — see packages/werewolf-orchestrator/src/match-runner.ts).
+    expect(typeof completed.currentPhase).toBe('string');
+    expect(completed.currentPhase).toBe('game-over');
+    expect(typeof completed.nightNumber).toBe('number');
+    expect(typeof completed.dayNumber).toBe('number');
+    expect(completed.nightNumber).toBeGreaterThanOrEqual(1);
+    expect(completed.dayNumber).toBeGreaterThanOrEqual(1);
+  });
+
   // Regression for the production fault `resolveMatchPk: no match for game_id <id>`:
   // when a Postgres-backed match registry is wired in, lobby.start() MUST
   // call registry.createMatch BEFORE the orchestrator emits any decision

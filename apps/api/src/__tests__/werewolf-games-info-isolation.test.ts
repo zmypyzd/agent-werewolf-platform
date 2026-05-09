@@ -73,4 +73,31 @@ describe('werewolf-games info isolation', () => {
       expect(seat.occupant).not.toHaveProperty('side');
     }
   });
+
+  it('phase metadata never appears on the public entry before the match starts', async () => {
+    // Phase backfill (currentPhase / dayNumber / nightNumber) is meant for
+    // late-joining spectators of a *running* match. Before start() flips
+    // status to 'running' the engine has not yet emitted any phase.changed
+    // event, so the fields must not surface on the lobby endpoint — same
+    // pre-start invariant role/side/alive observe.
+    const created = await post('/api/v1/werewolf-games', { name: 'iso' });
+    const { gameId } = created.json().data as { gameId: string };
+
+    // status: waiting (no seats yet)
+    let res = await get(`/api/v1/werewolf-games/${gameId}`);
+    let data = res.json().data;
+    expect(data.status).toBe('waiting');
+    expect(data).not.toHaveProperty('currentPhase');
+    expect(data).not.toHaveProperty('dayNumber');
+    expect(data).not.toHaveProperty('nightNumber');
+
+    // status: ready (all 9 seats filled, but start() has not been called)
+    await post(`/api/v1/werewolf-games/${gameId}/fill-with-npcs`, {});
+    res = await get(`/api/v1/werewolf-games/${gameId}`);
+    data = res.json().data;
+    expect(data.status).toBe('ready');
+    expect(data).not.toHaveProperty('currentPhase');
+    expect(data).not.toHaveProperty('dayNumber');
+    expect(data).not.toHaveProperty('nightNumber');
+  });
 });

@@ -89,6 +89,18 @@ export interface WerewolfLobbyEntry {
   winner?: 'good' | 'werewolf';
   failureReason?: string;
   finalPlayers?: ReadonlyArray<WerewolfFinalPlayerView>;
+  // Phase backfill for late-joining / reloading spectators. SSE has no
+  // backlog (apps/api/src/routes/werewolf-stream.ts), so a viewer who
+  // opens the page in the middle of a match would otherwise have to wait
+  // for the next phase.changed event to know what's happening — which
+  // can be 20–30s during long night phases. The lobby poll carries the
+  // last-observed phase so the spectator UI can render the precise day/
+  // night reading from t=0 of any reload. Present only for
+  // status='running'/'completed'; absent in waiting/ready to preserve
+  // pre-start info isolation (see werewolf-games-info-isolation.test.ts).
+  currentPhase?: string;
+  dayNumber?: number;
+  nightNumber?: number;
 }
 
 export interface WerewolfLobbySummary {
@@ -157,6 +169,14 @@ interface InternalEntry extends Omit<WerewolfLobbyEntry, 'seats'> {
   // Empty until the match starts; used in publicEntry to expose per-seat
   // alive/causeOfDeath so late-joining spectators can restore the board.
   deathsByPlayerId: Map<string, { cause: CauseOfDeath }>;
+  // Last-observed phase metadata, mirrored from the same phase.changed
+  // subscription that tracks deathsByPlayerId. Populated once start() flips
+  // status to 'running'; surfaced through publicEntry so the lobby poll
+  // can backfill currentPhase/day/night for late-joining spectators (see
+  // the WerewolfLobbyEntry comment). Stays undefined for waiting/ready.
+  currentPhase?: string;
+  dayNumber?: number;
+  nightNumber?: number;
   // werewolf_matches.id (uuid) — populated by start() when a matchRegistry is
   // wired in. Lets downstream Postgres-backed stores (replay events, decision
   // traces, final artifact) resolve gameId → matchPk without a round-trip per
@@ -212,6 +232,9 @@ function publicEntry(entry: InternalEntry, viewerUserId?: string): WerewolfLobby
     rosterByPlayerId,
     deathsByPlayerId,
     matchPk: _matchPk,
+    currentPhase,
+    dayNumber,
+    nightNumber,
     ...rest
   } = entry;
   // Reveal role/side/alive only once the match has started. Pre-start statuses
@@ -219,7 +242,18 @@ function publicEntry(entry: InternalEntry, viewerUserId?: string): WerewolfLobby
   // the lobby endpoint cannot derive the roster before the game begins.
   const reveal = rest.status === 'running' || rest.status === 'completed';
   const projected = rest.seats.map((s) => projectSeat(s, viewerUserId));
+  // Pre-start: phase metadata stays internal-only. start() never sets these
+  // until status flips to 'running', but the destructure above also drops
+  // them defensively for any future writer that violates the invariant.
   if (!reveal) return { ...rest, seats: projected };
+  const phaseFields: Pick<
+    WerewolfLobbyEntry,
+    'currentPhase' | 'dayNumber' | 'nightNumber'
+  > = {
+    ...(currentPhase !== undefined ? { currentPhase } : {}),
+    ...(dayNumber !== undefined ? { dayNumber } : {}),
+    ...(nightNumber !== undefined ? { nightNumber } : {}),
+  };
   const seats: WerewolfSeatInfo[] = projected.map((s, i) => {
     const internal = rest.seats[i]!;
     const r = rosterByPlayerId.get(internal.playerId);
@@ -231,7 +265,7 @@ function publicEntry(entry: InternalEntry, viewerUserId?: string): WerewolfLobby
       ...(d ? { causeOfDeath: d.cause } : {}),
     };
   });
-  return { ...rest, seats };
+  return { ...rest, seats, ...phaseFields };
 }
 
 export class WerewolfLobbyRegistry {
@@ -450,8 +484,20 @@ export class WerewolfLobbyRegistry {
     // continue to see the call (this is load-bearing for spectator broadcast
     // coverage — the hub must be wired before any agent decision can fire).
     this.options.attachMatch(gameId, []);
-    const deathUnsubscribe = this.options.orchestrator.subscribe(gameId, (event) => {
+    const phaseUnsubscribe = this.options.orchestrator.subscribe(gameId, (event) => {
       if (event.eventType !== 'phase.changed') return;
+      // Phase metadata: cache the latest phase/day/night so the lobby poll
+      // can backfill late-joining spectators (orchestrator emits these on
+      // every transition — see packages/werewolf-orchestrator/src/match-runner.ts).
+      const phase = event.data['phase'];
+      const day = event.data['dayNumber'];
+      const night = event.data['nightNumber'];
+      if (typeof phase === 'string') entry.currentPhase = phase;
+      if (typeof day === 'number') entry.dayNumber = day;
+      if (typeof night === 'number') entry.nightNumber = night;
+      // Eliminations (existing logic): persist per-seat cause-of-death so the
+      // dead-player visual restores from the polling loop, not just from WS/SSE
+      // history.
       const eliminated = event.data['eliminated'];
       if (!Array.isArray(eliminated)) return;
       for (const e of eliminated as Array<Record<string, unknown>>) {
@@ -462,7 +508,7 @@ export class WerewolfLobbyRegistry {
         }
       }
     });
-    const promise = this.runWithPersistence(gameId, entry, deathUnsubscribe);
+    const promise = this.runWithPersistence(gameId, entry, phaseUnsubscribe);
     this.runPromises.set(gameId, promise);
     return promise;
   }
@@ -475,7 +521,7 @@ export class WerewolfLobbyRegistry {
   private async runWithPersistence(
     gameId: string,
     entry: InternalEntry,
-    deathUnsubscribe: () => void,
+    phaseUnsubscribe: () => void,
   ): Promise<void> {
     let replayUnsubscribe: (() => void) | null = null;
     try {
@@ -546,7 +592,7 @@ export class WerewolfLobbyRegistry {
       entry.completedAt = Date.now();
       entry.failureReason = err instanceof Error ? err.message : String(err);
     } finally {
-      deathUnsubscribe();
+      phaseUnsubscribe();
       if (replayUnsubscribe) replayUnsubscribe();
       this.options.detachMatch(gameId);
     }
