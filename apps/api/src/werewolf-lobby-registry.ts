@@ -233,16 +233,22 @@ function projectSeat(s: InternalSeatInfo, viewerUserId?: string): WerewolfSeatIn
 }
 
 function publicEntry(entry: InternalEntry, viewerUserId?: string): WerewolfLobbyEntry {
-  // Defense-in-depth: explicit destructure-and-omit prevents future fields like
-  // `seed`, `rosterByPlayerId`, `deathsByPlayerId`, and `matchPk` from leaking
-  // via spread. The matchPk in particular is a uuid for werewolf_matches.id —
-  // not catastrophic if exposed (RLS still gates the row), but it's an
-  // internal database identifier with no business crossing the API boundary.
+  // Defense-in-depth: explicit destructure-and-omit prevents internal fields
+  // like `seed`, `rosterByPlayerId`, `deathsByPlayerId`, `matchPk`, and
+  // `creatorUserId` from leaking via spread. matchPk is the internal uuid for
+  // werewolf_matches.id (not catastrophic if exposed — RLS still gates the
+  // row — but no business crossing the API boundary). creatorUserId is the
+  // host's session userId; exposing it would let any spectator pivot from
+  // the public lobby list to a per-host enumeration ("which lobbies belong
+  // to user X?"). The `creatorUserId` field was introduced when host-only
+  // authorization landed (overnight-qa/lobby-creator-only-start); this
+  // destructure closes the matching projection gap.
   const {
     seed: _seed,
     rosterByPlayerId,
     deathsByPlayerId,
     matchPk: _matchPk,
+    creatorUserId: _creatorUserId,
     currentPhase,
     dayNumber,
     nightNumber,
