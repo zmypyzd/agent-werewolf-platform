@@ -55,9 +55,19 @@ export function validateWerewolfAction(
 ): ActionValidationResult {
   const matched = validActions.some((v) => actionsMatchByShape(action, v));
   if (!matched) {
+    // Reason text is broadcast to spectators via the agent.invalid_action
+    // event's `reason` field. The action payload itself is sanitized
+    // separately by sanitizeActionForBroadcast (the broadcast `received`
+    // field), but the `reason` string flows through unchanged. Embedding
+    // JSON.stringify(action) here leaked the full payload including
+    // night-action IDs (werewolf-vote.voterId, witch-poison.targetId,
+    // seer-divine.targetId) — a public SSE spectator could then identify
+    // wolves by parsing the reason of any malformed wolf vote. Use only
+    // action.type, which is also already public via `received` after
+    // night-redaction. validActions length stays for debug context.
     return {
       valid: false,
-      reason: `Action ${JSON.stringify(action)} not in validActions (${validActions.length} options)`,
+      reason: `Action of type "${action.type}" not in validActions (${validActions.length} options)`,
     };
   }
   return { valid: true, action };

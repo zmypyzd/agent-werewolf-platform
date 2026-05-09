@@ -139,6 +139,54 @@ describe('validateWerewolfAction', () => {
     expect(result.valid).toBe(false);
   });
 
+  // Regression: validateWerewolfAction's reason string is broadcast via
+  // agent.invalid_action.reason on the public SSE topic. A previous
+  // implementation embedded JSON.stringify(action) in the reason, which
+  // leaked night-action IDs (werewolf-vote.voterId/targetId, witch-
+  // poison.targetId, seer-divine.targetId) — a spectator parsing the
+  // reason could identify wolves from the voterId of any malformed wolf
+  // vote. The reason now includes only action.type.
+  it('reason does not leak night-action IDs (werewolf-vote)', () => {
+    const result = validateWerewolfAction(
+      { type: 'werewolf-vote', voterId: 'p1', targetId: 'p9' },
+      valid,
+    );
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.reason).not.toContain('p1');
+      expect(result.reason).not.toContain('p9');
+      expect(result.reason).not.toContain('voterId');
+      expect(result.reason).not.toContain('targetId');
+      expect(result.reason).toContain('werewolf-vote'); // type still useful for debug
+    }
+  });
+
+  it('reason does not leak night-action IDs (witch-poison)', () => {
+    const result = validateWerewolfAction(
+      { type: 'witch-poison', targetId: 'p7' },
+      [{ type: 'witch-skip-poison' }],
+    );
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.reason).not.toContain('p7');
+      expect(result.reason).not.toContain('targetId');
+      expect(result.reason).toContain('witch-poison');
+    }
+  });
+
+  it('reason does not leak night-action IDs (seer-divine)', () => {
+    const result = validateWerewolfAction(
+      { type: 'seer-divine', targetId: 'p4' },
+      [{ type: 'seer-divine', targetId: 'p2' }],
+    );
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.reason).not.toContain('p4');
+      expect(result.reason).not.toContain('targetId');
+      expect(result.reason).toContain('seer-divine');
+    }
+  });
+
   it('preserves free-text fields when speak matches by shape', () => {
     const result = validateWerewolfAction(
       { type: 'speak', playerId: 'p3', inner: 'thinking...', performance: 'calm', speech: 'I divine p7' },
