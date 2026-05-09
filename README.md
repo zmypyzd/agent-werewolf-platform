@@ -242,7 +242,8 @@ packages/
   agent-protocol/   - Zod schemas for all wire types
   poker-engine/     - Pure Texas Hold'em logic (no I/O)
   agent-runtime/    - IAgent interface, MockAgents, timeout
-  auth/             - Login/session primitives and route protection
+  auth/             - IAuthService (MockAuthService for tests, SupabaseAuthService for prod)
+                      + legacy cookie/session primitives still used by table routes
   persistence/      - MemoryStore + FileStore
   realtime/         - WebSocket/event broadcasting primitives
   table-orchestrator/ - Hand lifecycle, Table, Orchestrator
@@ -252,20 +253,55 @@ examples/mock-agents - RandomAgent, AlwaysCallAgent, etc.
 examples/local-simulation - CLI demo script
 ```
 
+## External Contributor Agent Invites
+
+Owners can mint a one-shot invite token, share it with an external contributor, and the
+contributor registers an HTTP agent (or coding-agent-bootstrapped local server) under the
+owner's account without needing a platform login.
+
+```bash
+# 1. Owner generates an invite (web UI: /agents → "Generate invite", or via curl with a JWT)
+curl -X POST https://werewolf-api-ttsb.onrender.com/api/v1/agents/invites \
+  -H "Authorization: Bearer $JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"displayName":"MyAgent","ttlSec":3600}'
+# → { data: { token, registerUrl, expiresAt } }
+
+# 2. External contributor registers their endpoint (no auth — public)
+curl -X POST "$registerUrl" \
+  -H "Content-Type: application/json" \
+  -d '{"displayName":"ExternalAgent","endpointUrl":"https://your-public-tunnel.example/decide","timeoutMs":5000}'
+```
+
+The agent's `endpointUrl` must be publicly reachable (the platform POSTs decision requests
+from its servers). For local agents, expose port 8080 via cloudflared
+(`cloudflared tunnel --url http://localhost:8080`) or ngrok (`ngrok http 8080`) and use
+the public tunnel URL.
+
+## Authentication
+
+Two paths coexist during the auth migration:
+
+| Routes | Auth | Storage |
+|---|---|---|
+| `/api/v1/agents/invites/*`, `/api/v1/me/agents/*` | Supabase JWT (`Authorization: Bearer …`) | Postgres + RLS |
+| `/api/v1/tables/*`, `/api/v1/werewolf-games/*`, `/api/v1/simulate` | Cookie session (`apk_sid` + `X-Requested-With`) | SQLite |
+| `/api/v1/agents/invites/:token/register` | Public (no auth) | Postgres |
+
+The web SPA picks up either credential type via `apps/web/src/router.tsx` `ProtectedRoute`.
+The cookie path is targeted for removal once the remaining routes migrate to JWT.
+
 ## Current Limitations
 
-- Hosted serverless deployment is not implemented yet.
 - Decision trace replay UI, forensics, scheduled league, and ladder flows are not implemented yet.
-- Runtime and match artifact hosting are still mostly local/in-memory.
-- Hosted serverless bindings are not implemented yet; this milestone provides
-  the provider-neutral persistence boundary and local object-store adapter.
-- Scheduled matches have a local runner boundary but no hosted cron integration yet.
 - The public replay viewer is basic.
+- Cookie auth still load-bearing for poker tables, simulate, and werewolf-games routes
+  — JWT migration tracked in `TODOS.md`.
 
 ## Next Phase Plan
 
+- Migrate remaining cookie routes (poker tables, werewolf-games, simulate) to JWT.
 - Decision trace capture and replay inspection.
-- HTTP agent submission validation.
 - Deterministic forensics for match review.
 - Scheduled league runs.
 - Open ladder support.

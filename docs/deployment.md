@@ -73,8 +73,12 @@ Push the repo to GitHub. In Render:
 
 1. **New → Web Service → Build from Dockerfile**
 2. Set **Dockerfile path**: `./Dockerfile`
-3. **Environment**: add the three Supabase keys + any operational toggles:
-   - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`
+3. **Environment**: add the Supabase keys + any operational toggles:
+   - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` — server-side only
+   - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` — mirror the first two so the
+     Vite SPA build inlines them. Required if you bundle the SPA into the API
+     container (see Section 2.5 below). Only the anon key reaches the browser;
+     the service-role key never does.
    - `NODE_ENV=production`
    - `WEREWOLF_BRIEFING_ENABLED=1` (optional)
 4. **Health check path**: `/health` (Dockerfile already wires the same
@@ -104,7 +108,32 @@ If `Werewolf storage:` in the boot log says `in-memory (SQLite for
 auth)`, the Supabase env triple isn't being read — re-check the env
 panel.
 
-## 3. Deploy the SPA to Vercel
+## 2.5. (Alternative) Bundle the SPA into the API container
+
+Stage 1 of the external-contributor-invite work (PR #2) added a web build stage to
+the Dockerfile. With it, the Render container serves both the SPA at `/` and the
+API at `/api/v1/*` from the same origin. This removes the need for Vercel rewrites
+or Vercel-hosted SPA hosting entirely:
+
+- **Browser → Render directly.** Same origin, no CORS, no Vercel proxy hop.
+- **Single artifact.** One image, one deploy, one URL.
+- **Trade-off.** You lose Vercel's edge CDN for static assets — fine for staging
+  and small-team production; revisit if cold-start CDN matters.
+
+To use this path:
+
+1. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` on Render (see Section 2
+   step 3). The Dockerfile passes these as `--build-arg` to the web build stage,
+   and Vite inlines them into the SPA bundle.
+2. Set `PUBLIC_DIR=apps/api/public` on Render (the runner stage `COPY`s
+   `apps/web/dist` there). Default in `apps/api/src/index.ts` is the same path,
+   so this env var is only needed if you override.
+3. Confirm the API boot log shows `Werewolf storage: Postgres (Supabase)` and
+   `curl https://<host>/` returns `<html>...<title>Agent Poker</title>...`.
+
+Skip Section 3 entirely if you take this path.
+
+## 3. (Alternative) Deploy the SPA to Vercel
 
 ```bash
 vercel --prod
@@ -166,6 +195,9 @@ recommended same-origin-via-rewrites topology.
 | SSE `/werewolf/stream/<id>` immediately closes | Vercel cold-start; first hit re-opens. Check `Cache-Control` and `X-Accel-Buffering` headers (`vercel.json` sets them, but a custom proxy in front would need to too) |
 | Cookie auth fails on Vercel-hosted UI | Browser SameSite=Lax cookies don't cross sites. Either use Vercel rewrites (recommended) or switch to `SameSite=None; Secure` (split-origin path). |
 | `pnpm install` fails on Render Docker build | better-sqlite3 needs `python3 / make / g++` — Dockerfile installs them in the base stage; deleting that line will break the build |
+| Container starts then crashes with `WebSocketFactory.getWebSocketConstructor` | Node 20 has no global WebSocket; `@supabase/supabase-js` ≥2.45 initializes RealtimeClient eagerly inside `createClient()`. Any code path that constructs a Supabase client must pass `realtime: { transport: WebSocket }` from the `ws` package. See `packages/auth/src/auth-service.ts` and `packages/persistence/src/postgres/supabase-clients.ts`. |
+| `registerUrl` / `redirect_uri` returns `http://` instead of `https://` on Render | Render terminates TLS at the load balancer and forwards plain HTTP to the container. Fastify must be constructed with `{ trustProxy: true }` so `req.protocol` and `req.hostname` honor `X-Forwarded-Proto` and `X-Forwarded-Host`. See `apps/api/src/server.ts:168`. |
+| Postgres `permission denied for table agents` / `agent_invites` / `profiles` | `service_role` is missing GRANTs on the agent tables. Apply `supabase/migrations/20260509000000_agent_service_role_grants.sql` via `supabase db push`. |
 
 ## 6. What's not covered yet (Phase 4.5+)
 
