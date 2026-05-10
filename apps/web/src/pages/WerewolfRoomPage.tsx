@@ -146,6 +146,25 @@ export function WerewolfRoomPage() {
     }
   }
 
+  // POST /werewolf-games/:gameId/fill-with-npcs — backend route exists in
+  // werewolf-games.ts:127 but had no UI affordance until now. Saves users
+  // from having to click "邀请 NPC" up to 9 times to seat a full house bot
+  // game. Disabled while the request is in-flight to avoid double-submit.
+  const [filling, setFilling] = useState(false);
+  async function fillWithNpcs() {
+    if (filling) return;
+    setFilling(true);
+    try {
+      await api.post(`/werewolf-games/${encodeURIComponent(gameId)}/fill-with-npcs`, {});
+      await fetchEntry();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '一键填充 NPC 失败');
+    } finally {
+      setFilling(false);
+    }
+  }
+  const emptySeatCount = state.seats.filter((s) => s.occupant.kind === 'empty').length;
+
   const isLive = state.status === 'running' || state.status === 'completed';
 
   return (
@@ -188,6 +207,18 @@ export function WerewolfRoomPage() {
           onInviteAgent={inviteAgent}
         />
       )}
+
+      {state.status === 'waiting' && emptySeatCount > 0 ? (
+        <button
+          type="button"
+          className="ww-fill-npcs"
+          onClick={fillWithNpcs}
+          disabled={filling}
+          aria-busy={filling}
+        >
+          {filling ? '填充中…' : `一键邀请 ${emptySeatCount} 个 NPC`}
+        </button>
+      ) : null}
 
       {state.status === 'ready' ? (
         <button className="ww-start" onClick={startMatch}>
