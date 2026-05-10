@@ -14,8 +14,15 @@ import WebSocket from 'ws';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const realtimeOpts = { transport: WebSocket as any };
 
+export interface VerifiedJwt {
+  userId: string;
+  jwt: string;
+  email: string;
+  displayName: string;
+}
+
 export interface IAuthService {
-  verifyJwt(authHeader: string | undefined): Promise<{ userId: string; jwt: string }>;
+  verifyJwt(authHeader: string | undefined): Promise<VerifiedJwt>;
 }
 
 /**
@@ -23,9 +30,13 @@ export interface IAuthService {
  * Throws if no userId configured — fails loudly rather than guessing from token contents.
  */
 export class MockAuthService implements IAuthService {
-  constructor(private readonly defaultUserId?: string) {}
+  constructor(
+    private readonly defaultUserId?: string,
+    private readonly defaultEmail: string = 'mock@example.test',
+    private readonly defaultDisplayName: string = 'Mock User',
+  ) {}
 
-  async verifyJwt(authHeader: string | undefined): Promise<{ userId: string; jwt: string }> {
+  async verifyJwt(authHeader: string | undefined): Promise<VerifiedJwt> {
     if (!authHeader) {
       throw new Error('Missing Authorization header');
     }
@@ -41,7 +52,12 @@ export class MockAuthService implements IAuthService {
     if (!this.defaultUserId) {
       throw new Error('MockAuthService requires defaultUserId to return a userId');
     }
-    return { userId: this.defaultUserId, jwt: token };
+    return {
+      userId: this.defaultUserId,
+      jwt: token,
+      email: this.defaultEmail,
+      displayName: this.defaultDisplayName,
+    };
   }
 }
 
@@ -61,7 +77,7 @@ export class SupabaseAuthService implements IAuthService {
     });
   }
 
-  async verifyJwt(authHeader: string | undefined): Promise<{ userId: string; jwt: string }> {
+  async verifyJwt(authHeader: string | undefined): Promise<VerifiedJwt> {
     if (!authHeader) {
       throw new Error('Missing Authorization header');
     }
@@ -80,6 +96,20 @@ export class SupabaseAuthService implements IAuthService {
       throw new Error(`Invalid or expired JWT: ${error?.message ?? 'no user returned'}`);
     }
 
-    return { userId: data.user.id, jwt: token };
+    const email = data.user.email ?? '';
+    if (!email) {
+      // Email is required to find-or-create a user_store entry. Supabase
+      // accounts created via password auth always carry an email; reject
+      // here if it's missing so the failure is visible at the auth layer
+      // rather than as a downstream NOT-NULL violation.
+      throw new Error('Supabase user has no email');
+    }
+    const meta = (data.user.user_metadata ?? {}) as Record<string, unknown>;
+    const rawName = meta['display_name'];
+    const displayName = typeof rawName === 'string' && rawName.length > 0
+      ? rawName
+      : email.split('@')[0] ?? email;
+
+    return { userId: data.user.id, jwt: token, email, displayName };
   }
 }

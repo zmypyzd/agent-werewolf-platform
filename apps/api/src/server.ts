@@ -323,6 +323,14 @@ export function buildServer(opts: BuildServerOptions = {}) {
       userStore,
       sessionStore,
       env,
+      // Same authService that powers requireJwtAuth — wire it into the
+      // cookie plugin so legacy requireAuth routes also accept a Bearer
+      // JWT, find-or-create the matching user_store row, and populate
+      // request.user. Without this, every Supabase login can reach a
+      // route via ProtectedRoute but cannot perform any mutating call
+      // (POST /tables, /werewolf-games, etc. all 401) because the
+      // Stage-2 JWT migration only covered a subset of endpoints.
+      authService,
     });
     await scope.register(fastifyWebsocket);
     await scope.register(authRoutes, {

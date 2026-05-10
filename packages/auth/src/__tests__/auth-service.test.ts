@@ -20,7 +20,19 @@ describe('MockAuthService', () => {
   it('returns provided defaultUserId regardless of token contents', async () => {
     const svc = new MockAuthService('user-fixed');
     const result = await svc.verifyJwt('Bearer any-token-string');
-    expect(result).toEqual({ userId: 'user-fixed', jwt: 'any-token-string' });
+    expect(result).toEqual({
+      userId: 'user-fixed',
+      jwt: 'any-token-string',
+      email: 'mock@example.test',
+      displayName: 'Mock User',
+    });
+  });
+
+  it('returns custom email + displayName when configured', async () => {
+    const svc = new MockAuthService('user-x', 'custom@example.test', 'Custom Display');
+    const result = await svc.verifyJwt('Bearer t');
+    expect(result.email).toBe('custom@example.test');
+    expect(result.displayName).toBe('Custom Display');
   });
 
   it('throws if no defaultUserId configured', async () => {

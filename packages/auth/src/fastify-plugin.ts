@@ -3,9 +3,11 @@ import fastifyCookie from '@fastify/cookie';
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import type { ISessionStore, IUserStore, User } from '@agent-poker/persistence';
 
+import type { IAuthService } from './auth-service.js';
 import { SESSION_COOKIE_NAME, clearCookieOptions, sessionCookieOptions } from './cookie.js';
 import { assertCsrfHeader } from './csrf.js';
 import { CsrfError, UnauthenticatedError } from './errors.js';
+import { hashPassword } from './password.js';
 import type { SessionConfig } from './sessions.js';
 import { DEFAULT_SESSION_CONFIG, validateSession } from './sessions.js';
 import type { RuntimeEnv } from './config.js';
@@ -27,6 +29,13 @@ export interface AuthPluginOptions {
   sessionConfig?: SessionConfig;
   env?: RuntimeEnv;
   cookieSecret?: string;
+  // Optional JWT verifier. When provided, requests without a valid cookie
+  // session fall through to a Bearer-token check; a verified Supabase
+  // user is materialized into user_store on first sight (find-by-email,
+  // create otherwise) and exposed via request.user just like a cookie
+  // session would. Lets a half-migrated dual-auth deployment serve both
+  // auth modes from the same set of legacy cookie-protected routes.
+  authService?: IAuthService;
 }
 
 const pluginImpl: FastifyPluginAsync<AuthPluginOptions> = async (app, opts) => {
@@ -42,23 +51,37 @@ const pluginImpl: FastifyPluginAsync<AuthPluginOptions> = async (app, opts) => {
 
   app.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
     const sid = request.cookies?.[SESSION_COOKIE_NAME];
-    if (!sid) {
-      request.user = null;
-      request.sessionId = null;
+    if (sid) {
+      const session = await validateSession(opts.sessionStore, sid, sessionConfig);
+      if (!session) {
+        request.user = null;
+        request.sessionId = null;
+        reply.clearCookie(SESSION_COOKIE_NAME, clearCookieOptions());
+        return;
+      }
+      const user = await opts.userStore.findById(session.userId);
+      request.user = user;
+      request.sessionId = user ? session.sessionId : null;
       return;
     }
 
-    const session = await validateSession(opts.sessionStore, sid, sessionConfig);
-    if (!session) {
-      request.user = null;
-      request.sessionId = null;
-      reply.clearCookie(SESSION_COOKIE_NAME, clearCookieOptions());
+    request.user = null;
+    request.sessionId = null;
+
+    if (!opts.authService) return;
+    const authHeader = request.headers.authorization;
+    if (!authHeader) return;
+    let verified;
+    try {
+      verified = await opts.authService.verifyJwt(authHeader);
+    } catch {
+      // Invalid/expired JWT → treat as anonymous; requireAuth on the
+      // route will reject with 401. Don't surface auth errors here
+      // because some routes are public and would otherwise blow up on
+      // a stale Authorization header.
       return;
     }
-
-    const user = await opts.userStore.findById(session.userId);
-    request.user = user;
-    request.sessionId = user ? session.sessionId : null;
+    request.user = await materializeJwtUser(opts.userStore, verified);
   });
 
   app.decorate('requireAuth', async (request: FastifyRequest, _reply: FastifyReply) => {
@@ -80,6 +103,27 @@ const pluginImpl: FastifyPluginAsync<AuthPluginOptions> = async (app, opts) => {
   // expose the env so route handlers can compute consistent options.
   app.decorate('authEnv', env);
 };
+
+async function materializeJwtUser(
+  userStore: IUserStore,
+  verified: { userId: string; email: string; displayName: string },
+): Promise<User> {
+  // Match Supabase users to existing user_store entries by email so a
+  // human who registered via the legacy cookie path with the same email
+  // doesn't end up with two unlinked identities. If no row matches, we
+  // create one using Supabase's user.id as the user_store userId — the
+  // passwordHash is a sentinel because these users authenticate via JWT
+  // and never go through the cookie /auth/login password verifier.
+  const existing = await userStore.findByEmail(verified.email);
+  if (existing) return existing;
+  const passwordHash = await hashPassword(`supabase-jwt-${verified.userId}-${Date.now()}`);
+  return userStore.createUser({
+    userId: verified.userId,
+    email: verified.email,
+    passwordHash,
+    displayName: verified.displayName,
+  });
+}
 
 export const authPlugin = fp(pluginImpl, {
   name: '@agent-poker/auth',

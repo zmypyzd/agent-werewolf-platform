@@ -9,6 +9,7 @@ import {
 import type { SqliteDb } from '@agent-poker/persistence';
 import { AppError } from '@agent-poker/shared';
 import { authPlugin } from '../fastify-plugin.js';
+import { MockAuthService, type IAuthService } from '../auth-service.js';
 import { CsrfError, UnauthenticatedError } from '../errors.js';
 import { createSession } from '../sessions.js';
 
@@ -164,6 +165,75 @@ describe('authPlugin', () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).ok).toBe(true);
+  });
+
+  describe('JWT fallback when authService is provided', () => {
+    async function buildAppWithAuthService(testDb: SqliteDb, authService: IAuthService) {
+      const u = new SqliteUserStore(testDb);
+      const s = new SqliteSessionStore(testDb);
+      const app2 = Fastify({ logger: false });
+      app2.setErrorHandler((err, _req, reply) => {
+        if (err instanceof UnauthenticatedError) return reply.code(401).send({ code: err.code });
+        if (err instanceof AppError) return reply.code(400).send({ code: err.code });
+        return reply.code(500).send({ code: 'INTERNAL', message: err.message });
+      });
+      await app2.register(authPlugin, {
+        userStore: u, sessionStore: s, env: 'test', sessionConfig: { ttlMs: 60_000 }, authService,
+      });
+      app2.get('/me', { preHandler: [app2.requireAuth] }, async req => ({
+        userId: req.user!.userId, email: req.user!.email, displayName: req.user!.displayName,
+      }));
+      await app2.ready();
+      return { app: app2, users: u };
+    }
+
+    it('Bearer JWT on a cookie-protected route is accepted; user is materialized into user_store', async () => {
+      const authService = new MockAuthService('supabase-uid-abc', 'jwt-user@example.test', 'JWT User');
+      const { app: app2, users: u } = await buildAppWithAuthService(db, authService);
+      try {
+        const res = await app2.inject({
+          method: 'GET', url: '/me', headers: { authorization: 'Bearer fake-jwt-token' },
+        });
+        expect(res.statusCode).toBe(200);
+        const body = JSON.parse(res.body);
+        expect(body.email).toBe('jwt-user@example.test');
+        expect(body.displayName).toBe('JWT User');
+        expect(body.userId).toBe('supabase-uid-abc');
+        // Idempotent on repeat (find-by-email returns the existing row).
+        const res2 = await app2.inject({
+          method: 'GET', url: '/me', headers: { authorization: 'Bearer fake-jwt-token' },
+        });
+        expect(res2.statusCode).toBe(200);
+        const found = await u.findByEmail('jwt-user@example.test');
+        expect(found?.userId).toBe('supabase-uid-abc');
+      } finally {
+        await app2.close();
+      }
+    });
+
+    it('without an authService, Bearer header alone yields 401 on cookie-protected routes', async () => {
+      // The default top-level test app does NOT pass authService, so legacy
+      // behavior is preserved when no JWT verifier is wired up.
+      const res = await app.inject({
+        method: 'GET', url: '/me', headers: { authorization: 'Bearer fake-jwt-token' },
+      });
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('invalid Bearer token falls through to 401 (not crash)', async () => {
+      const failing: IAuthService = {
+        async verifyJwt() { throw new Error('Invalid JWT'); },
+      };
+      const { app: app2 } = await buildAppWithAuthService(db, failing);
+      try {
+        const res = await app2.inject({
+          method: 'GET', url: '/me', headers: { authorization: 'Bearer bad-token' },
+        });
+        expect(res.statusCode).toBe(401);
+      } finally {
+        await app2.close();
+      }
+    });
   });
 
   it('valid session sliding: expiry advances forward on each request', async () => {
