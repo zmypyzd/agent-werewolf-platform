@@ -383,33 +383,54 @@ export class WerewolfMatchRunner {
     }
 
     if (this.decisionTraceStore) {
-      await recordWerewolfDecisionTrace({
-        store: this.decisionTraceStore,
-        matchId: this.state.gameId,
-        sequence: this.stepCount,
-        requestId: req.requestId,
-        agentId: agent.agentId,
-        playerId: player.id,
-        phase: phaseBefore,
-        nightNumber: this.state.nightNumber,
-        dayNumber: this.state.dayNumber,
-        publicState,
-        privateState,
-        validActions,
-        responseAction:
-          timedOut || invalidReason !== null ? null : (parsedActionForTrace ?? null),
-        appliedAction: action,
-        latencyMs: elapsedMs,
-        timedOut,
-        invalidReason,
-        fallbackReason: timedOut
-          ? 'timeout'
-          : invalidReason !== null
-            ? 'invalid_action'
-            : null,
-        ...(parsedReasoningForTrace ? { reasoningSummary: parsedReasoningForTrace } : {}),
-        now: Date.now(),
-      });
+      // The decision trace store can reject a write for legitimate reasons
+      // (ArtifactLimitExceededError when the per-trace 8KB cap fires on
+      // an unusually long reasoning summary, or the per-match 1000-trace
+      // cap fires after a marathon match). It can also reject for op
+      // reasons (Postgres permission denied, network blip on the object
+      // store). Decision traces are observability — they record what the
+      // agent did but they aren't authoritative for game state. Letting
+      // a trace failure abort the match would be a harsh tradeoff: a
+      // 9-AI multi-hour run could collapse on the 1001st action because
+      // the trace cap fired. Wrap and continue; the next decision still
+      // tries to persist.
+      try {
+        await recordWerewolfDecisionTrace({
+          store: this.decisionTraceStore,
+          matchId: this.state.gameId,
+          sequence: this.stepCount,
+          requestId: req.requestId,
+          agentId: agent.agentId,
+          playerId: player.id,
+          phase: phaseBefore,
+          nightNumber: this.state.nightNumber,
+          dayNumber: this.state.dayNumber,
+          publicState,
+          privateState,
+          validActions,
+          responseAction:
+            timedOut || invalidReason !== null ? null : (parsedActionForTrace ?? null),
+          appliedAction: action,
+          latencyMs: elapsedMs,
+          timedOut,
+          invalidReason,
+          fallbackReason: timedOut
+            ? 'timeout'
+            : invalidReason !== null
+              ? 'invalid_action'
+              : null,
+          ...(parsedReasoningForTrace ? { reasoningSummary: parsedReasoningForTrace } : {}),
+          now: Date.now(),
+        });
+      } catch (err) {
+        // Surface to console.error rather than throwing — the orchestrator
+        // has no structured logger. The error message includes the matchId
+        // and sequence so ops can correlate to a specific decision.
+        // eslint-disable-next-line no-console
+        console.error(
+          `[werewolf-match-runner] decision trace persist failed (matchId=${this.state.gameId} seq=${this.stepCount}): ${(err as Error).message}`,
+        );
+      }
     }
   }
 
