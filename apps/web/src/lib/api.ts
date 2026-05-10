@@ -12,7 +12,6 @@
 // header is also attached so JWT-protected routes (external-contributor
 // path) authenticate correctly alongside the legacy cookie path.
 import { supabase } from './supabase.js';
-import { signOut } from './auth.js';
 
 const API_ROOT = import.meta.env?.VITE_API_BASE_URL ?? '';
 const BASE = `${API_ROOT}/api/v1`;
@@ -98,15 +97,6 @@ export interface SimulateResponse {
   };
 }
 
-// Endpoints that authenticate via the legacy cookie session only and will
-// 401 for Supabase-JWT-only users. The 401 here is expected (it just means
-// "no cookie session"), not a signal that the JWT was rejected, so the
-// auto-signOut interceptor below must skip them.
-const COOKIE_ONLY_AUTH_PATHS = new Set(['/auth/me']);
-function isCookieOnlyAuthPath(path: string): boolean {
-  return COOKIE_ONLY_AUTH_PATHS.has(path);
-}
-
 async function call<T>(method: string, path: string, opts: ApiOptions = {}): Promise<T> {
   const headers: Record<string, string> = { 'X-Requested-With': 'fetch' };
   let body: string | undefined;
@@ -132,21 +122,14 @@ async function call<T>(method: string, path: string, opts: ApiOptions = {}): Pro
 
   const res = await fetch(`${BASE}${path}`, init);
 
-  if (res.status === 401 && !isCookieOnlyAuthPath(path)) {
-    // Only react with sign-out + redirect when we had a JWT session AND
-    // the 401 was not from a cookie-only legacy endpoint that always 401s
-    // for Supabase-only users (see isCookieOnlyAuthPath). Without that
-    // exclusion, AuthProvider's /auth/me probe on mount would auto-signOut
-    // every Supabase login and bounce the user straight back to /login.
-    const { data: { session: currentSession } } = await supabase.auth.getSession();
-    if (currentSession) {
-      await signOut();
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login';
-      }
-    }
-    // Fall through to throw via the existing error pipeline below.
-  }
+  // No global 401 handler: most legacy routes are still cookie-only and
+  // legitimately 401 for Supabase-JWT-only users (the dual-auth migration
+  // is mid-flight). A blanket "401 + Supabase session = JWT rejected"
+  // interceptor would auto-signOut + redirect on every page mount that
+  // touches a cookie-only endpoint (/auth/me, /tables, etc.), bouncing
+  // every successful login straight back to /login. Real JWT expiry is
+  // already handled by the Supabase client's autoRefreshToken; pages
+  // that need to react to 401 catch ApiError themselves.
 
   if (!res.ok) {
     let code = 'UNKNOWN';

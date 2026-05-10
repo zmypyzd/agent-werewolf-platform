@@ -75,30 +75,34 @@ describe('api wrapper', () => {
     await expect(api.get('/x')).rejects.toBeInstanceOf(ApiError);
   });
 
-  it('does not sign out + redirect on /auth/me 401 when a Supabase session exists', async () => {
-    // Reproduces the post-login bounce-back: AuthProvider mounts on /lobby,
-    // calls /auth/me, which is cookie-only and returns 401 for Supabase-only
-    // users. The api wrapper used to interpret that as "JWT rejected" and
-    // signOut + window.location='/login', which kicked the user back out
-    // immediately after a successful Supabase login.
-    const sessionStub = { access_token: 'fake-jwt', user: { id: 'u1' } } as never;
-    vi.spyOn(supabase.auth, 'getSession').mockResolvedValue({
-      data: { session: sessionStub },
-      error: null,
-    } as never);
-    const signOutSpy = vi.spyOn(authLib, 'signOut').mockResolvedValue({});
+  it.each(['/auth/me', '/tables', '/me-werewolf-agents'])(
+    'throws ApiError without auto-signOut on 401 from %s when a Supabase session exists',
+    async (path) => {
+      // Regression: the old api wrapper auto-signed-out + hard-redirected
+      // on any 401 when a Supabase session existed. Most legacy routes
+      // are still cookie-only and legitimately 401 for Supabase users;
+      // that interceptor bounced every successful login back to /login
+      // because /auth/me (AuthProvider mount), /tables (LobbyPage mount),
+      // and similar cookie-only routes all 401 on JWT-only users.
+      const sessionStub = { access_token: 'fake-jwt', user: { id: 'u1' } } as never;
+      vi.spyOn(supabase.auth, 'getSession').mockResolvedValue({
+        data: { session: sessionStub },
+        error: null,
+      } as never);
+      const signOutSpy = vi.spyOn(authLib, 'signOut').mockResolvedValue({});
 
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'authentication required', statusCode: 401 } }),
-        { status: 401, headers: { 'content-type': 'application/json' } },
-      ),
-    );
-    vi.stubGlobal('fetch', fetchMock);
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'authentication required', statusCode: 401 } }),
+          { status: 401, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+      vi.stubGlobal('fetch', fetchMock);
 
-    await expect(api.get('/auth/me')).rejects.toBeInstanceOf(ApiError);
-    expect(signOutSpy).not.toHaveBeenCalled();
-  });
+      await expect(api.get(path)).rejects.toBeInstanceOf(ApiError);
+      expect(signOutSpy).not.toHaveBeenCalled();
+    },
+  );
 
   it('GET match analysis calls the analysis endpoint', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
