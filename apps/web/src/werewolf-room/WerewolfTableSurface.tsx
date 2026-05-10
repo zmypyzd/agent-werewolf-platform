@@ -158,11 +158,38 @@ function SeatCard({ seat, pos, speaking, replaying, revealRoles, onEmptyClick }:
     seatName = seat.occupant.displayName;
   }
 
+  // a11y: collapse the seat's mixed visual cues (color borders, opacity for
+  // dead, "LIVE" pill) into a single text label that screen readers can
+  // announce in one read. Without this the SR walks each child div and emits
+  // a fragmented "P1, ⚔️, Bot 1, speaking…" sequence with no top-level
+  // identity for the seat. The aria-label always leads with the seat number
+  // so users navigating by landmark get an anchor.
+  const ariaLabelParts: string[] = [`P${seat.seatIndex + 1}`];
+  if (isEmpty) {
+    ariaLabelParts.push('空座位');
+  } else {
+    ariaLabelParts.push(seatName);
+    if (dead) {
+      ariaLabelParts.push(seat.causeOfDeath ? CAUSE_OF_DEATH_LABELS[seat.causeOfDeath] : '已淘汰');
+    } else {
+      ariaLabelParts.push('存活');
+    }
+    if (revealRoles && seat.revealedRole) {
+      ariaLabelParts.push(`身份: ${ROLE_LABELS[seat.revealedRole]}`);
+    }
+    if (speaking) ariaLabelParts.push('正在发言');
+    else if (replaying) ariaLabelParts.push('刚刚发言');
+    if (isMine) ariaLabelParts.push('你的 agent');
+  }
+  const ariaLabel = ariaLabelParts.join(' · ');
+
   return (
     <div
       className={cardClass}
       style={{ left: pos.left, top: pos.top }}
       data-seat-index={seat.seatIndex}
+      role="group"
+      aria-label={ariaLabel}
     >
       {isMine ? (
         <span className="ww-seat-mine-pill" aria-label="你的 agent">MINE</span>
