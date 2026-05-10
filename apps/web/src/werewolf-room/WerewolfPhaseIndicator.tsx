@@ -103,8 +103,23 @@ export function WerewolfPhaseIndicator({ state }: WerewolfPhaseIndicatorProps) {
     .filter(Boolean)
     .join(' ');
 
+  // a11y: phase transitions (night ↔ day, hunter-shoot fires, game-over) are
+  // load-bearing for sighted users via color + emoji shift. Mark the bar as
+  // a polite live region so screen readers announce the new phase as soon as
+  // the reducer flips it. `polite` (not `assertive`) matches the timeline +
+  // speech board convention and avoids interrupting an in-progress speech
+  // read-out. `aria-atomic` ensures the whole label is read on each change
+  // rather than only the diffed sub-string.
+  const ariaLabel = subtitle ? `${label} · ${subtitle}` : label;
+
   return (
-    <div className={barClass}>
+    <div
+      className={barClass}
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      aria-label={ariaLabel}
+    >
       <div className="ww-phase-row">
         <div className="ww-phase-dot" />
         <span className="ww-phase-text">{label}</span>
