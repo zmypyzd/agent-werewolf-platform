@@ -104,6 +104,18 @@ COPY --from=builder /app/packages/werewolf-orchestrator/dist           packages/
 # SPA dist served by @fastify/static at /
 COPY --from=builder /app/apps/web/dist /app/apps/api/public
 
+# Werewolf HTTP-agent guide: the public /api/v1/docs/werewolf-agent-guide
+# route reads docs/werewolf-http-agent-guide.md via a fs path computed
+# relative to its own dist file (apps/api/src/routes/werewolf-docs.ts:22 —
+# `resolve(HERE, '../../../../docs/werewolf-http-agent-guide.md')`). In
+# production HERE is /app/apps/api/dist/routes, which means the route
+# expects the doc at /app/docs/werewolf-http-agent-guide.md. Without
+# this COPY the route returns 404 with the "not bundled" sentinel
+# message; external agents that follow `briefing.docsUrl` then have
+# nowhere to read the protocol from. Found in overnight QA prod probe
+# 2026-05-09. Copying just the one file keeps the runner image lean.
+COPY docs/werewolf-http-agent-guide.md /app/docs/werewolf-http-agent-guide.md
+
 # Render and Fly inject the actual port via $PORT. Listen on 0.0.0.0 so
 # the platform's reverse proxy can reach the container.
 ENV HOST=0.0.0.0

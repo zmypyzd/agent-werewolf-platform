@@ -33,10 +33,16 @@ examples/*/output
 .github
 
 # CI / docs / tooling that has no runtime relevance.
-docs
+docs/**
 README.md
 *.md
 !apps/api/README.md
+# Exception: docs/werewolf-http-agent-guide.md is served at runtime by
+# /api/v1/docs/werewolf-agent-guide so external HTTP agents can read
+# the protocol contract on cold start. See apps/api/src/routes/
+# werewolf-docs.ts:22 for the path it resolves. Re-included AFTER the
+# broad *.md exclusion so the last-match rule keeps it in the context.
+!docs/werewolf-http-agent-guide.md
 
 # Dockerfile itself + ignore — recursive copy avoidance.
 Dockerfile
