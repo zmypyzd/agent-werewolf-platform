@@ -43,6 +43,18 @@ export function applyAction(state: WerewolfGameState, action: WerewolfAction): W
       return applyDayVote(state, action);
     case 'hunter-shoot':
       return applyHunterShoot(state, action);
+    default: {
+      // The discriminated WerewolfAction union covers every known type at
+      // compile time, but at runtime an unknown type can leak through if a
+      // caller bypasses the agent-protocol Zod schema (e.g., a future custom
+      // adapter or a misbehaving migration). Returning undefined here would
+      // crash the orchestrator downstream as it dereferences `.phase`. Throw
+      // a typed engine error so the API maps it to 400 INVALID_ACTION.
+      const unknownType = (action as { type?: unknown }).type;
+      throw new InvalidWerewolfActionError(
+        `unknown action.type: ${typeof unknownType === 'string' ? unknownType : '<not-a-string>'}`,
+      );
+    }
   }
 }
 
