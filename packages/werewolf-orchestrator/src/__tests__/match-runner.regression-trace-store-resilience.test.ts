@@ -1,12 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'events';
 import { createGame } from '@agent-poker/werewolf-engine';
-import { ArtifactLimitExceededError } from '@agent-poker/shared';
+import { ArtifactLimitExceededError, type WerewolfDecisionTrace } from '@agent-poker/shared';
 import { WerewolfRandomMockAgent } from '@agent-poker/agent-runtime';
-import type {
-  IWerewolfDecisionTraceStore,
-  WerewolfDecisionTrace,
-} from '@agent-poker/persistence';
+import type { IWerewolfDecisionTraceStore } from '@agent-poker/persistence';
 import { WerewolfMatchRunner } from '../match-runner.js';
 
 // Regression: a previous version of match-runner awaited
