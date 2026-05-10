@@ -91,12 +91,20 @@ export async function meWerewolfAgentsRoutes(
           `agent ${result.agent.id} created without a token (protocol mismatch)`,
         );
       }
-      reply.status(201).send({
-        data: {
-          agent: toPublicWerewolfAgent(result.agent),
-          rawToken: result.rawToken,
-        },
-      });
+      // Defense-in-depth: rawToken is shown exactly once. Forbid any
+      // intermediary cache (CDN, browser bfcache, dev-tools "preserve
+      // log" replays) from holding onto the response so a leak from the
+      // immediate transport doesn't outlive the legitimate read.
+      reply
+        .header('Cache-Control', 'no-store')
+        .header('Pragma', 'no-cache')
+        .status(201)
+        .send({
+          data: {
+            agent: toPublicWerewolfAgent(result.agent),
+            rawToken: result.rawToken,
+          },
+        });
     },
   );
 
@@ -107,12 +115,18 @@ export async function meWerewolfAgentsRoutes(
       const { id } = req.params as { id: string };
       try {
         const result = await agentStore.rotateToken(req.user!.userId, id);
-        reply.send({
-          data: {
-            agent: toPublicWerewolfAgent(result.agent),
-            rawToken: result.rawToken,
-          },
-        });
+        // See no-store rationale in POST /me/werewolf-agents — same
+        // defense applies to rotate-token, which equally shows the new
+        // raw token exactly once.
+        reply
+          .header('Cache-Control', 'no-store')
+          .header('Pragma', 'no-cache')
+          .send({
+            data: {
+              agent: toPublicWerewolfAgent(result.agent),
+              rawToken: result.rawToken,
+            },
+          });
       } catch (err) {
         if (err instanceof NotFoundError) throw err;
         throw err;

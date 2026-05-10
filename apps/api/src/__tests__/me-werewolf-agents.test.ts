@@ -204,6 +204,11 @@ describe('/me/werewolf-agents', () => {
     // token_hash must never leak.
     expect(JSON.stringify(body)).not.toContain('token_hash');
     expect(body.data.agent).not.toHaveProperty('tokenHash');
+    // Defense-in-depth: rawToken is a one-shot credential. Forbid all
+    // intermediary caches (CDN, browser bfcache, dev-tools "preserve log"
+    // replay) so the response can't outlive the legitimate read.
+    expect(r.headers['cache-control']).toBe('no-store');
+    expect(r.headers['pragma']).toBe('no-cache');
   });
 
   it('POST with timeoutMs out of range returns 400', async () => {
@@ -370,6 +375,10 @@ describe('/me/werewolf-agents', () => {
       cookies: { apk_sid: cookie },
     });
     expect(rotate.statusCode).toBe(200);
+    // Same no-cache contract as POST /me/werewolf-agents — rotate-token
+    // also returns a one-shot credential.
+    expect(rotate.headers['cache-control']).toBe('no-store');
+    expect(rotate.headers['pragma']).toBe('no-cache');
     const newToken = JSON.parse(rotate.body).data.rawToken as string;
     expect(newToken).not.toBe(oldToken);
 
