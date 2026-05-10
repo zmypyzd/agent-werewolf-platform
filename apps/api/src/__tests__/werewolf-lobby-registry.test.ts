@@ -60,6 +60,23 @@ describe('WerewolfLobbyRegistry', () => {
     expect(JSON.stringify(entry)).not.toContain('seed');
   });
 
+  it('never exposes creatorUserId in the returned entry (privacy)', () => {
+    // Regression: creatorUserId is the host's session userId. Exposing it
+    // would let any spectator pivot from the public lobby list to a
+    // per-host enumeration ("which lobbies belong to user X?"). Pinned
+    // at the create() seam and the get() seam below.
+    const entry = registry.create({
+      name: 'demo',
+      creatorUserId: 'user-host-secret-id-aaaa-bbbb-cccc-dddddddd',
+    });
+    expect(JSON.stringify(entry)).not.toContain('user-host-secret-id');
+    expect(JSON.stringify(entry)).not.toContain('creatorUserId');
+
+    const refetched = registry.get(entry.gameId);
+    expect(JSON.stringify(refetched)).not.toContain('user-host-secret-id');
+    expect(JSON.stringify(refetched)).not.toContain('creatorUserId');
+  });
+
   it('inviteNpc fills exactly one seat and registers an agent with the orchestrator', () => {
     const entry = registry.create({ name: 'demo', seed: 'fixed' });
     const updated = registry.inviteNpc(entry.gameId, 0);
