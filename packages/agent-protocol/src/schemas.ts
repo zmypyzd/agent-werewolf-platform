@@ -531,13 +531,37 @@ export const UserAgentConfigPublicSchema = z.object({
   updatedAt: z.number().int(),
 });
 
+// HTTP header name token charset per RFC 7230. Excludes CR/LF/NUL and any
+// non-ASCII; rejecting these at schema time prevents header-injection
+// patterns where a stored authHeaderName containing "X-Foo\r\nX-Inject:"
+// would either be silently corrupted by undici's outbound HTTP layer or
+// (on a non-validating runtime) inject a second header into the request
+// to the agent's endpoint. Bounded by .max(80) above; the regex is the
+// content gate.
+const HTTP_HEADER_NAME_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+// Header field-value can be any visible-ASCII + space + horizontal tab
+// (RFC 7230 §3.2.6). Reject CR/LF/NUL — undici / Node fetch enforce this
+// at the transport layer, but failing fast at schema time gives a clear
+// 400 instead of a runtime crash mid-decision.
+const HTTP_HEADER_VALUE_RE = /^[\t\x20-\x7E]+$/;
+
 export const CreateUserAgentConfigRequestSchema = z.object({
   agentName: z.string().min(1).max(40),
   endpointUrl: z.string().url().refine(isAcceptableEndpoint, {
     message: 'endpointUrl must be https:// (or http:// for localhost / 127.0.0.1 / ::1)',
   }),
-  authHeaderName: z.string().min(1).max(80).nullable(),
-  authHeaderValue: z.string().min(1).max(2048).nullable(),
+  authHeaderName: z
+    .string()
+    .min(1)
+    .max(80)
+    .regex(HTTP_HEADER_NAME_RE, 'authHeaderName must be a valid HTTP header token (RFC 7230)')
+    .nullable(),
+  authHeaderValue: z
+    .string()
+    .min(1)
+    .max(2048)
+    .regex(HTTP_HEADER_VALUE_RE, 'authHeaderValue must be visible ASCII or HTAB (no CR/LF)')
+    .nullable(),
   // Up to 60s — bounded so a misconfigured agent can't park a connection
   // indefinitely. The werewolf orchestrator's per-call budget defaults to
   // 60s as well, so an agent configured at the cap exhausts the budget at
@@ -562,8 +586,20 @@ export const RegisterAgentInviteRequestSchema = z.object({
   endpointUrl: z.string().url().refine(isAcceptableEndpoint, {
     message: 'endpointUrl must be https:// (or http:// for localhost / 127.0.0.1 / ::1)',
   }),
-  authHeaderName: z.string().min(1).max(80).nullable().optional(),
-  authHeaderValue: z.string().min(1).max(2048).nullable().optional(),
+  authHeaderName: z
+    .string()
+    .min(1)
+    .max(80)
+    .regex(HTTP_HEADER_NAME_RE, 'authHeaderName must be a valid HTTP header token (RFC 7230)')
+    .nullable()
+    .optional(),
+  authHeaderValue: z
+    .string()
+    .min(1)
+    .max(2048)
+    .regex(HTTP_HEADER_VALUE_RE, 'authHeaderValue must be visible ASCII or HTAB (no CR/LF)')
+    .nullable()
+    .optional(),
   timeoutMs: z.number().int().min(100).max(60000).default(5000),
 }).strict();
 
