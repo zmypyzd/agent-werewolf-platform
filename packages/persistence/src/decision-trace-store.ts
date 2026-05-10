@@ -50,6 +50,11 @@ export class MemoryDecisionTraceStore implements IDecisionTraceStore {
 
 export class ObjectDecisionTraceStore implements IDecisionTraceStore {
   private readonly limits: DecisionTraceStoreLimits;
+  // Per-matchId promise-chain mutex. See ObjectWerewolfDecisionTraceStore
+  // for the full rationale — appendDecisionTrace is a read-modify-write
+  // across two awaits and concurrent calls for the same matchId would
+  // silently lose every trace except the last writer's.
+  private readonly tails = new Map<string, Promise<unknown>>();
 
   constructor(
     private readonly objectStore: IObjectStore,
@@ -59,15 +64,30 @@ export class ObjectDecisionTraceStore implements IDecisionTraceStore {
   }
 
   async appendDecisionTrace(trace: DecisionTrace): Promise<DecisionTrace> {
+    const matchId = safePathSegment(toPublicDecisionTrace(trace).matchId);
+    const prev = this.tails.get(matchId) ?? Promise.resolve();
+    const next = prev.then(
+      () => this.appendDecisionTraceUnsafe(trace),
+      () => this.appendDecisionTraceUnsafe(trace),
+    );
+    this.tails.set(matchId, next);
+    try {
+      return await next;
+    } finally {
+      if (this.tails.get(matchId) === next) this.tails.delete(matchId);
+    }
+  }
+
+  private async appendDecisionTraceUnsafe(trace: DecisionTrace): Promise<DecisionTrace> {
     const publicTrace = toPublicDecisionTrace(trace);
     const matchId = safePathSegment(publicTrace.matchId);
     const existing = await this.listDecisionTraces(matchId);
-    const next = [...existing, publicTrace];
-    assertWithinLimits(publicTrace, next, this.limits);
+    const nextTraces = [...existing, publicTrace];
+    assertWithinLimits(publicTrace, nextTraces, this.limits);
 
     await this.objectStore.putText({
       key: traceObjectKey(matchId),
-      body: serializeDecisionTraces(next),
+      body: serializeDecisionTraces(nextTraces),
       contentType: 'application/x-ndjson',
     });
 
