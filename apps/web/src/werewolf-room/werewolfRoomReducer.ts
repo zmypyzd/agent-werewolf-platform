@@ -388,6 +388,18 @@ export function werewolfRoomReducer(
 
   if (lines.length === 0) {
     if (isNightPhase(phase)) {
+      // Suppress the fold while nightNumber is still its initial sentinel (0).
+      // emptyRoomState seeds nightNumber=0, and the orchestrator transitions
+      // setup → night-werewolf-vote *without* emitting phase.changed (only
+      // subsequent night phase transitions emit it — see match-runner.ts:357
+      // / :365). Multiple agent.action_requested events for the first night
+      // arrive before nightNumber is populated; without this guard they would
+      // produce "🌙 夜 0 · 行动中…" lines that mislead spectators (there is
+      // no night 0). Once phase.changed populates nightNumber, the fold
+      // appears with the correct number from then on.
+      if (typeof next.nightNumber !== 'number' || next.nightNumber < 1) {
+        return next;
+      }
       const last = next.timeline[next.timeline.length - 1];
       if (
         last &&
