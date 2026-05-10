@@ -52,6 +52,14 @@ export class MemoryWerewolfDecisionTraceStore implements IWerewolfDecisionTraceS
 
 export class ObjectWerewolfDecisionTraceStore implements IWerewolfDecisionTraceStore {
   private readonly limits: WerewolfDecisionTraceStoreLimits;
+  // Per-matchId promise-chain mutex. appendDecisionTrace is a read-modify-
+  // write across two awaits (listDecisionTraces → putText), so concurrent
+  // calls for the same matchId would all observe the same `existing`
+  // snapshot and the last writer would silently clobber every prior write.
+  // Serialize calls per matchId by chaining each invocation onto the prior
+  // tail; different matchIds remain independent so a slow match doesn't
+  // back up trace recording on every other match running on the server.
+  private readonly tails = new Map<string, Promise<unknown>>();
 
   constructor(
     private readonly objectStore: IObjectStore,
@@ -63,15 +71,34 @@ export class ObjectWerewolfDecisionTraceStore implements IWerewolfDecisionTraceS
   async appendDecisionTrace(
     trace: WerewolfDecisionTrace,
   ): Promise<WerewolfDecisionTrace> {
+    const matchId = safePathSegment(toPublicWerewolfDecisionTrace(trace).matchId);
+    const prev = this.tails.get(matchId) ?? Promise.resolve();
+    const next = prev.then(
+      () => this.appendDecisionTraceUnsafe(trace),
+      () => this.appendDecisionTraceUnsafe(trace),
+    );
+    this.tails.set(matchId, next);
+    try {
+      return await next;
+    } finally {
+      // Drop the entry once the chain reaches its current tail. A later
+      // append for the same matchId will reseed via `?? Promise.resolve()`.
+      if (this.tails.get(matchId) === next) this.tails.delete(matchId);
+    }
+  }
+
+  private async appendDecisionTraceUnsafe(
+    trace: WerewolfDecisionTrace,
+  ): Promise<WerewolfDecisionTrace> {
     const publicTrace = toPublicWerewolfDecisionTrace(trace);
     const matchId = safePathSegment(publicTrace.matchId);
     const existing = await this.listDecisionTraces(matchId);
-    const next = [...existing, publicTrace];
-    assertWithinLimits(publicTrace, next, this.limits);
+    const nextTraces = [...existing, publicTrace];
+    assertWithinLimits(publicTrace, nextTraces, this.limits);
 
     await this.objectStore.putText({
       key: traceObjectKey(matchId),
-      body: serializeWerewolfDecisionTraces(next),
+      body: serializeWerewolfDecisionTraces(nextTraces),
       contentType: 'application/x-ndjson',
     });
     return cloneTrace(publicTrace);
