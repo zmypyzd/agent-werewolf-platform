@@ -36,7 +36,7 @@ drives the orchestrator through the real HTTP path.
 ## Information-isolation invariants
 
 The werewolf domain is much stricter than poker about hidden information.
-Five protected points, each defended by ≥2 layers and pinned by tests:
+Six protected points, each defended by ≥2 layers and pinned by tests:
 
 1. **Night actor identity** — `agent.action_requested` / `agent.action_received`
    replay events in night phases must not include `playerId` or `agentId`.
@@ -58,6 +58,19 @@ Five protected points, each defended by ≥2 layers and pinned by tests:
 5. **`player:<userId>:<gameId>` topic** — server-side gate in
    `apps/api/src/routes/ws.ts:isOwnPlayerTopic` (subscribe-time) +
    per-player ownership map in `attachWerewolfHub` (publish-time).
+6. **Lobby internal fields** — `creatorUserId`, `seed`, `matchPk`,
+   `rosterByPlayerId`, `deathsByPlayerId`, and any future
+   `InternalEntry`-only field never cross the API boundary on
+   `/api/v1/werewolf-games` responses. Defended by:
+   `apps/api/src/werewolf-lobby-registry.ts:publicEntry` using an
+   **allowlist projection** — only fields named in
+   `PUBLIC_ENTRY_FIELDS` are copied into the response, and a
+   compile-time `_AllPublicFieldsCovered` check pins that list against
+   `WerewolfLobbyEntry`'s keys. New fields added to `InternalEntry` are
+   private by default; surfacing one requires an explicit edit to this
+   list. Pinned by `apps/api/src/__tests__/werewolf-lobby-registry.regression-public-allowlist.test.ts`
+   and the existing `werewolf-lobby-registry.test.ts` per-field privacy
+   assertions (`creatorUserId`, `seed`).
 
 **Not on this list — and intentionally so**: `role` / `side` on each
 player. As of ISSUE-005 the spectator surface reveals the full roster

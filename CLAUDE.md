@@ -86,6 +86,8 @@ examples/local-simulation drives the orchestrator directly (no API).
 
 **Auth:** `packages/auth` provides cookie sessions (`apk_sid`), CSRF (`X-Requested-With: fetch`), password hashing, and a rate limiter. Mutating routes require `requireAuth`; `/api/v1/matches/*` is public read-only. Sessions/users/agent-configs persist in SQLite (`packages/persistence/src/sqlite/`); the API defaults to `:memory:` SQLite when no `authDb` is injected, which is why test runs are isolated.
 
+**Werewolf lobby authorization (host-only):** `/api/v1/werewolf-games/:gameId/start`, `/fill-with-npcs`, and `/seats/:seatIndex/invite-npc` require the requesting user to equal the lobby creator. Enforced by `WerewolfLobbyRegistry.assertCreatorOnly` against the `creatorUserId` field captured at create-time. Every new route handler that mutates a lobby must pass `req.user!.userId` to the registry method — the gate has an intentional silent-bypass for `requesterUserId === undefined` (legacy test fixtures rely on it), so a forgotten argument silently disables authorization. Pinned by `apps/api/src/__tests__/werewolf-games-host-only.test.ts`.
+
 ## Conventions
 
 - Tests live in `src/__tests__/` colocated with each package; name them `*.test.ts(x)`. Web e2e is the only exception (`apps/web/e2e/`).

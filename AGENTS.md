@@ -37,6 +37,28 @@ accepts any non-empty bearer and resolves to the constructor user id. Leave
 gate still verifiable). See `apps/api/src/__tests__/agent-invites.test.ts` and
 `route-audit.test.ts` for canonical test setups.
 
+### Werewolf lobby authorization (host-only)
+
+On top of the cookie-session auth above, three werewolf lobby endpoints further
+require the requesting user to be the lobby creator:
+
+- `POST /api/v1/werewolf-games/:gameId/start`
+- `POST /api/v1/werewolf-games/:gameId/fill-with-npcs`
+- `POST /api/v1/werewolf-games/:gameId/seats/:seatIndex/invite-npc`
+
+The constraint lives in `WerewolfLobbyRegistry.assertCreatorOnly` and matches
+against the `creatorUserId` captured when `POST /werewolf-games` is called.
+Inviting one's *own* registered HTTP agent into someone else's lobby is
+intentionally still allowed (the multi-host design intent).
+
+**Watch out:** the gate has an intentional silent-bypass when
+`requesterUserId === undefined` so legacy test fixtures that build the
+registry without an auth layer keep working. New route handlers that mutate
+a lobby **must** pass `req.user!.userId` explicitly — TypeScript does not
+enforce this (the parameter is optional), so a forgotten argument disables
+authorization without any warning. Regression coverage:
+`apps/api/src/__tests__/werewolf-games-host-only.test.ts`.
+
 ## Common Commands
 
 | Command                 | Purpose                                                            |
