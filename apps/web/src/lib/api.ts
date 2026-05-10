@@ -98,6 +98,15 @@ export interface SimulateResponse {
   };
 }
 
+// Endpoints that authenticate via the legacy cookie session only and will
+// 401 for Supabase-JWT-only users. The 401 here is expected (it just means
+// "no cookie session"), not a signal that the JWT was rejected, so the
+// auto-signOut interceptor below must skip them.
+const COOKIE_ONLY_AUTH_PATHS = new Set(['/auth/me']);
+function isCookieOnlyAuthPath(path: string): boolean {
+  return COOKIE_ONLY_AUTH_PATHS.has(path);
+}
+
 async function call<T>(method: string, path: string, opts: ApiOptions = {}): Promise<T> {
   const headers: Record<string, string> = { 'X-Requested-With': 'fetch' };
   let body: string | undefined;
@@ -123,9 +132,12 @@ async function call<T>(method: string, path: string, opts: ApiOptions = {}): Pro
 
   const res = await fetch(`${BASE}${path}`, init);
 
-  if (res.status === 401) {
-    // Only react with sign-out + redirect when we had a JWT session.
-    // Cookie-auth 401s are handled by the existing flow (no redirect).
+  if (res.status === 401 && !isCookieOnlyAuthPath(path)) {
+    // Only react with sign-out + redirect when we had a JWT session AND
+    // the 401 was not from a cookie-only legacy endpoint that always 401s
+    // for Supabase-only users (see isCookieOnlyAuthPath). Without that
+    // exclusion, AuthProvider's /auth/me probe on mount would auto-signOut
+    // every Supabase login and bounce the user straight back to /login.
     const { data: { session: currentSession } } = await supabase.auth.getSession();
     if (currentSession) {
       await signOut();
