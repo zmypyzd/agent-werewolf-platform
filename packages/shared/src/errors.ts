@@ -90,3 +90,12 @@ export class RateLimitedError extends AppError {
     super('RATE_LIMITED', `rate limit exceeded; retry after ${retryAfterMs}ms`);
   }
 }
+
+// 503: a backing service (Postgres, Supabase, object store) refused or rejected
+// the request for reasons that are not the caller's fault — e.g. the API role
+// lacks GRANT on a public view because the migration was never applied to the
+// target database. Distinct from INTERNAL_ERROR, which is reserved for true
+// server bugs. The thrown message must be safe to surface to the client.
+export class ServiceUnavailableError extends AppError {
+  constructor(reason: string) { super('SERVICE_UNAVAILABLE', reason); }
+}

@@ -245,6 +245,7 @@ export function buildServer(opts: BuildServerOptions = {}) {
         RATE_LIMITED: 429,
         NOT_IMPLEMENTED: 501,
         INTERNAL_ERROR: 500,
+        SERVICE_UNAVAILABLE: 503,
       };
       const statusCode = statusMap[error.code] ?? 500;
       if (error instanceof RateLimitedError) {
