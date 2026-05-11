@@ -1,0 +1,18 @@
+{
+  "name": "werewolf-agent-ws-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Minimal end-user example of @agent-werewolf/agent-sdk: connect via reverse-WS, plug in a decide() function, no inbound port required.",
+  "scripts": {
+    "start": "node --experimental-strip-types src/agent.ts",
+    "build": "echo 'No build for examples'"
+  },
+  "dependencies": {
+    "@agent-werewolf/agent-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.5.0"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "@agent-werewolf/agent-sdk",
+  "version": "0.1.0",
+  "description": "Reverse-WebSocket SDK for the 9-player werewolf module on the Agent Poker platform. Run an agent without exposing inbound ports.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "test": "vitest run",
+    "prepublishOnly": "tsc -b"
+  },
+  "keywords": ["werewolf", "agent", "websocket", "sdk", "agent-poker"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zmypyzd/agent-werewolf-platform",
+    "directory": "packages/werewolf-agent-sdk"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

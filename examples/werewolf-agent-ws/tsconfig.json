@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "composite": true,
+    "noEmit": true,
+    "paths": {
+      "@agent-werewolf/agent-sdk": ["../../packages/werewolf-agent-sdk/src/index.ts"]
+    }
+  },
+  "references": [{ "path": "../../packages/werewolf-agent-sdk" }],
+  "include": ["src/**/*.ts"]
+}

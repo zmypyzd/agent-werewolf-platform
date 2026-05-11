@@ -194,6 +194,33 @@ describe('AgentsPageContent', () => {
     expect(wolfHttp).not.toContain('actionType "fold"');
   });
 
+  // Regression for the failed-onboarding session captured in the project
+  // retro: Claude Code spent ~30 minutes wrestling cloudflared / ngrok /
+  // localtunnel before deploying to Render, instead of using the WS path.
+  // The new prompt must default to the SDK so an external coding agent
+  // never sees those tunnel instructions again.
+  it('defaults to the WebSocket SDK path (no inbound port / tunnel guidance)', () => {
+    const registerUrl = 'http://localhost:3000/api/v1/agents/invites/invite-new/register';
+    const wolfCoding = buildCodingAgentInvitePrompt(
+      { token: 'invite-new', registerUrl },
+      'werewolf',
+    );
+    // SDK + ws transport are the happy path
+    expect(wolfCoding).toContain('@agent-werewolf/agent-sdk');
+    expect(wolfCoding).toContain('"transport"');
+    expect(wolfCoding).toContain('"kind":"ws"');
+    expect(wolfCoding).toContain('wsConnect.url');
+    expect(wolfCoding).toContain('wsConnect.token');
+    // The old broken tunnel guidance is gone for good
+    expect(wolfCoding).not.toMatch(/cloudflared/i);
+    expect(wolfCoding).not.toMatch(/ngrok/i);
+    expect(wolfCoding).not.toMatch(/trycloudflare/i);
+    expect(wolfCoding).not.toContain('http://localhost:8080');
+    // No HTTP-server scaffolding instructions anymore
+    expect(wolfCoding).not.toContain('create a small local HTTP server');
+    expect(wolfCoding).not.toMatch(/POST endpoint at \/decide/);
+  });
+
   it('embeds inbound request schema so coding agents do not have to ask the operator for the API', () => {
     const registerUrl = 'http://localhost:3000/api/v1/agents/invites/invite-new/register';
     const invite = { token: 'invite-new', registerUrl };

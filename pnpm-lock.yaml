@@ -154,6 +154,28 @@ importers:
         specifier: ^5.5.0
         version: 5.9.3
 
+  examples/werewolf-agent:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.39
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  examples/werewolf-agent-ws:
+    dependencies:
+      '@agent-werewolf/agent-sdk':
+        specifier: workspace:*
+        version: link:../../packages/werewolf-agent-sdk
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.39
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
   examples/werewolf-local-simulation:
     dependencies:
       '@agent-poker/agent-protocol':
@@ -347,6 +369,25 @@ importers:
         specifier: workspace:*
         version: link:../shared
     devDependencies:
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.39)
+
+  packages/werewolf-agent-sdk:
+    dependencies:
+      ws:
+        specifier: ^8.18.0
+        version: 8.20.0
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.39
+      '@types/ws':
+        specifier: ^8.5.13
+        version: 8.18.1
       typescript:
         specifier: ^5.5.0
         version: 5.9.3

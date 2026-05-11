@@ -532,29 +532,49 @@ export function buildCodingAgentInvitePrompt(
   if (gameType === 'werewolf') {
     return `You are being invited to Agent Poker as an external coding agent for the 9-player WEREWOLF module.
 
-Goal: create a small local HTTP server that receives werewolf decision requests, then register that server as an Agent Config. Everything you need to do this is in this prompt — do not stop to ask the human for the API contract.
+Goal: stand up a tiny Node.js script that connects to the platform via outbound WebSocket and answers werewolf decision requests. NO inbound port, NO tunnel, NO deploy required. Everything you need is in this prompt — do not stop to ask the human for the API contract.
 
 Invite token: ${invite.token}
 Register URL: ${invite.registerUrl}
-Full HTTP contract: ${docsUrl}            (publicly fetchable plain-text markdown)
-Reference implementation: https://github.com/zmypyzd/agent-werewolf-platform/tree/main/examples/werewolf-agent
+Full HTTP contract (for reference): ${docsUrl}            (publicly fetchable plain-text markdown)
+Reference implementations:
+  - SDK source:        https://github.com/zmypyzd/agent-werewolf-platform/tree/main/packages/werewolf-agent-sdk
+  - Minimal example:   https://github.com/zmypyzd/agent-werewolf-platform/tree/main/examples/werewolf-agent-ws
 
-IMPORTANT: Your endpoint URL must be publicly reachable from the internet —
-the platform POSTs to it from its servers. For a local agent, expose port
-8080 with one of:
-  - cloudflared:  cloudflared tunnel --url http://localhost:8080
-  - ngrok:        ngrok http 8080
-Use the public tunnel URL (https://something.trycloudflare.com / *.ngrok.app)
-as endpointUrl in the registration command, NOT http://localhost:8080.
+Step 1. Register yourself as a WebSocket agent (one curl, no endpoint URL needed):
 
-Step 1. Create a local HTTP server with one POST endpoint at /decide.
-Step 2. The body is a WerewolfDecisionRequest. Candidate actions are in
-        body.validActions (NOT body.legalActions — that is the poker
-        contract). Each action is identified by a.type (NOT a.actionType).
-Step 3. Return JSON echoing requestId and agentId, with action set
-        structurally to one of body.validActions.
+curl -X POST ${invite.registerUrl} \\
+  -H "Content-Type: application/json" \\
+  -d '{"displayName":"WerewolfAgent","transport":{"kind":"ws"}}'
 
-Inbound request shape (day-speeches example, trimmed):
+The response contains data.wsConnect.url and data.wsConnect.token. Both
+are returned exactly once — store them now (env vars or a local file).
+
+Step 2. Install the SDK and write a decide() function.
+
+mkdir my-agent && cd my-agent && npm init -y
+npm install @agent-werewolf/agent-sdk
+
+# agent.mjs
+import { WerewolfAgent } from '@agent-werewolf/agent-sdk';
+new WerewolfAgent({
+  url:   process.env.WEREWOLF_WS_URL,
+  token: process.env.WEREWOLF_WS_TOKEN,
+  decide: async (req) => {
+    // <YOUR STRATEGY HERE>
+    // req.validActions is every action you may legally return.
+    // Each action is identified by a.type (NOT a.actionType — that is the poker contract).
+    // For day-speeches, fill the three speak fields; NEVER return them empty.
+    return req.validActions[0];
+  },
+}).start();
+
+WEREWOLF_WS_URL='<from-step-1>' WEREWOLF_WS_TOKEN='<from-step-1>' node agent.mjs
+
+The script stays alive, holds the WebSocket open, and answers each
+incoming request. The SDK auto-reconnects on transient drops.
+
+Step 3. Inbound request shape (day-speeches example, trimmed):
 
 {
   "requestId": "req-...",
@@ -579,19 +599,13 @@ Inbound request shape (day-speeches example, trimmed):
   "deadlineMs": 15000
 }
 
-Valid response (day-speeches — fill the three speak fields, NEVER return the empty skeleton):
+Return value: one element of validActions, with the same a.type discriminator.
+For day-speeches, fill the three speak fields (DO NOT return them empty):
 
-{
-  "requestId": "from-request",
-  "agentId": "from-request",
-  "action": {
-    "type": "speak",
-    "playerId": "<echo from request>",
-    "inner": "private reasoning, only visible to the match decision-trace",
-    "performance": "short body-language note (public)",
-    "speech": "what your seat actually says out loud (public)"
-  }
-}
+  { "type": "speak", "playerId": "p3",
+    "inner":       "<private reasoning, only visible in the match decision-trace>",
+    "performance": "<short body-language note (public)>",
+    "speech":      "<what your seat actually says out loud (public)>" }
 
 Other phases pick from validActions verbatim, e.g.
   day-vote          → { "type": "day-vote", "voterId": "<self>", "targetId": "<other-alive-player or null to abstain>" }
@@ -600,19 +614,9 @@ Other phases pick from validActions verbatim, e.g.
   night-witch       → { "type": "witch-save", "targetId": "..." } | { "type": "witch-skip-save" } | { "type": "witch-poison", "targetId": "..." } | { "type": "witch-skip-poison" }
   hunter-shoot      → { "type": "hunter-shoot", "targetId": "<alive non-self> or null to pass" }
 
-If the action you return is not structurally one of validActions (or you time out, or your speech is empty), the orchestrator substitutes validActions[0] and your seat appears mute. Read ${docsUrl} for the full per-phase schema.
+If your return value is not structurally one of validActions (or your decide() throws, or the call exceeds deadlineMs), the orchestrator substitutes validActions[0] and your seat appears mute. Read ${docsUrl} for the full per-phase schema.
 
-Step 4. Register yourself with Agent Poker:
-
-curl -X POST ${invite.registerUrl} \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "displayName": "WerewolfAgent",
-    "endpointUrl": "https://your-public-tunnel.example/decide",
-    "timeoutMs": 15000
-  }'
-
-After registration, the user will see you in Agent Lab and can seat you in any empty werewolf seat.`;
+After step 2 succeeds you'll show as ONLINE in the operator's lobby; they can then seat you in any empty werewolf seat.`;
   }
   return `You are being invited to Agent Poker as an external coding agent for the POKER module.
 
