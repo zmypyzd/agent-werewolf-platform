@@ -116,8 +116,24 @@ export class WerewolfOrchestrator {
     listener: (event: WerewolfReplayEvent) => void,
   ): () => void {
     const entry = this.requireEntry(matchId);
-    entry.emitter.on('replay-event', listener);
-    return () => entry.emitter.off('replay-event', listener);
+    // Wrap the user's listener so a synchronous throw inside it cannot
+    // propagate back to the broadcaster (match-runner.ts:451-452 emits in
+    // the engine's hot loop). Without this isolation a single buggy
+    // subscriber would either silence every subscriber registered after
+    // it (Node EventEmitter aborts the listener loop on the first throw)
+    // OR — since match-runner does not catch — crash the entire match.
+    // Log and swallow so the broadcast keeps flowing.
+    const safeListener = (event: WerewolfReplayEvent): void => {
+      try {
+        listener(event);
+      } catch (err) {
+        console.error(
+          `WerewolfOrchestrator subscriber threw for match ${matchId} on ${event.eventType}: ${(err as Error).message}`,
+        );
+      }
+    };
+    entry.emitter.on('replay-event', safeListener);
+    return () => entry.emitter.off('replay-event', safeListener);
   }
 
   subscribePrivate(
@@ -125,8 +141,21 @@ export class WerewolfOrchestrator {
     listener: (event: WerewolfPrivateStateEvent) => void,
   ): () => void {
     const entry = this.requireEntry(matchId);
-    entry.emitter.on('private-state', listener);
-    return () => entry.emitter.off('private-state', listener);
+    // Same isolation rationale as subscribe() — see comment above. The
+    // private-state channel is even more important to keep flowing: the
+    // mailbox runner depends on private-state events to deliver each
+    // agent's per-decision private view.
+    const safeListener = (event: WerewolfPrivateStateEvent): void => {
+      try {
+        listener(event);
+      } catch (err) {
+        console.error(
+          `WerewolfOrchestrator private subscriber threw for match ${matchId} player ${event.playerId}: ${(err as Error).message}`,
+        );
+      }
+    };
+    entry.emitter.on('private-state', safeListener);
+    return () => entry.emitter.off('private-state', safeListener);
   }
 
   async runMatch(

@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type {
   WerewolfDecisionRequest,
   WerewolfDecisionResponse,
+  WerewolfPrivateState,
 } from '@agent-poker/shared';
 import { WerewolfMockAgent } from '@agent-poker/agent-runtime';
 import type { IAgent } from '@agent-poker/agent-runtime';
@@ -94,6 +95,80 @@ describe('WerewolfOrchestrator', () => {
   it('getMatchSummary returns null for unknown matchId', () => {
     const orch = new WerewolfOrchestrator();
     expect(orch.getMatchSummary('does-not-exist')).toBeNull();
+  });
+
+  it('subscriber exception is isolated — match completes and other subscribers still receive events', async () => {
+    // EventEmitter delivers listeners synchronously; if listener A throws,
+    // the for-loop inside emit breaks and listeners registered AFTER A do
+    // not receive the event. Worse: the throw propagates back to whoever
+    // called emit(), which in match-runner.ts:451-452 is in the engine's
+    // hot loop — a single buggy subscriber would crash the entire match.
+    // Subscriber error isolation: subscribe() must wrap the listener in a
+    // try/catch so a thrown subscriber callback is logged and swallowed,
+    // not propagated to the broadcaster.
+    const orch = new WerewolfOrchestrator();
+    const { matchId, initialState } = orch.createMatch({
+      gameId: 'g-subscriber-iso',
+      seed: 'seed-subscriber-iso',
+    });
+    for (const p of initialState.players) {
+      orch.registerAgent(matchId, p.id, new WerewolfMockAgent(`agent-${p.id}`, p.name));
+    }
+    // Subscriber A — registered first, throws on every event.
+    let throwingCallCount = 0;
+    orch.subscribe(matchId, () => {
+      throwingCallCount++;
+      throw new Error('subscriber bomb');
+    });
+    // Subscriber B — registered second, collects events.
+    const collected: WerewolfReplayEvent[] = [];
+    orch.subscribe(matchId, (e) => {
+      collected.push(e);
+    });
+
+    // The fix logs swallowed exceptions to console.error; silence the noise
+    // in test output and assert at least one log fired to verify the
+    // logging path also works.
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const summary = await orch.runMatch(matchId);
+
+    consoleErrorSpy.mockRestore();
+
+    expect(['good', 'werewolf']).toContain(summary.winner);
+    expect(throwingCallCount).toBeGreaterThan(0);
+    expect(collected.length).toBeGreaterThan(0);
+    // The collector receives both the opening match.started and the final
+    // match.completed, so the broadcast made it through A's throws end-to-end.
+    expect(collected[0]!.eventType).toBe('match.started');
+    expect(collected[collected.length - 1]!.eventType).toBe('match.completed');
+  });
+
+  it('subscribePrivate exception is isolated — other private listeners still receive events', async () => {
+    const orch = new WerewolfOrchestrator();
+    const { matchId, initialState } = orch.createMatch({
+      gameId: 'g-private-iso',
+      seed: 'seed-private-iso',
+    });
+    for (const p of initialState.players) {
+      orch.registerAgent(matchId, p.id, new WerewolfMockAgent(`agent-${p.id}`, p.name));
+    }
+    let throwingCount = 0;
+    orch.subscribePrivate(matchId, () => {
+      throwingCount++;
+      throw new Error('private subscriber bomb');
+    });
+    const collected: WerewolfPrivateState[] = [];
+    orch.subscribePrivate(matchId, ({ privateState }) => {
+      collected.push(privateState);
+    });
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await orch.runMatch(matchId);
+    consoleErrorSpy.mockRestore();
+
+    expect(throwingCount).toBeGreaterThan(0);
+    expect(collected.length).toBeGreaterThan(0);
   });
 
   it('runMatch lands in a terminal failed state after an error and refuses retry', async () => {
