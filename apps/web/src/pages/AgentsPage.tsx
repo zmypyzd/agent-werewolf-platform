@@ -16,7 +16,13 @@ export interface UserAgentConfigPublic {
 }
 
 export interface AgentInvitePublic {
-  token: string;
+  // Wire field is `tokenHash` (sha256). The raw token is emitted by the
+  // server exactly once — at creation — and never again, so list/render
+  // paths only ever see the hash. Use the freshly-generated invite's
+  // `token` for actions that need the raw value (e.g. copying into a
+  // prompt for an external agent); use `tokenHash` for revoke and as a
+  // React key.
+  tokenHash: string;
   displayName: string | null;
   notes: string | null;
   expiresAt: number;
@@ -56,7 +62,7 @@ export interface AgentsPageContentProps {
   onCancelDelete: () => void;
   onConfirmDelete: () => void;
   onCreateInvite: () => void;
-  onRevokeInvite: (token: string) => void;
+  onRevokeInvite: (tokenHash: string) => void;
   onCopyInvitePrompt: (type: 'coding-agent' | 'http-agent', invite: GeneratedAgentInvite) => void;
   gameType: AgentInviteGameType;
   onGameTypeChange: (gameType: AgentInviteGameType) => void;
@@ -164,12 +170,16 @@ export function AgentsPage() {
     }
   }
 
-  async function revokeInvite(token: string) {
+  // Listed invites only carry the sha256 hash — the raw token is emitted
+  // exactly once at creation. Routed to the by-hash endpoint that the API
+  // exposes specifically for this case. The freshly-generated invite card
+  // (which still has the raw token in scope) calls revokeGeneratedInvite
+  // below instead.
+  async function revokeInviteByHash(tokenHash: string) {
     setInviteBusy(true);
     setInviteError(null);
     try {
-      await api.del(`/agents/invites/${token}`);
-      if (generatedInvite?.token === token) setGeneratedInvite(null);
+      await api.del(`/agents/invites/by-hash/${tokenHash}`);
       await refreshInvites();
     } catch (e) {
       setInviteError(e instanceof ApiError ? e.message : 'Failed to revoke invite');
@@ -203,7 +213,7 @@ export function AgentsPage() {
         onCancelDelete={() => setDeleteAgent(null)}
         onConfirmDelete={confirmDelete}
         onCreateInvite={() => void createInvite()}
-        onRevokeInvite={token => void revokeInvite(token)}
+        onRevokeInvite={tokenHash => void revokeInviteByHash(tokenHash)}
         onCopyInvitePrompt={copyInvitePrompt}
         gameType={gameType}
         onGameTypeChange={setGameType}
@@ -439,7 +449,7 @@ export function AgentsPageContent({
         {!inviteLoading && pendingInvites.length > 0 && (
           <div className="agent-config-list">
             {pendingInvites.map(invite => (
-              <article className="agent-card agent-config-card" key={invite.token}>
+              <article className="agent-card agent-config-card" key={invite.tokenHash}>
                 <div className="agent-card-header">
                   <div>
                     <h3>{invite.displayName ?? 'External agent invite'}</h3>
@@ -449,8 +459,8 @@ export function AgentsPageContent({
                 </div>
                 <dl className="agent-config-metrics">
                   <div>
-                    <dt>Token</dt>
-                    <dd><code>{invite.token}</code></dd>
+                    <dt>Created</dt>
+                    <dd>{formatInviteExpiry(invite.createdAt)}</dd>
                   </div>
                   <div>
                     <dt>Expires</dt>
@@ -461,7 +471,7 @@ export function AgentsPageContent({
                   <button
                     type="button"
                     className="button-danger"
-                    onClick={() => onRevokeInvite(invite.token)}
+                    onClick={() => onRevokeInvite(invite.tokenHash)}
                     disabled={inviteBusy}
                   >
                     Revoke
@@ -501,17 +511,33 @@ function formatInviteExpiry(expiresAt: number): string {
   return new Date(expiresAt).toLocaleString();
 }
 
+// Derive the platform's public origin from the registerUrl baked into the
+// invite — same scheme/host/port the operator uses to register, so docs
+// and reference assets resolve against the same deployment (local dev,
+// preview, prod). Falls back to relative paths if registerUrl is malformed.
+function deriveOrigin(registerUrl: string): string {
+  try {
+    return new URL(registerUrl).origin;
+  } catch {
+    return '';
+  }
+}
+
 export function buildCodingAgentInvitePrompt(
   invite: Pick<GeneratedAgentInvite, 'token' | 'registerUrl'>,
   gameType: AgentInviteGameType,
 ): string {
+  const origin = deriveOrigin(invite.registerUrl);
+  const docsUrl = `${origin}/api/v1/docs/werewolf-agent-guide`;
   if (gameType === 'werewolf') {
     return `You are being invited to Agent Poker as an external coding agent for the 9-player WEREWOLF module.
 
-Goal: create a small local HTTP server that receives werewolf decision requests, then register that server as an Agent Config.
+Goal: create a small local HTTP server that receives werewolf decision requests, then register that server as an Agent Config. Everything you need to do this is in this prompt — do not stop to ask the human for the API contract.
 
 Invite token: ${invite.token}
 Register URL: ${invite.registerUrl}
+Full HTTP contract: ${docsUrl}            (publicly fetchable plain-text markdown)
+Reference implementation: https://github.com/zmypyzd/agent-werewolf-platform/tree/main/examples/werewolf-agent
 
 IMPORTANT: Your endpoint URL must be publicly reachable from the internet —
 the platform POSTs to it from its servers. For a local agent, expose port
@@ -521,26 +547,62 @@ the platform POSTs to it from its servers. For a local agent, expose port
 Use the public tunnel URL (https://something.trycloudflare.com / *.ngrok.app)
 as endpointUrl in the registration command, NOT http://localhost:8080.
 
-1. Create a local HTTP server with one POST endpoint at /decide.
-2. The body is a WerewolfDecisionRequest. Candidate actions are in body.validActions
-   (NOT body.legalActions — that is the poker contract). Each action is identified
-   by a.type (NOT a.actionType).
-3. Return JSON echoing requestId and agentId, with action set to one of
-   body.validActions. Example for the day-speeches phase:
+Step 1. Create a local HTTP server with one POST endpoint at /decide.
+Step 2. The body is a WerewolfDecisionRequest. Candidate actions are in
+        body.validActions (NOT body.legalActions — that is the poker
+        contract). Each action is identified by a.type (NOT a.actionType).
+Step 3. Return JSON echoing requestId and agentId, with action set
+        structurally to one of body.validActions.
+
+Inbound request shape (day-speeches example, trimmed):
+
+{
+  "requestId": "req-...",
+  "gameId": "game-...",
+  "agentId": "cfg-...",
+  "playerId": "p3",
+  "phase": "day-speeches",          // also: night-werewolf-vote | night-witch | night-seer | day-vote | hunter-shoot
+  "nightNumber": 1,
+  "dayNumber": 1,
+  "publicState": {
+    "players": [{ "id": "p1", "seatIndex": 0, "name": "...", "alive": true, "revealedRole": null }, ...],
+    "history": [{ "type": "death", "day": 1, "playerId": "p2", "cause": "wolf-kill" }, ...],
+    "winner": null
+  },
+  "privateState": {
+    "selfId": "p3", "selfRole": "villager", "selfSide": "good",
+    "knownAllies": [], "seerKnowledge": [], "witchView": null, "hunterCanShoot": false
+  },
+  "validActions": [
+    { "type": "speak", "playerId": "p3", "inner": "", "performance": "", "speech": "" }
+  ],
+  "deadlineMs": 15000
+}
+
+Valid response (day-speeches — fill the three speak fields, NEVER return the empty skeleton):
 
 {
   "requestId": "from-request",
   "agentId": "from-request",
   "action": {
     "type": "speak",
-    "playerId": "from-request.playerId",
-    "inner": "private reasoning visible to no one",
+    "playerId": "<echo from request>",
+    "inner": "private reasoning, only visible to the match decision-trace",
     "performance": "short body-language note (public)",
-    "speech": "what your seat actually says out loud"
+    "speech": "what your seat actually says out loud (public)"
   }
 }
 
-4. Register yourself with Agent Poker:
+Other phases pick from validActions verbatim, e.g.
+  day-vote          → { "type": "day-vote", "voterId": "<self>", "targetId": "<other-alive-player or null to abstain>" }
+  night-werewolf-vote (wolves only) → { "type": "werewolf-vote", "voterId": "<self>", "targetId": "<non-wolf alive>" }
+  night-seer        → { "type": "seer-divine", "targetId": "<alive non-self>" }
+  night-witch       → { "type": "witch-save", "targetId": "..." } | { "type": "witch-skip-save" } | { "type": "witch-poison", "targetId": "..." } | { "type": "witch-skip-poison" }
+  hunter-shoot      → { "type": "hunter-shoot", "targetId": "<alive non-self> or null to pass" }
+
+If the action you return is not structurally one of validActions (or you time out, or your speech is empty), the orchestrator substitutes validActions[0] and your seat appears mute. Read ${docsUrl} for the full per-phase schema.
+
+Step 4. Register yourself with Agent Poker:
 
 curl -X POST ${invite.registerUrl} \\
   -H "Content-Type: application/json" \\
@@ -550,15 +612,11 @@ curl -X POST ${invite.registerUrl} \\
     "timeoutMs": 15000
   }'
 
-The full per-phase action menu (witch-save, werewolf-vote, day-vote,
-hunter-shoot, ...) and request schema is in docs/werewolf-http-agent-guide.md.
-
-After registration, the user will see you in Agent Lab and can seat you in any
-empty werewolf seat.`;
+After registration, the user will see you in Agent Lab and can seat you in any empty werewolf seat.`;
   }
   return `You are being invited to Agent Poker as an external coding agent for the POKER module.
 
-Goal: create a small local HTTP server that receives poker decision requests, then register that server as an Agent Config.
+Goal: create a small local HTTP server that receives poker decision requests, then register that server as an Agent Config. Everything you need to do this is in this prompt — do not stop to ask the human for the API contract.
 
 Invite token: ${invite.token}
 Register URL: ${invite.registerUrl}
@@ -569,16 +627,48 @@ the platform POSTs to it from its servers. For a local agent, expose port
 ngrok (ngrok http 8080). Use the public tunnel URL as endpointUrl below,
 NOT http://localhost:8080.
 
-1. Create a local HTTP server with one POST endpoint at /decide.
-2. For every decision request, return JSON with the same requestId and agentId plus an action:
+Step 1. Create a local HTTP server with one POST endpoint at /decide.
+
+Inbound request shape (preflop example, trimmed):
+
+{
+  "requestId": "req-...",
+  "handId": "hand-...",
+  "tableId": "tbl-...",
+  "agentId": "<your agent id>",
+  "publicState": {
+    "phase": "preflop",                    // also: flop | turn | river | showdown
+    "players": [{ "playerId": "p1", "seatIndex": 0, "stack": 980, "status": "active", "totalBetInHand": 20, "currentRoundBet": 20 }, ...],
+    "communityCards": [],                  // length 0/3/4/5
+    "pots": [{ "amount": 30, "eligiblePlayerIds": ["p0","p1","p2"] }],
+    "button": 0, "smallBlindIndex": 1, "bigBlindIndex": 2,
+    "currentActorIndex": 3,
+    "currentRoundMinBet": 20,
+    "minRaiseAmount": 40,
+    "allActions": [/* full action history this hand */]
+  },
+  "privateState": {
+    "playerId": "<your seat>",
+    "holeCards": [{ "rank": "A", "suit": "s" }, { "rank": "K", "suit": "d" }]
+  },
+  "legalActions": [
+    { "type": "fold" },
+    { "type": "call", "callAmount": 20 },
+    { "type": "raise", "minAmount": 40, "maxAmount": 980 }
+  ],
+  "timeoutMs": 5000
+}
+
+Step 2. Pick one of legalActions. Note the field renaming: legalActions[i].type is the field on the request side, but your response uses actionType. Return JSON echoing requestId and agentId:
 
 {
   "requestId": "from-request",
   "agentId": "from-request",
-  "actionType": "fold"
+  "actionType": "raise",       // one of: fold | check | call | bet | raise | all-in
+  "amount": 40                  // include for bet/raise/call/all-in; omit for fold/check
 }
 
-3. Register yourself with Agent Poker:
+Step 3. Register yourself with Agent Poker:
 
 curl -X POST ${invite.registerUrl} \\
   -H "Content-Type: application/json" \\
@@ -595,6 +685,8 @@ export function buildHttpAgentInvitePrompt(
   invite: Pick<GeneratedAgentInvite, 'token' | 'registerUrl'>,
   gameType: AgentInviteGameType,
 ): string {
+  const origin = deriveOrigin(invite.registerUrl);
+  const docsUrl = `${origin}/api/v1/docs/werewolf-agent-guide`;
   if (gameType === 'werewolf') {
     return `You are being invited to Agent Poker as an external HTTP agent for the 9-player WEREWOLF module.
 
@@ -608,6 +700,7 @@ This is a DIFFERENT protocol from the poker module. Pinning the differences:
   - The response carries an action object (one of validActions), not an actionType string.
 
 Invite token: ${invite.token}
+Full HTTP contract (publicly fetchable plain-text): ${docsUrl}
 
 Register your endpoint:
 
@@ -631,8 +724,8 @@ Response shape:
 
 The action you return MUST be structurally one of body.validActions. The
 orchestrator substitutes a fallback (which makes you look mute on day-speeches)
-on schema mismatch, network error, or timeout. See
-docs/werewolf-http-agent-guide.md for the full per-phase schema.`;
+on schema mismatch, network error, or timeout. Fetch ${docsUrl} for the full
+per-phase schema, request body fields, and worked end-to-end example.`;
   }
   return `You are being invited to Agent Poker as an external HTTP agent for the POKER module.
 
@@ -652,6 +745,16 @@ curl -X POST ${invite.registerUrl} \\
     "timeoutMs": 5000
   }'
 
+Inbound request shape:
+
+{
+  "requestId": "...", "handId": "...", "tableId": "...", "agentId": "...",
+  "publicState": { "phase": "preflop|flop|turn|river|showdown", "players": [...], "communityCards": [...], "pots": [...], "button": N, "currentActorIndex": N, "currentRoundMinBet": N, "minRaiseAmount": N, "allActions": [...] },
+  "privateState": { "playerId": "...", "holeCards": [{ "rank": "A", "suit": "s" }, { "rank": "K", "suit": "d" }] },
+  "legalActions": [ { "type": "fold" }, { "type": "call", "callAmount": 20 }, { "type": "raise", "minAmount": 40, "maxAmount": 980 } ],
+  "timeoutMs": 5000
+}
+
 Your HTTP decision endpoint response shape:
 
 {
@@ -661,5 +764,5 @@ Your HTTP decision endpoint response shape:
   "amount": 0
 }
 
-Use actionType "fold", "check", "call", "bet", "raise", or "all-in". Include amount only when the chosen legal action needs chips.`;
+Use actionType "fold", "check", "call", "bet", "raise", or "all-in". Include amount only when the chosen legal action needs chips. Note the request uses legalActions[i].type but your response uses actionType.`;
 }

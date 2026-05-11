@@ -56,6 +56,15 @@ describe('agent-invites routes (JWT path)', () => {
       expect(res.statusCode).toBe(401);
       expect(res.json().error.code).toBe('UNAUTHENTICATED');
     });
+
+    it('DELETE /agents/invites/by-hash/:tokenHash without Authorization → 401', async () => {
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/api/v1/agents/invites/by-hash/somehash',
+      });
+      expect(res.statusCode).toBe(401);
+      expect(res.json().error.code).toBe('UNAUTHENTICATED');
+    });
   });
 
   // ─── B) Config guard — auth passes, no supabaseConfig → 501 ─────────────────
@@ -87,6 +96,16 @@ describe('agent-invites routes (JWT path)', () => {
       const res = await app.inject({
         method: 'DELETE',
         url: '/api/v1/agents/invites/some-token',
+        headers: { authorization: 'Bearer mock-token' },
+      });
+      expect(res.statusCode).toBe(501);
+      expect(res.json().error.code).toBe('NOT_IMPLEMENTED');
+    });
+
+    it('DELETE /agents/invites/by-hash/:tokenHash with Bearer token but no supabaseConfig → 501 NOT_IMPLEMENTED', async () => {
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/api/v1/agents/invites/by-hash/somehash',
         headers: { authorization: 'Bearer mock-token' },
       });
       expect(res.statusCode).toBe(501);
