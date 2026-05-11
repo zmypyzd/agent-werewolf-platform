@@ -120,6 +120,10 @@ export interface BuildServerOptions {
   // When provided, agent-invites routes use Postgres-backed stores with RLS.
   // Without this, all agent-invites endpoints return 501 (not configured).
   supabaseConfig?: SupabaseClientConfig;
+  // Test-injection seam for the register-time HTTP probe. Defaults to
+  // globalThis.fetch in production. See
+  // apps/api/src/services/probe-http-agent-endpoint.ts.
+  probeFetch?: typeof fetch;
 }
 
 export function buildServer(opts: BuildServerOptions = {}) {
@@ -263,6 +267,11 @@ export function buildServer(opts: BuildServerOptions = {}) {
         AGENT_NOT_FOUND: 404,
         AGENT_INVITE_NOT_FOUND: 404,
         AGENT_INVITE_UNAVAILABLE: 410,
+        // 400 — the supplied endpointUrl is reachable but failed the
+        // register-time probe. The body's `message` field carries the
+        // specific reason (timeout, non-2xx, malformed JSON, schema mismatch).
+        ENDPOINT_UNREACHABLE: 400,
+        ENDPOINT_INVALID_RESPONSE: 400,
         HAND_NOT_FOUND: 404,
         MATCH_NOT_FOUND: 404,
         NOT_ENOUGH_PLAYERS: 400,
@@ -408,6 +417,7 @@ export function buildServer(opts: BuildServerOptions = {}) {
     await scope.register(agentInvitesRoutes, {
       prefix: '/api/v1',
       ...(opts.supabaseConfig ? { supabaseConfig: opts.supabaseConfig } : {}),
+      ...(opts.probeFetch ? { probeFetch: opts.probeFetch } : {}),
     });
     await scope.register(werewolfDocsRoutes, { prefix: '/api/v1' });
     if (opts.werewolfAgentStore) {

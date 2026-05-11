@@ -22,9 +22,19 @@ import {
   type SupabaseClientConfig,
 } from '@agent-poker/persistence';
 import type { JwtAuthenticatedRequest } from '../middleware/auth.js';
+import {
+  probeHttpAgentEndpoint,
+  type ProbeOutcome,
+} from '../services/probe-http-agent-endpoint.js';
 
 interface AgentInvitesPluginOptions extends FastifyPluginOptions {
   supabaseConfig?: SupabaseClientConfig;
+  // Test-injection seam for the register-time HTTP probe (see
+  // probe-http-agent-endpoint.ts). When undefined the probe uses the
+  // global fetch, which is what production wants. Tests pass a fake
+  // fetch so they can simulate unreachable / malformed endpoints
+  // without a real listener.
+  probeFetch?: typeof fetch;
 }
 
 function requireSupabaseConfig(supabaseConfig: SupabaseClientConfig | undefined): SupabaseClientConfig {
@@ -231,6 +241,30 @@ export async function agentInvitesRoutes(app: FastifyInstance, opts: AgentInvite
       }
 
       const transport = normalizeTransport(body);
+
+      // For HTTP transports, synthetically probe the supplied endpoint
+      // BEFORE creating the agent record. Without this, a misconfigured
+      // URL (broken tunnel, wrong port, etc.) is silently accepted and
+      // only manifests as a mute seat during a real match. See
+      // services/probe-http-agent-endpoint.ts for the rationale + the
+      // shape of the synthetic request. ws transports skip this — they
+      // have no inbound endpoint to probe; reachability is verified at
+      // WS upgrade time instead.
+      if (transport.kind === 'http') {
+        const outcome: ProbeOutcome = await probeHttpAgentEndpoint({
+          endpointUrl: transport.endpointUrl,
+          authHeaderName: transport.authHeaderName,
+          authHeaderValue: transport.authHeaderValue,
+          timeoutMs: body.timeoutMs,
+          ...(opts.probeFetch ? { fetchImpl: opts.probeFetch } : {}),
+        });
+        if (!outcome.ok) {
+          throw new AppError(
+            outcome.code ?? 'ENDPOINT_UNREACHABLE',
+            `endpointUrl probe failed: ${outcome.reason ?? 'unknown'}`,
+          );
+        }
+      }
 
       const created = transport.kind === 'http'
         ? await agentStore.create({
