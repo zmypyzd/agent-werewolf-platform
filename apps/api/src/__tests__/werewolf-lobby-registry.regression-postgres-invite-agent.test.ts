@@ -1,0 +1,291 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { randomUUID } from 'crypto';
+import { WerewolfOrchestrator } from '@agent-poker/werewolf-orchestrator';
+import type {
+  AgentRecord,
+  CreateAgentResult,
+  IAgentStore,
+  IUserAgentConfigStore,
+  NewAgent,
+  PatchAgent,
+  UserAgentConfig,
+} from '@agent-poker/persistence';
+import { WerewolfLobbyRegistry } from '../werewolf-lobby-registry.js';
+
+// Regression for the prod bug captured 2026-05-11: after the auth
+// migration, `/me/agents` was switched to query postgres (see
+// apps/api/src/routes/me-agents.ts:60), but
+// `WerewolfLobbyRegistry.inviteAgent` was still reading the SQLite
+// IUserAgentConfigStore. Net effect: AgentPicker showed the user's
+// postgres-registered agents, the user clicked one, the seat-time
+// lookup failed in the wrong store, and the API returned AGENT_NOT_FOUND
+// for an agent that demonstrably existed in the listing call.
+//
+// This test wires WerewolfLobbyRegistry with a postgres-shaped
+// IAgentStore (mirroring production via opts.werewolfAgentStore) and
+// exercises the now-supported path end-to-end.
+
+function makeMockAgentStore(): IAgentStore & {
+  records: Map<string, AgentRecord>;
+} {
+  const records = new Map<string, AgentRecord>();
+  return {
+    records,
+    async list(ownerId) {
+      return [...records.values()].filter((r) => r.ownerId === ownerId);
+    },
+    async get(ownerId, agentId) {
+      const r = records.get(agentId);
+      return r && r.ownerId === ownerId ? r : null;
+    },
+    async getById(agentId) {
+      return records.get(agentId) ?? null;
+    },
+    async findByTokenHash() {
+      return null;
+    },
+    async create(input: NewAgent): Promise<CreateAgentResult> {
+      const id = randomUUID();
+      const record: AgentRecord = {
+        id,
+        ownerId: input.ownerId,
+        name: input.name,
+        description: input.description ?? null,
+        protocol: input.protocol,
+        callbackUrl: input.callbackUrl ?? null,
+        authHeaderName: input.authHeaderName ?? null,
+        authHeaderValue: input.authHeaderValue ?? null,
+        timeoutMs: input.timeoutMs ?? 15_000,
+        status: 'active',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      records.set(id, record);
+      return { agent: record, rawToken: null };
+    },
+    async update(_o, id, _patch: PatchAgent) {
+      return records.get(id)!;
+    },
+    async rotateToken() {
+      throw new Error('not implemented in mock');
+    },
+    async delete(_o, id) {
+      records.delete(id);
+    },
+  };
+}
+
+function makeMockAgentConfigStore(): IUserAgentConfigStore & {
+  configs: Map<string, UserAgentConfig>;
+} {
+  const configs = new Map<string, UserAgentConfig>();
+  return {
+    configs,
+    async list() { return [...configs.values()]; },
+    async get(userId, id) {
+      const c = configs.get(id);
+      return c && c.userId === userId ? c : null;
+    },
+    async create(cfg) { configs.set(cfg.agentConfigId, cfg as UserAgentConfig); return cfg as UserAgentConfig; },
+    async update(_u, id) { return configs.get(id)!; },
+    async delete(_u, id) { configs.delete(id); },
+  };
+}
+
+describe('WerewolfLobbyRegistry — inviteAgent against postgres IAgentStore', () => {
+  it('seats an http agent looked up from postgres agentStore', async () => {
+    const orch = new WerewolfOrchestrator();
+    const agentStore = makeMockAgentStore();
+    const registry = new WerewolfLobbyRegistry({
+      orchestrator: orch,
+      attachMatch: vi.fn(),
+      detachMatch: vi.fn(),
+      npcThinkingDelayRange: [0, 0],
+      agentStore,
+    });
+
+    const ownerUserId = 'user-alice';
+    const created = await agentStore.create({
+      ownerId: ownerUserId,
+      name: 'http-bot',
+      description: null,
+      protocol: 'http',
+      callbackUrl: 'https://example.test/decide',
+      authHeaderName: 'X-Auth',
+      authHeaderValue: 'secret',
+      timeoutMs: 12_000,
+    });
+
+    const game = registry.create({ name: 'test', seed: 'p3-prod-fix' });
+    const entry = await registry.inviteAgent(
+      game.gameId,
+      0,
+      created.agent.id,
+      ownerUserId,
+    );
+
+    const seat0 = entry.seats[0]!;
+    expect(seat0.occupant.kind).toBe('agent');
+    if (seat0.occupant.kind !== 'agent') throw new Error('unreachable');
+    expect(seat0.occupant.displayName).toBe('http-bot');
+    // Public projection strips agentConfigId; verify the internal tracking
+    // worked by querying the cross-game in-use checker (which iterates
+    // internal seats and reads agentConfigId).
+    expect(registry.isAgentConfigInUse(created.agent.id)).toBe(true);
+  });
+
+  it('returns AGENT_NOT_FOUND when the postgres record exists but is owned by someone else', async () => {
+    const orch = new WerewolfOrchestrator();
+    const agentStore = makeMockAgentStore();
+    const registry = new WerewolfLobbyRegistry({
+      orchestrator: orch,
+      attachMatch: vi.fn(),
+      detachMatch: vi.fn(),
+      npcThinkingDelayRange: [0, 0],
+      agentStore,
+    });
+    const created = await agentStore.create({
+      ownerId: 'user-alice',
+      name: 'alice-bot',
+      description: null,
+      protocol: 'http',
+      callbackUrl: 'https://example.test/decide',
+      timeoutMs: 12_000,
+    });
+    const game = registry.create({});
+
+    await expect(
+      registry.inviteAgent(game.gameId, 0, created.agent.id, 'user-bob'),
+    ).rejects.toMatchObject({ code: 'AGENT_NOT_FOUND' });
+  });
+
+  it('rejects a postgres ws agent with AGENT_NOT_FOUND (lobby seating of ws is a future PR)', async () => {
+    // ws agents authenticate via wsToken at WS upgrade time and need an
+    // AgentConnectionRegistry to dispatch decisions. The web-lobby seat
+    // path doesn't wire either of those yet. Surface as not-found so a
+    // cross-user probe can't distinguish from "no such id".
+    const orch = new WerewolfOrchestrator();
+    const agentStore = makeMockAgentStore();
+    const registry = new WerewolfLobbyRegistry({
+      orchestrator: orch,
+      attachMatch: vi.fn(),
+      detachMatch: vi.fn(),
+      npcThinkingDelayRange: [0, 0],
+      agentStore,
+    });
+    const created = await agentStore.create({
+      ownerId: 'user-alice',
+      name: 'ws-bot',
+      description: null,
+      protocol: 'ws',
+      timeoutMs: 12_000,
+    });
+    const game = registry.create({});
+
+    await expect(
+      registry.inviteAgent(game.gameId, 0, created.agent.id, 'user-alice'),
+    ).rejects.toMatchObject({ code: 'AGENT_NOT_FOUND' });
+  });
+
+  it('prefers postgres over SQLite when both stores have the same id', async () => {
+    // Hybrid wiring (postgres set + SQLite set) is the migration window
+    // state: prod will run postgres-only, but tests sometimes seed
+    // SQLite fakes. Resolution order must be postgres-first so the new
+    // production path is exercised even when both happen to be live.
+    const orch = new WerewolfOrchestrator();
+    const agentStore = makeMockAgentStore();
+    const agentConfigStore = makeMockAgentConfigStore();
+    const registry = new WerewolfLobbyRegistry({
+      orchestrator: orch,
+      attachMatch: vi.fn(),
+      detachMatch: vi.fn(),
+      npcThinkingDelayRange: [0, 0],
+      agentStore,
+      agentConfigStore,
+    });
+
+    const ownerUserId = 'user-alice';
+    const pg = await agentStore.create({
+      ownerId: ownerUserId,
+      name: 'pg-bot',
+      description: null,
+      protocol: 'http',
+      callbackUrl: 'https://pg.example/decide',
+      timeoutMs: 5_000,
+    });
+    // Plant a same-id, different-data SQLite record. If resolveAgent
+    // fell through to SQLite, the seated agent's name would be
+    // 'sqlite-bot' instead of 'pg-bot'.
+    agentConfigStore.configs.set(pg.agent.id, {
+      agentConfigId: pg.agent.id,
+      userId: ownerUserId,
+      agentName: 'sqlite-bot',
+      endpointUrl: 'https://sqlite.example/decide',
+      authHeaderName: null,
+      authHeaderValue: null,
+      timeoutMs: 5_000,
+      description: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    const game = registry.create({});
+    const entry = await registry.inviteAgent(
+      game.gameId,
+      0,
+      pg.agent.id,
+      ownerUserId,
+    );
+    const seat0 = entry.seats[0]!;
+    if (seat0.occupant.kind !== 'agent') throw new Error('unreachable');
+    expect(seat0.occupant.displayName).toBe('pg-bot');
+  });
+
+  it('falls back to SQLite when postgres returns null (legacy fixture compat)', async () => {
+    const orch = new WerewolfOrchestrator();
+    const agentStore = makeMockAgentStore();
+    const agentConfigStore = makeMockAgentConfigStore();
+    const registry = new WerewolfLobbyRegistry({
+      orchestrator: orch,
+      attachMatch: vi.fn(),
+      detachMatch: vi.fn(),
+      npcThinkingDelayRange: [0, 0],
+      agentStore,
+      agentConfigStore,
+    });
+    const legacyId = 'sqlite-only-id';
+    agentConfigStore.configs.set(legacyId, {
+      agentConfigId: legacyId,
+      userId: 'user-alice',
+      agentName: 'legacy-bot',
+      endpointUrl: 'https://legacy.example/decide',
+      authHeaderName: null,
+      authHeaderValue: null,
+      timeoutMs: 5_000,
+      description: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    const game = registry.create({});
+    const entry = await registry.inviteAgent(
+      game.gameId,
+      0,
+      legacyId,
+      'user-alice',
+    );
+    const seat0 = entry.seats[0]!;
+    if (seat0.occupant.kind !== 'agent') throw new Error('unreachable');
+    expect(seat0.occupant.displayName).toBe('legacy-bot');
+  });
+
+  it('constructor throws if neither agentStore nor agentConfigStore is provided', () => {
+    expect(() => {
+      new WerewolfLobbyRegistry({
+        orchestrator: new WerewolfOrchestrator(),
+        attachMatch: vi.fn(),
+        detachMatch: vi.fn(),
+        npcThinkingDelayRange: [0, 0],
+      });
+    }).toThrow(/at least one of/);
+  });
+});

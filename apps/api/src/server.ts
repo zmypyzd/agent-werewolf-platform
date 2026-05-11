@@ -341,6 +341,13 @@ export function buildServer(opts: BuildServerOptions = {}) {
       attachMatch: (gameId, ownership) =>
         werewolfHubAttachment.attachMatch(gameId, ownership),
       detachMatch: (gameId) => werewolfHubAttachment.detachMatch(gameId),
+      // Postgres-backed lookup for inviteAgent. Mirrors the read path
+      // already taken by /me/agents (which since the auth-migration is
+      // postgres-only) so the agent the user sees in AgentPicker is the
+      // same record this seats. Falls back to SQLite agentConfigStore
+      // below when werewolfAgentStore isn't wired — that's the legacy
+      // dev/test path; production always sets werewolfAgentStore.
+      ...(opts.werewolfAgentStore ? { agentStore: opts.werewolfAgentStore } : {}),
       agentConfigStore: agentConfigStore!,
       ...(werewolfBriefing ? { briefing: werewolfBriefing } : {}),
       ...(opts.werewolfMatchRegistry

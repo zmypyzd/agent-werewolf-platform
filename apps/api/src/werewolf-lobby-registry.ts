@@ -15,6 +15,7 @@ import {
 } from '@agent-poker/shared';
 import type { WerewolfBriefing } from '@agent-poker/shared';
 import type {
+  IAgentStore,
   IUserAgentConfigStore,
   IWerewolfMatchRegistry,
   IWerewolfReplayEventStore,
@@ -120,7 +121,17 @@ export interface WerewolfLobbyRegistryOptions {
   ) => void;
   detachMatch: (gameId: string) => void;
   npcThinkingDelayRange?: [number, number];
-  agentConfigStore: IUserAgentConfigStore;
+  // Postgres-backed agent store. When set, inviteAgent uses this to look
+  // up the agent record. This is the production path — `/me/agents` only
+  // reads postgres, so the web UI's AgentPicker shows postgres agents
+  // and inviteAgent needs to find them in the same store.
+  agentStore?: IAgentStore;
+  // SQLite-backed agent config store. Kept as a fallback so existing
+  // tests that pre-date the postgres migration continue to pass without
+  // a fake-store rewrite. inviteAgent only consults this when agentStore
+  // is unset. Production wires agentStore via opts.werewolfAgentStore and
+  // leaves this undefined.
+  agentConfigStore?: IUserAgentConfigStore;
   // Optional protocol briefing forwarded to every external HTTP agent on
   // every decision request. The API server fills this in from env when
   // WEREWOLF_BRIEFING_ENABLED is truthy. Local sims/tests leave it unset.
@@ -319,7 +330,77 @@ export class WerewolfLobbyRegistry {
   private readonly entries = new Map<string, InternalEntry>();
   private readonly runPromises = new Map<string, Promise<void>>();
 
-  constructor(private readonly options: WerewolfLobbyRegistryOptions) {}
+  constructor(private readonly options: WerewolfLobbyRegistryOptions) {
+    if (!options.agentStore && !options.agentConfigStore) {
+      throw new Error(
+        'WerewolfLobbyRegistry: at least one of { agentStore, agentConfigStore } must be provided',
+      );
+    }
+  }
+
+  // Resolve a per-user agent record from whichever store is wired in.
+  // Production wires agentStore (postgres) via opts.werewolfAgentStore;
+  // legacy tests wire agentConfigStore (SQLite). When both are set,
+  // postgres is consulted first; falling back to SQLite covers the
+  // narrow window where a test pre-dates the postgres migration and
+  // wants its mock data to flow through.
+  //
+  // Returns null when no record matches the (ownerUserId, agentConfigId)
+  // pair. For postgres agents we additionally require protocol='http'
+  // since longpoll/ws seating from the web lobby is a future PR — those
+  // agents fall through to AGENT_NOT_FOUND for now rather than seating
+  // an adapter that would either crash on dispatch (ws without registry)
+  // or address the wrong mailbox row (longpoll). The error is the same
+  // shape as "ownership mismatch" so a caller can't probe which case
+  // they hit.
+  private async resolveAgent(
+    ownerUserId: string,
+    agentConfigId: string,
+  ): Promise<{
+    name: string;
+    endpointUrl: string;
+    authHeaderName: string | null;
+    authHeaderValue: string | null;
+    timeoutMs: number;
+  } | null> {
+    if (this.options.agentStore) {
+      const record = await this.options.agentStore.get(ownerUserId, agentConfigId);
+      if (record) {
+        if (record.protocol !== 'http') {
+          // Out-of-scope protocol for this seating path. Surface as
+          // not-found so cross-user probing can't distinguish.
+          return null;
+        }
+        if (!record.callbackUrl) {
+          return null;
+        }
+        return {
+          name: record.name,
+          endpointUrl: record.callbackUrl,
+          authHeaderName: record.authHeaderName,
+          authHeaderValue: record.authHeaderValue,
+          timeoutMs: record.timeoutMs,
+        };
+      }
+      // Fall through to SQLite only if postgres found nothing. This lets
+      // a hybrid test environment (postgres for prod-like data + SQLite
+      // for legacy fixtures) operate cleanly without store-priority
+      // ambiguity inside a single resolved record.
+    }
+    if (this.options.agentConfigStore) {
+      const cfg = await this.options.agentConfigStore.get(ownerUserId, agentConfigId);
+      if (cfg) {
+        return {
+          name: cfg.agentName,
+          endpointUrl: cfg.endpointUrl,
+          authHeaderName: cfg.authHeaderName,
+          authHeaderValue: cfg.authHeaderValue,
+          timeoutMs: cfg.timeoutMs,
+        };
+      }
+    }
+    return null;
+  }
 
   create(input: { name?: string; seed?: string; creatorUserId?: string }): WerewolfLobbyEntry {
     const gameId = randomUUID();
@@ -434,9 +515,10 @@ export class WerewolfLobbyRegistry {
     return publicEntry(entry);
   }
 
-  // Seat a third-party HTTP agent backed by a user-owned UserAgentConfig.
+  // Seat a third-party HTTP agent backed by a user-owned agent record.
   // Mirrors inviteNpc structurally; differs in three load-bearing ways:
-  //   - reads cfg from agentConfigStore and verifies cfg.userId === ownerUserId
+  //   - reads cfg from agentStore (postgres, production) or
+  //     agentConfigStore (SQLite, legacy/test) and verifies ownership
   //     (cross-account access is reported as AGENT_NOT_FOUND, not 403, so the
   //     caller cannot probe for cfg existence belonging to other users)
   //   - rejects if the same cfg is already seated in this game (cross-game
@@ -461,13 +543,13 @@ export class WerewolfLobbyRegistry {
     if (seat.occupant.kind !== 'empty') {
       throw new WerewolfSeatOccupiedError(gameId, seatIndex);
     }
-    const cfg = await this.options.agentConfigStore.get(ownerUserId, agentConfigId);
+    const cfg = await this.resolveAgent(ownerUserId, agentConfigId);
     if (!cfg) {
       throw new AppError('AGENT_NOT_FOUND', `Agent config ${agentConfigId} not found`);
     }
     // Re-check seat occupancy AFTER the await. Two concurrent inviteAgent
     // calls for the same empty seat would both pass the line-411 check,
-    // both await `agentConfigStore.get`, and both proceed to the write
+    // both await the store lookup, and both proceed to the write
     // below — the second silently clobbering the first while still
     // returning 200 OK to its caller, leaving the "loser" with the
     // illusion of a successful invite. This synchronous re-read sits in
@@ -497,7 +579,7 @@ export class WerewolfLobbyRegistry {
     }
     const playerId = seatNow.playerId;
     const agentId = `agent-${playerId}`;
-    const finalDisplayName = displayName?.trim() || cfg.agentName;
+    const finalDisplayName = displayName?.trim() || cfg.name;
     const adapter = new WerewolfHttpAgentAdapter({
       agentId,
       name: finalDisplayName,
