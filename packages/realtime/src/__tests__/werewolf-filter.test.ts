@@ -193,4 +193,34 @@ describe('werewolfReplayEventToPublic — werewolf', () => {
     };
     expect(werewolfReplayEventToPublic(e)).toBe(e);
   });
+
+  // Defense-in-depth: a stale build that ships ahead of shared/werewolf-types
+  // (i.e., the orchestrator emits a phase value the realtime filter doesn't
+  // yet know about) must NOT silently leak actor identity. The switch
+  // statements in werewolf-filter.ts have exhaustiveness guards (`never`
+  // assignment) that fail compilation when a new WerewolfPhase or
+  // WerewolfReplayEventType variant is added; this runtime test pins the
+  // fail-closed branch so a future refactor can't quietly flip the default
+  // to "treat unknown as public".
+  it('fail-closed: unknown phase on agent.action_requested strips actor identity', () => {
+    const e: WerewolfReplayEvent = {
+      ...baseEvent,
+      eventType: 'agent.action_requested',
+      data: {
+        requestId: 'req-1',
+        agentId: 'agent-x',
+        playerId: 'p3',
+        phase: 'night-hunter-watch' /* hypothetical future private phase */,
+        validActionCount: 1,
+      },
+    };
+    const out = werewolfReplayEventToPublic(e)!;
+    // playerId + agentId must be stripped even though 'night-hunter-watch'
+    // is not in the known WerewolfPhase union. The filter's fail-closed
+    // default treats unknown phase strings as private.
+    expect(out.data['playerId']).toBeUndefined();
+    expect(out.data['agentId']).toBeUndefined();
+    expect(out.data['phase']).toBe('night-hunter-watch');
+    expect(out.data['requestId']).toBe('req-1');
+  });
 });
