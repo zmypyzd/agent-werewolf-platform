@@ -1,35 +1,124 @@
 import { describe, it, expect } from 'vitest';
 import type {
-  WerewolfDecisionRequest,
-} from '@agent-poker/shared';
-import { NotImplementedError } from '@agent-poker/shared';
+  AgentWsClientMessage,
+  AgentWsServerMessage,
+} from '@agent-poker/agent-protocol';
+import type { WerewolfDecisionRequest } from '@agent-poker/shared';
+import {
+  AgentConnection,
+  AgentConnectionRegistry,
+  AgentOfflineError,
+  type AgentSocket,
+} from '../agent-connection-registry.js';
 import { WerewolfWsAgentAdapter } from '../werewolf-ws-agent-adapter.js';
 
-const stubReq: WerewolfDecisionRequest = {
-  requestId: 'r', gameId: 'g', agentId: 'a', playerId: 'p1',
-  phase: 'night-werewolf-vote', nightNumber: 1, dayNumber: 0,
+class FakeSocket implements AgentSocket {
+  sent: AgentWsServerMessage[] = [];
+  closed = false;
+  send(data: string): void {
+    this.sent.push(JSON.parse(data) as AgentWsServerMessage);
+  }
+  close(): void {
+    this.closed = true;
+  }
+  pushClientFrame(conn: AgentConnection, frame: AgentWsClientMessage): void {
+    conn.handleFrame(JSON.stringify(frame));
+  }
+}
+
+const stubRequest: WerewolfDecisionRequest = {
+  requestId: 'r-1',
+  gameId: 'g-1',
+  agentId: 'agent-A',
+  playerId: 'p1',
+  phase: 'night-werewolf-vote',
+  nightNumber: 1,
+  dayNumber: 0,
   publicState: {
-    gameId: 'g', phase: 'night-werewolf-vote', nightNumber: 1, dayNumber: 0,
-    players: [], history: [], winner: null,
+    gameId: 'g-1',
+    phase: 'night-werewolf-vote',
+    nightNumber: 1,
+    dayNumber: 0,
+    players: [],
+    history: [],
+    winner: null,
   },
   privateState: {
-    selfId: 'p1', selfRole: 'werewolf', selfSide: 'werewolf',
-    knownAllies: [], seerKnowledge: [], witchView: null, hunterCanShoot: false,
+    selfId: 'p1',
+    selfRole: 'werewolf',
+    selfSide: 'werewolf',
+    knownAllies: [],
+    seerKnowledge: [],
+    witchView: null,
+    hunterCanShoot: false,
   },
   validActions: [{ type: 'werewolf-vote', voterId: 'p1', targetId: 'p2' }],
-  deadlineMs: 1000,
+  deadlineMs: 1_000,
 };
 
 describe('WerewolfWsAgentAdapter', () => {
-  it('stores its identity and endpoint without invoking the network', () => {
-    const a = new WerewolfWsAgentAdapter('a-1', 'Wolf', 'ws://example/ws');
-    expect(a.agentId).toBe('a-1');
-    expect(a.name).toBe('Wolf');
-    expect(a.endpoint).toBe('ws://example/ws');
+  it('exposes agentId + name without invoking the network', () => {
+    const registry = new AgentConnectionRegistry();
+    const adapter = new WerewolfWsAgentAdapter('agent-A', 'Wolf', registry);
+    expect(adapter.agentId).toBe('agent-A');
+    expect(adapter.name).toBe('Wolf');
   });
 
-  it('requestDecision throws NotImplementedError', async () => {
-    const a = new WerewolfWsAgentAdapter('a-1', 'Wolf', 'ws://example/ws');
-    await expect(a.requestDecision(stubReq)).rejects.toBeInstanceOf(NotImplementedError);
+  it('requestDecision throws AgentOfflineError when no connection is registered', async () => {
+    const registry = new AgentConnectionRegistry();
+    const adapter = new WerewolfWsAgentAdapter('agent-A', 'Wolf', registry);
+    await expect(adapter.requestDecision(stubRequest)).rejects.toBeInstanceOf(AgentOfflineError);
+  });
+
+  it('requestDecision routes through the registered connection and resolves on response', async () => {
+    const registry = new AgentConnectionRegistry();
+    const sock = new FakeSocket();
+    const conn = new AgentConnection({
+      agentId: 'agent-A',
+      socket: sock,
+      serverConnectionId: 'srv-1',
+      correlationIdFactory: () => 'corr-X',
+    });
+    conn.start();
+    registry.register(conn);
+
+    const adapter = new WerewolfWsAgentAdapter('agent-A', 'Wolf', registry);
+
+    const promise = adapter.requestDecision(stubRequest);
+    expect(sock.sent.some((m) => m.type === 'decide')).toBe(true);
+
+    sock.pushClientFrame(conn, {
+      type: 'decide.response',
+      correlationId: 'corr-X',
+      action: { type: 'werewolf-vote', voterId: 'p1', targetId: 'p2' },
+    });
+
+    const res = await promise;
+    expect(res.requestId).toBe('r-1');
+    expect(res.agentId).toBe('agent-A');
+    expect(res.action).toEqual({ type: 'werewolf-vote', voterId: 'p1', targetId: 'p2' });
+
+    conn.handleSocketClosed('test-cleanup');
+  });
+
+  it('falls back to AgentOfflineError if the connection was closed between dispatches', async () => {
+    const registry = new AgentConnectionRegistry();
+    const sock = new FakeSocket();
+    const conn = new AgentConnection({
+      agentId: 'agent-A',
+      socket: sock,
+      serverConnectionId: 'srv-1',
+      correlationIdFactory: () => 'corr-X',
+    });
+    conn.start();
+    registry.register(conn);
+
+    const adapter = new WerewolfWsAgentAdapter('agent-A', 'Wolf', registry);
+
+    // Connection drops before the next decision.
+    conn.handleSocketClosed('peer_left');
+    registry.unregister(conn);
+
+    await expect(adapter.requestDecision(stubRequest)).rejects.toBeInstanceOf(AgentOfflineError);
   });
 });

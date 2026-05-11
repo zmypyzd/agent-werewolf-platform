@@ -51,6 +51,8 @@ import { WerewolfLobbyRegistry } from './werewolf-lobby-registry.js';
 import { AgentConfigUsageService } from './services/agent-config-usage.js';
 import { authRoutes } from './routes/auth.js';
 import { wsRoutes } from './routes/ws.js';
+import { agentsWsRoutes } from './routes/agents-ws.js';
+import { AgentConnectionRegistry } from '@agent-poker/agent-runtime';
 import { meAgentsRoutes } from './routes/me-agents.js';
 import { agentInvitesRoutes } from './routes/agent-invites.js';
 import { werewolfDocsRoutes } from './routes/werewolf-docs.js';
@@ -95,6 +97,12 @@ export interface BuildServerOptions {
   authDb?: SqliteDb;
   env?: RuntimeEnv;
   hub?: RealtimeHub;
+  // Singleton holding live agent WS connections opened against
+  // /api/v1/agents/connect. Optional for test injection; if omitted
+  // (and werewolfAgentStore is set), buildServer constructs one. Without
+  // werewolfAgentStore the route is not registered at all, so a registry
+  // would be unreachable anyway.
+  agentRegistry?: AgentConnectionRegistry;
   // When set, /auth/login + /auth/register are rate-limited per request.ip
   // using a small in-memory counter. Default off so the existing test suite
   // doesn't trip the limit running 30+ register calls in seconds.
@@ -124,6 +132,9 @@ export function buildServer(opts: BuildServerOptions = {}) {
   const matchArtifactStore = opts.matchArtifactStore || createMatchArtifactStore();
   const decisionTraceStore = opts.decisionTraceStore ?? new MemoryDecisionTraceStore();
   const hub = opts.hub ?? new RealtimeHub();
+  // One registry per server instance. Empty when no agents are connected;
+  // memory cost is bounded by the number of registered ws agents.
+  const agentRegistry = opts.agentRegistry ?? new AgentConnectionRegistry();
   const orch = opts.orchestrator ?? new TableOrchestrator(tableStore, hs, hub, decisionTraceStore);
 
   const werewolfMatchArtifactStore =
@@ -277,6 +288,10 @@ export function buildServer(opts: BuildServerOptions = {}) {
   // attachments leak EventEmitter listeners between cycles.
   app.addHook('onClose', async () => {
     werewolfHubAttachment.detachAll();
+    // Close every live agent WS connection with a `goodbye{server_shutdown}`
+    // so reconnect logic on the agent side knows it's a planned restart,
+    // not a transient network blip.
+    agentRegistry.closeAll('server shutdown');
   });
 
   // Briefing is opt-in via env so existing fixtures and the demo CLIs don't
@@ -375,6 +390,16 @@ export function buildServer(opts: BuildServerOptions = {}) {
         prefix: '/api/v1',
         agentStore: opts.werewolfAgentStore,
         mailbox: opts.werewolfMailbox,
+      });
+    }
+    // Reverse-WS transport for external werewolf agents. Needs the
+    // agent store for Bearer-token auth; without it the route is not
+    // registered (mirrors the gating on werewolfMailboxRoutes).
+    if (opts.werewolfAgentStore) {
+      await scope.register(agentsWsRoutes, {
+        prefix: '/api/v1',
+        agentStore: opts.werewolfAgentStore,
+        agentRegistry,
       });
     }
     await scope.register(wsRoutes, { hub });

@@ -20,6 +20,8 @@ import {
 } from '@agent-poker/persistence';
 import {
   WerewolfHttpAgentAdapter,
+  WerewolfWsAgentAdapter,
+  type AgentConnectionRegistry,
   type IAgent,
 } from '@agent-poker/agent-runtime';
 import type { WerewolfDecisionRequest, WerewolfDecisionResponse } from '@agent-poker/shared';
@@ -177,6 +179,11 @@ export interface BuildAgentForRecordOptions {
   readonly matchPk: string;
   readonly mailbox: IWerewolfDecisionMailbox;
   readonly sequenceAllocator: SequenceAllocator;
+  // Required when the agent record's protocol is 'ws'. The registry holds
+  // live agent WS connections opened against /api/v1/agents/connect. Pass
+  // null in flows that don't support ws (e.g. CLI tests); buildAgentForRecord
+  // throws in that case rather than silently substituting a fallback.
+  readonly agentRegistry?: AgentConnectionRegistry | null;
 }
 
 // Builds the right WerewolfAgent for a registered AgentRecord based on its
@@ -216,15 +223,12 @@ export function buildAgentForRecord(opts: BuildAgentForRecordOptions): WerewolfA
         `buildAgentForRecord: agent ${a.id} (${a.name}) is protocol=inproc; caller must supply a WerewolfAgent instance directly`,
       );
     case 'ws':
-      // P0 of the reverse-WS transport (docs/agent-ws-transport-design.md)
-      // only adds the protocol value at the data layer. The connect route,
-      // AgentConnectionRegistry, and WerewolfWsAgentAdapter arrive in P1;
-      // until then, registration cannot produce a 'ws' row, so this branch
-      // is unreachable in practice. Throw loudly if it ever runs so the
-      // gap is obvious instead of silently producing a fallback action.
-      throw new Error(
-        `buildAgentForRecord: agent ${a.id} (${a.name}) is protocol=ws; ws transport is not yet implemented (see docs/agent-ws-transport-design.md, P1)`,
-      );
+      if (!opts.agentRegistry) {
+        throw new Error(
+          `buildAgentForRecord: agent ${a.id} (${a.name}) protocol=ws requires an agentRegistry (caller must inject AgentConnectionRegistry)`,
+        );
+      }
+      return new WerewolfWsAgentAdapter(a.id, a.name, opts.agentRegistry);
   }
 }
 

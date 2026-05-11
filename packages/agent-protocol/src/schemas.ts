@@ -581,8 +581,10 @@ export const CreateAgentInviteRequestSchema = z.object({
   ttlSec: z.number().int().positive().max(7 * 24 * 60 * 60).default(24 * 60 * 60),
 }).strict();
 
-export const RegisterAgentInviteRequestSchema = z.object({
-  displayName: z.string().min(1).max(40),
+// Shared HTTP-transport fields. The values exist as a flat record on the
+// legacy body shape (top-level endpointUrl + auth headers) and as the
+// nested `transport.kind === 'http'` variant on the new shape.
+const HttpTransportFields = {
   endpointUrl: z.string().url().refine(isAcceptableEndpoint, {
     message: 'endpointUrl must be https:// (or http:// for localhost / 127.0.0.1 / ::1)',
   }),
@@ -600,8 +602,44 @@ export const RegisterAgentInviteRequestSchema = z.object({
     .regex(HTTP_HEADER_VALUE_RE, 'authHeaderValue must be visible ASCII or HTAB (no CR/LF)')
     .nullable()
     .optional(),
+} as const;
+
+// Three accepted shapes:
+//   (1) legacy:  { displayName, endpointUrl, authHeaderName?, authHeaderValue?, timeoutMs? }
+//   (2) explicit-http:  { displayName, transport: { kind: 'http', endpointUrl, ... }, timeoutMs? }
+//   (3) ws:  { displayName, transport: { kind: 'ws' }, timeoutMs? }
+//
+// The legacy shape stays accepted forever — older invite prompts still
+// embed it. New prompts default to (3) ws, which needs zero deployment
+// surface from the agent author. See docs/agent-ws-transport-design.md.
+const LegacyHttpRegisterSchema = z.object({
+  displayName: z.string().min(1).max(40),
+  ...HttpTransportFields,
   timeoutMs: z.number().int().min(100).max(60000).default(5000),
 }).strict();
+
+const ExplicitHttpRegisterSchema = z.object({
+  displayName: z.string().min(1).max(40),
+  transport: z.object({
+    kind: z.literal('http'),
+    ...HttpTransportFields,
+  }).strict(),
+  timeoutMs: z.number().int().min(100).max(60000).default(5000),
+}).strict();
+
+const WsRegisterSchema = z.object({
+  displayName: z.string().min(1).max(40),
+  transport: z.object({
+    kind: z.literal('ws'),
+  }).strict(),
+  timeoutMs: z.number().int().min(100).max(60000).default(5000),
+}).strict();
+
+export const RegisterAgentInviteRequestSchema = z.union([
+  LegacyHttpRegisterSchema,
+  ExplicitHttpRegisterSchema,
+  WsRegisterSchema,
+]);
 
 // ─── Realtime / WebSocket (Phase 2 / M7) ─────────────────────────────────────
 
