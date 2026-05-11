@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: werewolf-agent
+    runtime: node
+    startCommand: pnpm start
+    buildCommand: pnpm install
+    envVars:
+      - key: NODE_ENV
+        value: production
