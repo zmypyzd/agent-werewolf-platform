@@ -42,6 +42,7 @@ COPY packages/werewolf-engine/package.json packages/werewolf-engine/
 COPY packages/werewolf-orchestrator/package.json packages/werewolf-orchestrator/
 COPY examples/local-simulation/package.json examples/local-simulation/
 COPY examples/mock-agents/package.json examples/mock-agents/
+COPY examples/werewolf-agent/package.json examples/werewolf-agent/
 COPY examples/werewolf-agent-ws/package.json examples/werewolf-agent-ws/
 COPY examples/werewolf-local-simulation/package.json examples/werewolf-local-simulation/
 
