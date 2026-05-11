@@ -180,3 +180,70 @@ When you wake up:
 - More fuzz scanning with seeds that produce the longest possible matches (the random mock occasionally produces 17-night games — those are the best stress tests for the cap-related code paths).
 - Deeper read of `WerewolfTableSurface.tsx` and `WerewolfPhaseIndicator.tsx` for ARIA / state-leak / focus-management issues.
 - Review `agent-poker-platform-overview.md` for any documented but un-implemented invariants.
+
+---
+
+# Round 2 Campaign — 2026-05-11
+
+**Start:** 2026-05-11T18:34:58Z
+**Duration:** ~40 minutes
+**Mode:** Autonomous, no human in the loop. Resumed from HANDOFF.md left by Round 1 (2026-05-10). 24+ of the original Round 1 PRs had already merged; round 2 was a fresh hunt against a cleaner baseline.
+
+**Baseline:** `pnpm test` 1202 tests pass on main at session start; production probe — all P1 endpoints alive (`/health`, `/api/v1/werewolf-matches`, `/api/v1/docs/werewolf-agent-guide`).
+
+## Shipped (6 PRs)
+
+| PR  | Branch                                                          | Severity         | Notes |
+|-----|-----------------------------------------------------------------|------------------|-------|
+| #34 | `overnight-qa/witch-poison-self-engine-guard`                   | **P1 rule-viol** | `witch-poison` rejects self-target at the engine boundary. Parallels seer self-target check; closes engine-vs-valid-actions consistency gap. |
+| #35 | `overnight-qa/me-agents-no-store-defense`                       | hardening        | `GET /me/werewolf-agents` adds `Cache-Control: no-store + Pragma: no-cache`. Parity with POST/rotate-token (PR #10/#11 pattern). |
+| #36 | `overnight-qa/registry-replace-rejects-pending-rpc`             | test             | Pins documented contract: when registry replaces a connection, the evicted conn's in-flight RPCs reject with `AgentConnectionClosedError`. Sentinel-verified. |
+| #37 | `overnight-qa/werewolf-filter-exhaustiveness`                   | refactor / sec   | TS exhaustiveness guards on `werewolf-filter` — new `WerewolfPhase` or `WerewolfReplayEventType` variants fail compilation until classified. Fail-closed runtime default. Same architectural pattern as PR #23. Sentinel-verified. |
+| #38 | `overnight-qa/orchestrator-subscriber-error-isolation`          | **P1 reliability** | `orchestrator.subscribe()` and `subscribePrivate()` wrap user listeners in try/catch. Before: one throwing subscriber would crash the entire match. Tested by an end-to-end "throwing listener + collecting listener" pair. |
+| #39 | `overnight-qa/rate-limiter-inline-prune`                        | **P1 DoS**       | `RateLimiter.hits` grew unboundedly per distinct IP — `prune()` existed but had no callers. Botnet/spoof attack on `/auth/login` could OOM the Render free-tier container. `check()` now prunes inline when Map > 1024. Sentinel-verified. |
+
+### Suggested merge order
+
+1. **#39** first (P1 DoS resilience — production-impacting).
+2. **#38** next (P1 reliability — one bad subscriber could already crash a live match).
+3. **#34** (P1 engine boundary).
+4. **#37** (defense-in-depth refactor).
+5. **#35** (hardening).
+6. **#36** (test pin; safe anytime).
+
+No PR in this batch needs operator action beyond merge — no migrations, no secret rotation, no config changes.
+
+## Items deliberately not fixed (deferred to backlog)
+
+| Item | Reason |
+|---|---|
+| **Popover focus restoration** in `WerewolfTableSurface.tsx` | Web tests run under `environment: node` with `renderToStaticMarkup`; no jsdom / @testing-library / interactive DOM in this codebase. Shipping the fix without a regression test would silently rot. Needs a separate infra-PR adding jsdom + an interactive test pattern. |
+| **PK 3-tie characterization test** | Existing `apply-action-day.test.ts:186` (PK ceiling via all-abstain) already exercises the same engine code path. New genuine-tie test would be redundant. |
+| **Mailbox runner retry-forever on persistent 4xx** | Agent-side runtime behavior, not server bug. The agent operator should wire `onError` to detect persistent auth failures and call `abort()`. Documented design: "log + backoff + retry" is conservative. |
+| **HTTP adapter response.body drain on 5xx** | `packages/agent-runtime/src/werewolf-http-agent-adapter.ts:69-71` throws without calling `resp.body.cancel()`. Real but minor under-the-radar resource issue. Testing requires fetch-socket instrumentation that isn't set up here. ~2-line fix worth shipping when a maintainer adds the test scaffolding. |
+| **WS connection in-flight RPC dropped late-response observability** | The dropping behavior is correct (silent + intended — PR #36 pins the rejection contract). Adding metrics/log for "late response on cancelled correlationId" is observability work, not a bug. |
+| **Reducer `thinkingActor` SSE-reorder concern** | False alarm from Explore agent. Line 358 of `werewolfRoomReducer.ts` already clears `thinkingActor: undefined` when handling `agent.action_received` for speak; the concern doesn't apply. |
+| **SSE `/werewolf/stream/:gameId` no-auth** | False alarm. The `/ws` route (`apps/api/src/routes/ws.ts:30-46`) is also intentionally anonymous for `match:` topics; SSE matches the documented public-spectator visibility model. Both endpoints serve the same already-filtered events via `werewolfReplayEventToPublic`. |
+| **PK round 3-tie no-banishment** | Documented intent at `docs/werewolf-http-agent-guide.md:82-83`: "Ties trigger up to 3 PK rounds; if still tied, no one is banished." Not a bug. |
+| **inviteAgent without `assertCreatorOnly`** | Documented intent at `apps/api/src/__tests__/werewolf-games-host-only.test.ts:16-19`: multi-host design — any logged-in user can field their own agent in someone else's lobby. Only the host can start, fill, or invite NPCs. Reviewed and verified consistent with PR #14's framing. |
+
+## Pipeline B 200-sim health (Round 2 fresh baseline)
+
+```
+bash scripts/overnight-batch-sim.sh 200 audit-r3
+ok=200 failed=0 total=200
+
+node scripts/overnight-replay-audit.mjs
+totalMatches: 251 (50 audit-r1 + 200 audit-r3 + 1 demo)
+totalViolations: 0
+```
+
+Engine remains rock-solid against the 9 baked invariants. Property fuzz from PR #17 covers the property-test side.
+
+## What I'd hand to a next session
+
+1. Read this section first.
+2. `gh pr list --search "[overnight-qa]" --state open` — verify what merged while away. Then re-run the merge order above against the open set.
+3. Re-run Pipeline F (`pnpm typecheck && pnpm test`) — baseline should be 1202+N depending on which PRs merged.
+4. Re-run Pipeline D (production probe). PR #38 + #39 are reliability fixes; verify after deploy that the live match-runner is still emitting events end-to-end (a curl of `GET /api/v1/werewolf-matches` should still 200; SSE smoke-test if a session can be set up).
+5. The deferred-item table above is the next-round inbox. The HTTP adapter body drain + popover focus restoration both need a small infra investment first (fetch-socket instrumentation; jsdom test setup) — those infra-PRs unblock multiple future fixes.
