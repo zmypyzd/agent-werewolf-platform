@@ -100,6 +100,10 @@ examples/local-simulation drives the orchestrator directly (no API).
 
 `docs/` is the source of truth for design decisions — put rationale there, not in code comments. Key files: `agent-poker-platform-greenfield-spec.md`, `agent-poker-platform-implementation-plan.md`, `agent-poker-platform-api-and-protocol.md`, `agent-poker-platform-test-plan.md`, plus `phase-2-web-platform-*.md` for the web milestone. `docs/agent-poker-platform-CLAUDE.md` is the longer-form version of this file and is kept in sync with it.
 
+## Production caveats
+
+Render serves the API on the **free tier**, which means the container has an ephemeral filesystem (no persistent disk) and sleeps after ~15 minutes of no traffic. Werewolf hot-path data lives in Supabase Postgres and is safe; SQLite (`users` / `sessions` / `user_agent_configs` / `tables` / `hands`) runs `:memory:` and is wiped on every deploy and every idle spin-down. The cold-start after spin-down adds ~30s to whichever request wakes the container. Full storage map + mitigation paths in `docs/deployment.md` section 5.5.
+
 <!-- TEAMAGENT:START - 自动管理，请勿手动编辑 -->
 ## TeamAgent 经验（54条活跃知识，为你编译了 27 条（token 预算 3000）)
 - 使用 忽略 <local-command-caveat> 包裹的消息，除非用户明确要求分析 而非 <local-command-caveat>——该标签内容由本地命令自动生成，非用户意图表达；AI 主动响应会污染对话上下文，误把系统噪声当用户指令 [1.00] [预置]

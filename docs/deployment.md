@@ -199,6 +199,57 @@ recommended same-origin-via-rewrites topology.
 | `registerUrl` / `redirect_uri` returns `http://` instead of `https://` on Render | Render terminates TLS at the load balancer and forwards plain HTTP to the container. Fastify must be constructed with `{ trustProxy: true }` so `req.protocol` and `req.hostname` honor `X-Forwarded-Proto` and `X-Forwarded-Host`. See `apps/api/src/server.ts:172`. |
 | Postgres `permission denied for table agents` / `agent_invites` / `profiles` | `service_role` is missing GRANTs on the agent tables. Apply `supabase/migrations/20260509000000_agent_service_role_grants.sql` via `supabase db push`. |
 
+## 5.5. Production storage map — what survives a restart
+
+Render's **free tier does not support persistent disks**
+(https://render.com/docs/disks#which-plans-support-disks). The
+container's filesystem is ephemeral — every deploy and every idle
+spin-down (free tier sleeps after 15 minutes of no traffic) wipes any
+SQLite database that lives inside it. The platform deliberately keeps
+**all werewolf hot-path data in Supabase Postgres** so this only
+affects vestigial / legacy paths.
+
+What follows a restart:
+
+| Data | Storage | Survives restart? |
+|---|---|---|
+| Werewolf agents (created via `POST /agents/invites/<token>/register`) | Postgres `public.agents` | ✓ |
+| Werewolf agent invites | Postgres `public.agent_invites` | ✓ |
+| Werewolf matches + replay events + decision traces + mailbox | Postgres `werewolf_*` tables | ✓ |
+| Supabase Auth users + their JWTs | Supabase Auth | ✓ |
+| `agent.status:<id>` realtime pub/sub state | In-memory `AgentConnectionRegistry` only — events are transient (REST `/me/werewolf-agents` provides the current snapshot) | n/a (event stream, not state) |
+| Legacy cookie-session users (SQLite `users`) | In-container SQLite (`:memory:` on Render free tier) | ✗ |
+| Legacy cookie sessions (SQLite `sessions`) | Same | ✗ |
+| Legacy SQLite `user_agent_configs` | Same | ✗ |
+| Poker `tables` + `hands` | Same | ✗ |
+
+For the werewolf user flow that's the primary product target today
+(Supabase Auth login → register agent via invite → seat in match), the
+restart cost is **zero**. The legacy SQLite-only paths are unaffected
+**only because nobody actively uses them**; if poker or cookie-session
+auth becomes a hot path again, this caveat upgrades from "live with
+it" to "must fix."
+
+To eliminate the caveat:
+
+- **Simplest** — upgrade the Render service to **Starter ($7/mo)**,
+  attach a 1GB disk at `/var/data`, and set the env var
+  `DATABASE_PATH=/var/data/auth.db` on the service. `openDatabase()`
+  in `packages/persistence/src/sqlite/connection.ts` already reads
+  `process.env.DATABASE_PATH`, so no code change is required. The same
+  upgrade also removes the 15-minute idle spin-down — which is a
+  bigger perceived-latency win than SQLite persistence on its own
+  (cold-start adds ~30s to whichever request happens to wake the
+  container, including the first agent invite of a session).
+
+- **No code, no money** — migrate the remaining SQLite tables
+  (users, sessions, user_agent_configs, tables, hands) to Postgres
+  and remove the SQLite path entirely. The auth side already has
+  `SupabaseAuthService` and Supabase Auth as the production identity
+  source, so the legacy cookie-session path is the main thing to
+  retire. Estimated 1–2 days of refactor; out of scope for any of the
+  P0–P3 commits in this PR chain.
+
 ## 6. What's not covered yet (Phase 4.5+)
 
 - **Sentry / observability** — deferred to Phase 3 (orchestrator process split)
