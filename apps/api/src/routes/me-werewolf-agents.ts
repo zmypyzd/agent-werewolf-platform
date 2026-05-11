@@ -91,11 +91,22 @@ export async function meWerewolfAgentsRoutes(
       const werewolfOnly = list.filter(
         (a) => a.protocol === 'longpoll' || a.protocol === 'ws',
       );
-      reply.send({
-        data: werewolfOnly.map((a) =>
-          toPublicWerewolfAgent(a, computeOnline(a, agentRegistry)),
-        ),
-      });
+      // Parity with POST /me/werewolf-agents and rotate-token: those two
+      // surface the one-shot rawToken and must never be cached. The list
+      // response carries per-user agent inventory (names, descriptions,
+      // protocol) — not credential material, but still personal data that
+      // a shared cache or browser bfcache could cross-leak between sessions
+      // on the same device. Apply the same no-store defense so every
+      // caching layer is consistently informed that /me/werewolf-agents
+      // responses must not be retained.
+      reply
+        .header('Cache-Control', 'no-store')
+        .header('Pragma', 'no-cache')
+        .send({
+          data: werewolfOnly.map((a) =>
+            toPublicWerewolfAgent(a, computeOnline(a, agentRegistry)),
+          ),
+        });
     },
   );
 
