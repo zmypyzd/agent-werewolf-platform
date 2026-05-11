@@ -215,6 +215,16 @@ export function buildAgentForRecord(opts: BuildAgentForRecordOptions): WerewolfA
       throw new Error(
         `buildAgentForRecord: agent ${a.id} (${a.name}) is protocol=inproc; caller must supply a WerewolfAgent instance directly`,
       );
+    case 'ws':
+      // P0 of the reverse-WS transport (docs/agent-ws-transport-design.md)
+      // only adds the protocol value at the data layer. The connect route,
+      // AgentConnectionRegistry, and WerewolfWsAgentAdapter arrive in P1;
+      // until then, registration cannot produce a 'ws' row, so this branch
+      // is unreachable in practice. Throw loudly if it ever runs so the
+      // gap is obvious instead of silently producing a fallback action.
+      throw new Error(
+        `buildAgentForRecord: agent ${a.id} (${a.name}) is protocol=ws; ws transport is not yet implemented (see docs/agent-ws-transport-design.md, P1)`,
+      );
   }
 }
 

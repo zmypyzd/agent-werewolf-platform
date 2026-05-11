@@ -3,17 +3,24 @@ import { NotFoundError } from '@agent-poker/shared';
 import type { SupabaseServiceClient, SupabaseUserClient } from './supabase-clients.js';
 
 // Replacement for IUserAgentConfigStore. This interface is protocol-aware
-// (longpoll mailbox vs http webhook vs inproc house bot), which the
-// orchestrator needs to route decisions through the right adapter at
-// dispatch time.
+// (longpoll mailbox vs http webhook vs inproc house bot vs ws reverse
+// connection), which the orchestrator needs to route decisions through
+// the right adapter at dispatch time.
 //
 // The agents table has RLS policies that restrict reads/writes to the
 // owner. Pass a user-scoped client (createUserScopedClient) to get auth.uid()
 // enforcement, or a service-role client for cross-user reads (orchestrator
 // hot-path lookup of agent metadata at dispatch time).
 
-export type AgentProtocol = 'http' | 'longpoll' | 'inproc';
+export type AgentProtocol = 'http' | 'longpoll' | 'inproc' | 'ws';
 export type AgentStatus = 'active' | 'suspended' | 'retired';
+
+// Protocols that authenticate inbound calls with a sha256(bearer-token)
+// lookup. `longpoll` agents present the token on /wait + /action;
+// `ws` agents present it as `Authorization: Bearer <token>` at the
+// WebSocket upgrade. Both share the agents.token_hash column and the
+// agent_token_required_for_longpoll_or_ws CHECK constraint.
+const TOKEN_REQUIRED_PROTOCOLS = new Set<AgentProtocol>(['longpoll', 'ws']);
 
 export interface AgentRecord {
   readonly id: string;
@@ -56,7 +63,9 @@ export interface CreateAgentResult {
   readonly agent: AgentRecord;
   // Raw bearer token. Returned once at create time only; never persisted
   // and never re-derivable from the row (only the sha256 hash is stored).
-  // Null for non-longpoll protocols, where no inbound auth is needed.
+  // Non-null for `longpoll` (mailbox auth) and `ws` (WS-upgrade auth);
+  // null for `http` (orchestrator-initiated, no inbound auth) and
+  // `inproc` (no network at all).
   readonly rawToken: string | null;
 }
 
@@ -143,7 +152,7 @@ export class PostgresAgentStore implements IAgentStore {
   async create(input: NewAgent): Promise<CreateAgentResult> {
     let rawToken: string | null = null;
     let tokenHash: string | null = null;
-    if (input.protocol === 'longpoll') {
+    if (TOKEN_REQUIRED_PROTOCOLS.has(input.protocol)) {
       rawToken = generateRawToken();
       tokenHash = hashToken(rawToken);
     }
@@ -181,7 +190,7 @@ export class PostgresAgentStore implements IAgentStore {
       .update({ token_hash: tokenHash })
       .eq('owner_id', ownerId)
       .eq('id', agentId)
-      .eq('protocol', 'longpoll')
+      .in('protocol', Array.from(TOKEN_REQUIRED_PROTOCOLS))
       .select(SELECT_COLUMNS)
       .maybeSingle();
     if (error) throw new Error(`rotateToken failed: ${error.message}`);
