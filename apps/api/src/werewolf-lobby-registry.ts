@@ -3,6 +3,8 @@ import {
   WerewolfHttpAgentAdapter,
   WerewolfNpcAgent,
   WerewolfRandomMockAgent,
+  WerewolfWsAgentAdapter,
+  type AgentConnectionRegistry,
 } from '@agent-poker/agent-runtime';
 import {
   AgentInUseError,
@@ -132,6 +134,14 @@ export interface WerewolfLobbyRegistryOptions {
   // is unset. Production wires agentStore via opts.werewolfAgentStore and
   // leaves this undefined.
   agentConfigStore?: IUserAgentConfigStore;
+  // Live agent WS connection registry. Required to seat protocol='ws'
+  // agents — those need an established AgentConnection at dispatch time,
+  // and at seat time we verify the agent is actually online (strict
+  // policy: refuse to seat an offline ws agent rather than letting the
+  // seat go mute every turn). Unwired = ws agents fall through to
+  // AGENT_NOT_FOUND (back-compat with the previous fix that explicitly
+  // rejected ws agents in this code path).
+  agentRegistry?: AgentConnectionRegistry;
   // Optional protocol briefing forwarded to every external HTTP agent on
   // every decision request. The API server fills this in from env when
   // WEREWOLF_BRIEFING_ENABLED is truthy. Local sims/tests leave it unset.
@@ -155,6 +165,30 @@ export interface WerewolfLobbyRegistryOptions {
 // carries ownerUserId/agentConfigId for ownership checks and the per-viewer
 // isMine projection. publicEntry() must NEVER expose these fields directly;
 // it derives isMine for the requester and drops the rest.
+// Normalized shape returned by resolveAgent. Discriminated by transport
+// kind so the inviteAgent body can branch into the right adapter
+// constructor with type-safe access to per-protocol fields. http stays
+// the legacy-compatible shape (endpointUrl + optional auth headers); ws
+// carries the postgres UUID separately so the orchestrator can keep
+// using synthetic `agent-${playerId}` identities for its own bookkeeping
+// while the WS adapter looks up the live connection by the agent's real
+// id.
+type ResolvedAgent =
+  | {
+      kind: 'http';
+      name: string;
+      endpointUrl: string;
+      authHeaderName: string | null;
+      authHeaderValue: string | null;
+      timeoutMs: number;
+    }
+  | {
+      kind: 'ws';
+      name: string;
+      registryKey: string;  // postgres agents.id UUID
+      timeoutMs: number;
+    };
+
 type InternalSeatOccupant =
   | { kind: 'empty' }
   | { kind: 'npc'; agentId: string; displayName: string }
@@ -346,41 +380,44 @@ export class WerewolfLobbyRegistry {
   // wants its mock data to flow through.
   //
   // Returns null when no record matches the (ownerUserId, agentConfigId)
-  // pair. For postgres agents we additionally require protocol='http'
-  // since longpoll/ws seating from the web lobby is a future PR — those
-  // agents fall through to AGENT_NOT_FOUND for now rather than seating
-  // an adapter that would either crash on dispatch (ws without registry)
-  // or address the wrong mailbox row (longpoll). The error is the same
-  // shape as "ownership mismatch" so a caller can't probe which case
-  // they hit.
+  // pair. For postgres agents, accepted protocols are 'http' and 'ws';
+  // longpoll/inproc fall through to AGENT_NOT_FOUND because seating
+  // them via the web lobby would need adapter wiring (mailbox key /
+  // in-process strategy injection) that doesn't fit the current
+  // per-seat synthetic agentId model. The error is the same shape as
+  // ownership-mismatch so a caller can't probe which case they hit.
   private async resolveAgent(
     ownerUserId: string,
     agentConfigId: string,
-  ): Promise<{
-    name: string;
-    endpointUrl: string;
-    authHeaderName: string | null;
-    authHeaderValue: string | null;
-    timeoutMs: number;
-  } | null> {
+  ): Promise<ResolvedAgent | null> {
     if (this.options.agentStore) {
       const record = await this.options.agentStore.get(ownerUserId, agentConfigId);
       if (record) {
-        if (record.protocol !== 'http') {
-          // Out-of-scope protocol for this seating path. Surface as
-          // not-found so cross-user probing can't distinguish.
-          return null;
+        if (record.protocol === 'http') {
+          if (!record.callbackUrl) return null;
+          return {
+            kind: 'http',
+            name: record.name,
+            endpointUrl: record.callbackUrl,
+            authHeaderName: record.authHeaderName,
+            authHeaderValue: record.authHeaderValue,
+            timeoutMs: record.timeoutMs,
+          };
         }
-        if (!record.callbackUrl) {
-          return null;
+        if (record.protocol === 'ws') {
+          return {
+            kind: 'ws',
+            name: record.name,
+            // postgres `agents.id` UUID — used to look up the live
+            // AgentConnection in AgentConnectionRegistry. The
+            // registry indexes by this exact value (set in agents-ws.ts
+            // at upgrade time).
+            registryKey: record.id,
+            timeoutMs: record.timeoutMs,
+          };
         }
-        return {
-          name: record.name,
-          endpointUrl: record.callbackUrl,
-          authHeaderName: record.authHeaderName,
-          authHeaderValue: record.authHeaderValue,
-          timeoutMs: record.timeoutMs,
-        };
+        // longpoll / inproc — out of scope for the web lobby seat path
+        return null;
       }
       // Fall through to SQLite only if postgres found nothing. This lets
       // a hybrid test environment (postgres for prod-like data + SQLite
@@ -391,6 +428,7 @@ export class WerewolfLobbyRegistry {
       const cfg = await this.options.agentConfigStore.get(ownerUserId, agentConfigId);
       if (cfg) {
         return {
+          kind: 'http',
           name: cfg.agentName,
           endpointUrl: cfg.endpointUrl,
           authHeaderName: cfg.authHeaderName,
@@ -580,14 +618,46 @@ export class WerewolfLobbyRegistry {
     const playerId = seatNow.playerId;
     const agentId = `agent-${playerId}`;
     const finalDisplayName = displayName?.trim() || cfg.name;
-    const adapter = new WerewolfHttpAgentAdapter({
-      agentId,
-      name: finalDisplayName,
-      endpointUrl: cfg.endpointUrl,
-      authHeaderName: cfg.authHeaderName,
-      authHeaderValue: cfg.authHeaderValue,
-      timeoutMs: cfg.timeoutMs,
-    });
+    const adapter = (() => {
+      if (cfg.kind === 'http') {
+        return new WerewolfHttpAgentAdapter({
+          agentId,
+          name: finalDisplayName,
+          endpointUrl: cfg.endpointUrl,
+          authHeaderName: cfg.authHeaderName,
+          authHeaderValue: cfg.authHeaderValue,
+          timeoutMs: cfg.timeoutMs,
+        });
+      }
+      // cfg.kind === 'ws'
+      if (!this.options.agentRegistry) {
+        throw new AppError(
+          'INVALID_CONFIG',
+          `cannot seat ws agent ${agentConfigId}: lobby was constructed without an agentRegistry (production should wire opts.werewolfAgentStore + agentRegistry; only legacy SQLite-only tests omit them)`,
+        );
+      }
+      // Strict online check: refuse to seat an ws agent whose process
+      // isn't currently connected. Without this, the seat would get
+      // assigned but the very first decision request would throw
+      // AgentOfflineError, the orchestrator would substitute fallback,
+      // and the seat would appear mute every turn. Surfacing the
+      // mismatch at seat time gives the user an actionable error
+      // ("start your agent process and retry") instead of a silent
+      // failure mode that only shows up mid-match.
+      const conn = this.options.agentRegistry.acquire(cfg.registryKey);
+      if (!conn) {
+        throw new AppError(
+          'AGENT_OFFLINE',
+          `agent ${agentConfigId} has no live WS connection — start the agent process (it should connect to /api/v1/agents/connect) and retry`,
+        );
+      }
+      return new WerewolfWsAgentAdapter(
+        agentId,                  // orchestrator-facing, per-seat synthetic
+        finalDisplayName,
+        this.options.agentRegistry,
+        cfg.registryKey,          // registry-lookup key, postgres UUID
+      );
+    })();
     this.options.orchestrator.registerAgent(gameId, playerId, adapter);
     entry.seats[seatIndex] = {
       seatIndex,

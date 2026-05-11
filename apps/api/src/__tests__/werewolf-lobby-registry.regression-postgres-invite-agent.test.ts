@@ -10,7 +10,17 @@ import type {
   PatchAgent,
   UserAgentConfig,
 } from '@agent-poker/persistence';
+import {
+  AgentConnection,
+  AgentConnectionRegistry,
+  type AgentSocket,
+} from '@agent-poker/agent-runtime';
 import { WerewolfLobbyRegistry } from '../werewolf-lobby-registry.js';
+
+class StubSocket implements AgentSocket {
+  send(_data: string): void {}
+  close(): void {}
+}
 
 // Regression for the prod bug captured 2026-05-11: after the auth
 // migration, `/me/agents` was switched to query postgres (see
@@ -159,19 +169,21 @@ describe('WerewolfLobbyRegistry — inviteAgent against postgres IAgentStore', (
     ).rejects.toMatchObject({ code: 'AGENT_NOT_FOUND' });
   });
 
-  it('rejects a postgres ws agent with AGENT_NOT_FOUND (lobby seating of ws is a future PR)', async () => {
-    // ws agents authenticate via wsToken at WS upgrade time and need an
-    // AgentConnectionRegistry to dispatch decisions. The web-lobby seat
-    // path doesn't wire either of those yet. Surface as not-found so a
-    // cross-user probe can't distinguish from "no such id".
+  it('refuses to seat a postgres ws agent when the lobby is constructed without an agentRegistry', async () => {
+    // Without an AgentConnectionRegistry the lobby has no way to look
+    // up the agent's live connection at dispatch time, so seating a
+    // ws agent here would just produce a guaranteed-mute seat. Surface
+    // it as INVALID_CONFIG so the deployer sees a clear "wire the
+    // registry" message instead of a silent failure path.
     const orch = new WerewolfOrchestrator();
     const agentStore = makeMockAgentStore();
-    const registry = new WerewolfLobbyRegistry({
+    const lobby = new WerewolfLobbyRegistry({
       orchestrator: orch,
       attachMatch: vi.fn(),
       detachMatch: vi.fn(),
       npcThinkingDelayRange: [0, 0],
       agentStore,
+      // NB: agentRegistry deliberately omitted
     });
     const created = await agentStore.create({
       ownerId: 'user-alice',
@@ -180,11 +192,87 @@ describe('WerewolfLobbyRegistry — inviteAgent against postgres IAgentStore', (
       protocol: 'ws',
       timeoutMs: 12_000,
     });
-    const game = registry.create({});
-
+    const game = lobby.create({});
     await expect(
-      registry.inviteAgent(game.gameId, 0, created.agent.id, 'user-alice'),
-    ).rejects.toMatchObject({ code: 'AGENT_NOT_FOUND' });
+      lobby.inviteAgent(game.gameId, 0, created.agent.id, 'user-alice'),
+    ).rejects.toMatchObject({ code: 'INVALID_CONFIG' });
+  });
+
+  it('refuses to seat a ws agent that has no live WS connection (AGENT_OFFLINE)', async () => {
+    // Strict-online seat-time check: the agent's process must be
+    // currently connected to /api/v1/agents/connect before the user
+    // can seat it. Without the check, the seat would be filled but
+    // the very first decision request would AgentOfflineError →
+    // werewolfFallback every turn ("mute seat" failure mode this
+    // whole PR chain exists to prevent).
+    const orch = new WerewolfOrchestrator();
+    const agentStore = makeMockAgentStore();
+    const agentRegistry = new AgentConnectionRegistry();
+    const lobby = new WerewolfLobbyRegistry({
+      orchestrator: orch,
+      attachMatch: vi.fn(),
+      detachMatch: vi.fn(),
+      npcThinkingDelayRange: [0, 0],
+      agentStore,
+      agentRegistry,
+    });
+    const created = await agentStore.create({
+      ownerId: 'user-alice',
+      name: 'ws-bot',
+      description: null,
+      protocol: 'ws',
+      timeoutMs: 12_000,
+    });
+    const game = lobby.create({});
+    await expect(
+      lobby.inviteAgent(game.gameId, 0, created.agent.id, 'user-alice'),
+    ).rejects.toMatchObject({ code: 'AGENT_OFFLINE' });
+  });
+
+  it('seats a ws agent when the registry has a live connection for it', async () => {
+    const orch = new WerewolfOrchestrator();
+    const agentStore = makeMockAgentStore();
+    const agentRegistry = new AgentConnectionRegistry();
+    const lobby = new WerewolfLobbyRegistry({
+      orchestrator: orch,
+      attachMatch: vi.fn(),
+      detachMatch: vi.fn(),
+      npcThinkingDelayRange: [0, 0],
+      agentStore,
+      agentRegistry,
+    });
+
+    const ownerUserId = 'user-alice';
+    const created = await agentStore.create({
+      ownerId: ownerUserId,
+      name: 'ws-bot',
+      description: null,
+      protocol: 'ws',
+      timeoutMs: 12_000,
+    });
+    const agentId = created.agent.id;
+
+    // Establish a live connection (mirrors what
+    // apps/api/src/routes/agents-ws.ts does on a real upgrade — the
+    // registry keys by AgentConnection.agentId, which is set to the
+    // postgres `agents.id` UUID after token-hash lookup).
+    const conn = new AgentConnection({
+      agentId,
+      socket: new StubSocket(),
+    });
+    agentRegistry.register(conn);
+
+    const game = lobby.create({});
+    const entry = await lobby.inviteAgent(game.gameId, 0, agentId, ownerUserId);
+    const seat0 = entry.seats[0]!;
+    if (seat0.occupant.kind !== 'agent') throw new Error('unreachable');
+    expect(seat0.occupant.displayName).toBe('ws-bot');
+    // Public projection strips agentConfigId; verify via the in-use
+    // joiner which iterates internal state.
+    expect(lobby.isAgentConfigInUse(agentId)).toBe(true);
+
+    // Cleanup so registry's interval timers don't keep the test runner alive.
+    conn.handleSocketClosed('test-cleanup');
   });
 
   it('prefers postgres over SQLite when both stores have the same id', async () => {

@@ -267,6 +267,11 @@ export function buildServer(opts: BuildServerOptions = {}) {
         AGENT_NOT_FOUND: 404,
         AGENT_INVITE_NOT_FOUND: 404,
         AGENT_INVITE_UNAVAILABLE: 410,
+        // 409 — caller tried to seat a protocol='ws' agent that doesn't
+        // currently have an AgentConnection in AgentConnectionRegistry.
+        // Strict policy: refuse at seat time rather than letting the
+        // seat go mute on the first decision request.
+        AGENT_OFFLINE: 409,
         // 400 — the supplied endpointUrl is reachable but failed the
         // register-time probe. The body's `message` field carries the
         // specific reason (timeout, non-2xx, malformed JSON, schema mismatch).
@@ -358,6 +363,11 @@ export function buildServer(opts: BuildServerOptions = {}) {
       // dev/test path; production always sets werewolfAgentStore.
       ...(opts.werewolfAgentStore ? { agentStore: opts.werewolfAgentStore } : {}),
       agentConfigStore: agentConfigStore!,
+      // Pass the live-agent registry so the lobby can (a) construct
+      // WerewolfWsAgentAdapter for protocol='ws' agents, (b) enforce
+      // the strict-online seat-time check that rejects offline ws
+      // agents with AGENT_OFFLINE instead of letting the seat go mute.
+      agentRegistry,
       ...(werewolfBriefing ? { briefing: werewolfBriefing } : {}),
       ...(opts.werewolfMatchRegistry
         ? { matchRegistry: opts.werewolfMatchRegistry }

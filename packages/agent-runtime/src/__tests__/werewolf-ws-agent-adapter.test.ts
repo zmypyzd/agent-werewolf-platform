@@ -101,6 +101,42 @@ describe('WerewolfWsAgentAdapter', () => {
     conn.handleSocketClosed('test-cleanup');
   });
 
+  it('uses a separate registryKey for connection lookup when split from agentId', async () => {
+    // werewolf-lobby seat flow: orchestrator-facing agentId is the per-
+    // seat synthetic (agent-p1), but the registry indexes by postgres
+    // UUID. Passing both keeps the two identities cleanly separated.
+    const registry = new AgentConnectionRegistry();
+    const sock = new FakeSocket();
+    const postgresId = 'cfg-postgres-uuid-here';
+    const conn = new AgentConnection({
+      agentId: postgresId,
+      socket: sock,
+      serverConnectionId: 'srv-1',
+      correlationIdFactory: () => 'corr-X',
+    });
+    conn.start();
+    registry.register(conn);
+
+    const adapter = new WerewolfWsAgentAdapter(
+      'agent-p3',       // orchestrator-facing, synthetic per-seat
+      'WolfBot',
+      registry,
+      postgresId,       // registry-lookup key, postgres UUID
+    );
+    expect(adapter.agentId).toBe('agent-p3');
+
+    const promise = adapter.requestDecision(stubRequest);
+    sock.pushClientFrame(conn, {
+      type: 'decide.response',
+      correlationId: 'corr-X',
+      action: { type: 'werewolf-vote', voterId: 'p1', targetId: 'p2' },
+    });
+    const res = await promise;
+    expect(res.action).toEqual({ type: 'werewolf-vote', voterId: 'p1', targetId: 'p2' });
+
+    conn.handleSocketClosed('test-cleanup');
+  });
+
   it('falls back to AgentOfflineError if the connection was closed between dispatches', async () => {
     const registry = new AgentConnectionRegistry();
     const sock = new FakeSocket();
