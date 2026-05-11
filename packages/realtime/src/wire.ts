@@ -41,3 +41,13 @@ export function werewolfMatchTopic(gameId: string): string {
 export function werewolfPlayerTopic(userId: string, gameId: string): string {
   return `player:${userId}:${gameId}`;
 }
+
+// Presence topic for an externally-registered agent's WS connection. Public —
+// the agentId is a UUID, so leaking presence via guessing is bounded by
+// brute-forcing the namespace. Lobby/agent-management UIs subscribe here to
+// surface "online" indicators driven by AgentConnectionRegistry.
+export function agentStatusTopic(agentId: string): string {
+  return `agent.status:${agentId}`;
+}
+
+export const AGENT_STATUS_TOPIC_PREFIX = 'agent.status:' as const;

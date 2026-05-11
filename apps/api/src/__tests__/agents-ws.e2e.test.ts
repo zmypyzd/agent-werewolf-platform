@@ -276,3 +276,97 @@ describe('agents-ws E2E (reverse-WebSocket transport)', () => {
     await expect(adapter.requestDecision(buildRequest())).rejects.toThrow(/no live WS connection/);
   });
 });
+
+// ─── P3: agent.status pub/sub roundtrip ─────────────────────────────────────
+// Verifies the full plumbing wired in P3:
+//   AgentConnectionRegistry → RealtimeHub.publish → /ws subscriber.
+// A second WS client (the "lobby UI") subscribes to
+// `agent.status:<agentId>` and observes `agent.online` when the agent's
+// /agents/connect opens, and `agent.offline` when it closes.
+
+// Subscribe a /ws client to a topic; resolve with a frames buffer that
+// the test polls. The /ws route at apps/api/src/routes/ws.ts accepts
+// anonymous subscriptions for public topics (LOBBY, match:*, table:*,
+// agent.status:*) — no auth headers needed.
+async function openLobbyWs(topic: string): Promise<{
+  ws: WebSocket;
+  frames: Array<{ topic: string; type: string; payload: Record<string, unknown> }>;
+}> {
+  return await new Promise((resolve, reject) => {
+    const ws = new WebSocket(`${wsBaseUrl}/ws`);
+    const frames: Array<{ topic: string; type: string; payload: Record<string, unknown> }> = [];
+    ws.on('message', (raw) => {
+      try {
+        frames.push(JSON.parse(raw.toString()));
+      } catch {
+        // ignore malformed
+      }
+    });
+    ws.on('open', () => {
+      ws.send(JSON.stringify({ topic, type: 'subscribe', payload: {} }));
+      // Give Fastify a tick to process the subscribe message before
+      // returning. Without this, a publish that fires immediately after
+      // the agent /agents/connect upgrade can race the subscribe.
+      setTimeout(() => resolve({ ws, frames }), 50);
+    });
+    ws.on('unexpected-response', (_req, res) =>
+      reject(new Error(`/ws upgrade failed: ${res.statusCode}`)),
+    );
+    ws.on('error', reject);
+  });
+}
+
+async function waitForLobbyFrame(
+  frames: Array<{ topic: string; type: string; payload: Record<string, unknown> }>,
+  predicate: (f: { topic: string; type: string; payload: Record<string, unknown> }) => boolean,
+  timeoutMs = 2_000,
+): Promise<{ topic: string; type: string; payload: Record<string, unknown> }> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const hit = frames.find(predicate);
+    if (hit) return hit;
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  throw new Error(`timeout waiting for matching lobby frame`);
+}
+
+describe('agent.status pub/sub (P3 plumbing)', () => {
+  it('publishes agent.online to subscribers when an agent connects, agent.offline when it disconnects', async () => {
+    const topic = `agent.status:${AGENT_ID}`;
+    const lobby = await openLobbyWs(topic);
+
+    // Open the agent's reverse-WS. registry.register → hub.publish on
+    // the agent.status topic; the lobby subscriber sees it.
+    const agentConn = await connectAgent(RAW_TOKEN);
+
+    const onlineMsg = await waitForLobbyFrame(lobby.frames, (f) =>
+      f.topic === topic && f.type === 'agent.online',
+    );
+    expect(onlineMsg.payload).toMatchObject({ agentId: AGENT_ID });
+    expect(typeof onlineMsg.payload['ts']).toBe('number');
+
+    // Disconnect the agent → registry.unregister → publish offline.
+    agentConn.ws.close();
+
+    const offlineMsg = await waitForLobbyFrame(lobby.frames, (f) =>
+      f.topic === topic && f.type === 'agent.offline',
+    );
+    expect(offlineMsg.payload).toMatchObject({ agentId: AGENT_ID });
+    expect(typeof offlineMsg.payload['ts']).toBe('number');
+
+    lobby.ws.close();
+  });
+
+  it('rejects subscribing to the bare prefix `agent.status:` (empty agentId)', async () => {
+    // The /ws route guards against an empty agentId in the topic so a
+    // misbehaving client cannot flood the empty-string topic. Subscribe
+    // attempt is silently dropped; no frames arrive.
+    const lobby = await openLobbyWs('agent.status:');
+    await connectAgent(RAW_TOKEN);
+    // Wait long enough that any publish would have landed if the subscribe
+    // had succeeded. Then assert no agent.status frames arrived.
+    await new Promise((r) => setTimeout(r, 100));
+    expect(lobby.frames.filter((f) => f.topic.startsWith('agent.status:'))).toEqual([]);
+    lobby.ws.close();
+  });
+});

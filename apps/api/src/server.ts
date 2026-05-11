@@ -41,7 +41,7 @@ import {
 import { RateLimiter, authPlugin, MockAuthService } from '@agent-poker/auth';
 import type { RateLimiterConfig, RuntimeEnv, IAuthService } from '@agent-poker/auth';
 import { registerJwtAuthMiddleware } from './middleware/auth.js';
-import { RealtimeHub } from '@agent-poker/realtime';
+import { RealtimeHub, agentStatusTopic } from '@agent-poker/realtime';
 import { tablesRoutes } from './routes/tables.js';
 import { simulateRoutes } from './routes/simulate.js';
 import { matchesRoutes } from './routes/matches.js';
@@ -135,6 +135,30 @@ export function buildServer(opts: BuildServerOptions = {}) {
   // One registry per server instance. Empty when no agents are connected;
   // memory cost is bounded by the number of registered ws agents.
   const agentRegistry = opts.agentRegistry ?? new AgentConnectionRegistry();
+
+  // Bridge agent connection presence onto the realtime hub. Subscribers
+  // to `agent.status:<agentId>` see `agent.online` / `agent.offline`
+  // messages as the agent's WS comes and goes. Wired here (before any
+  // route runs) so the very first /agents/connect upgrade emits through
+  // a populated subscriber set if a lobby UI already opened the /ws first.
+  // The hub is a noop when nobody is listening, so this is cheap if
+  // unused.
+  agentRegistry.on('online', (agentId) => {
+    const topic = agentStatusTopic(agentId);
+    hub.publish(topic, {
+      topic,
+      type: 'agent.online',
+      payload: { agentId, ts: Date.now() },
+    });
+  });
+  agentRegistry.on('offline', (agentId) => {
+    const topic = agentStatusTopic(agentId);
+    hub.publish(topic, {
+      topic,
+      type: 'agent.offline',
+      payload: { agentId, ts: Date.now() },
+    });
+  });
   const orch = opts.orchestrator ?? new TableOrchestrator(tableStore, hs, hub, decisionTraceStore);
 
   const werewolfMatchArtifactStore =
@@ -383,6 +407,7 @@ export function buildServer(opts: BuildServerOptions = {}) {
       await scope.register(meWerewolfAgentsRoutes, {
         prefix: '/api/v1',
         agentStore: opts.werewolfAgentStore,
+        agentRegistry,
       });
     }
     if (opts.werewolfAgentStore && opts.werewolfMailbox) {

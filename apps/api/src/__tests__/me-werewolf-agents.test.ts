@@ -15,6 +15,11 @@ import {
   type PatchAgent,
 } from '@agent-poker/persistence';
 import { MailboxOwnershipError } from '@agent-poker/persistence';
+import {
+  AgentConnection,
+  AgentConnectionRegistry,
+  type AgentSocket,
+} from '@agent-poker/agent-runtime';
 import { buildServer } from '../server.js';
 
 const CSRF = { 'content-type': 'application/json', 'x-requested-with': 'fetch' };
@@ -244,6 +249,108 @@ describe('/me/werewolf-agents', () => {
   });
 
   // ─── GET ─────────────────────────────────────────────────────────────
+
+  // ─── online field (P3 plumbing) ──────────────────────────────────────
+  // The GET response includes `online: boolean | null` for each agent.
+  // - 'ws' agents → boolean reflecting AgentConnectionRegistry state
+  // - 'longpoll' agents → null (no registry concept; mailbox liveness
+  //   would be a separate signal, out of scope here)
+
+  it('GET returns online: null for longpoll agents (no registry concept)', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/me/werewolf-agents',
+      headers: CSRF,
+      cookies: { apk_sid: cookie },
+      payload: JSON.stringify({ name: 'LongpollAgent' }),
+    });
+    const list = await app.inject({
+      method: 'GET',
+      url: '/api/v1/me/werewolf-agents',
+      cookies: { apk_sid: cookie },
+    });
+    const body = JSON.parse(list.body) as {
+      data: Array<{ name: string; protocol: string; online: boolean | null }>;
+    };
+    expect(body.data[0]!.protocol).toBe('longpoll');
+    expect(body.data[0]!.online).toBeNull();
+  });
+
+  it('GET returns online: true/false for ws agents based on the registry', async () => {
+    // Re-build the server with a registry we control so we can flip
+    // online state from the test without an actual WS upgrade.
+    await app.close();
+    const registry = new AgentConnectionRegistry();
+    agentStore = new FakeAgentStore();
+    app = buildServer({
+      werewolfAgentStore: agentStore,
+      werewolfMailbox: new FakeMailbox(),
+      agentRegistry: registry,
+    });
+    await app.ready();
+    const reg = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      headers: CSRF,
+      payload: JSON.stringify({ email: 'wsowner@x.test', password: 'hunter22pw', displayName: 'W' }),
+    });
+    const setCookie = Array.isArray(reg.headers['set-cookie'])
+      ? reg.headers['set-cookie'].join(';')
+      : reg.headers['set-cookie'] ?? '';
+    const myCookie = setCookie.match(/apk_sid=([^;]+)/)![1]!;
+
+    // Seed a ws agent directly in the store (POST /me/werewolf-agents
+    // only creates longpoll). Need the user_id that the auth-register
+    // path materialized — read it off the list endpoint we just exercised.
+    // For this test we just inject the row using the fake.
+    const meRes = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      cookies: { apk_sid: myCookie },
+    });
+    const ownerId = (JSON.parse(meRes.body) as { data: { user: { userId: string } } })
+      .data.user.userId;
+    const created = await agentStore.create({
+      ownerId,
+      name: 'WsAgent',
+      description: null,
+      protocol: 'ws',
+    });
+    const wsAgentId = created.agent.id;
+
+    // Initial state: offline (no connection registered).
+    const offline = await app.inject({
+      method: 'GET',
+      url: '/api/v1/me/werewolf-agents',
+      cookies: { apk_sid: myCookie },
+    });
+    const offlineBody = JSON.parse(offline.body) as {
+      data: Array<{ agentId: string; protocol: string; online: boolean | null }>;
+    };
+    const offlineRow = offlineBody.data.find((r) => r.agentId === wsAgentId)!;
+    expect(offlineRow.protocol).toBe('ws');
+    expect(offlineRow.online).toBe(false);
+
+    // Register a connection → online flips to true. Use a no-op socket
+    // since we don't actually exercise frames here.
+    const fakeSocket: AgentSocket = { send: () => {}, close: () => {} };
+    const conn = new AgentConnection({ agentId: wsAgentId, socket: fakeSocket });
+    registry.register(conn);
+
+    const online = await app.inject({
+      method: 'GET',
+      url: '/api/v1/me/werewolf-agents',
+      cookies: { apk_sid: myCookie },
+    });
+    const onlineBody = JSON.parse(online.body) as {
+      data: Array<{ agentId: string; protocol: string; online: boolean | null }>;
+    };
+    expect(onlineBody.data.find((r) => r.agentId === wsAgentId)!.online).toBe(true);
+
+    // Cleanup
+    conn.handleSocketClosed('test-cleanup');
+    registry.unregister(conn);
+  });
 
   it('GET lists only the requesting owner\'s agents and never includes raw tokens', async () => {
     await app.inject({

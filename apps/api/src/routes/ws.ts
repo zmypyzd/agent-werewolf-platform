@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import type { WebSocket } from 'ws';
 import { WsClientMessageSchema } from '@agent-poker/agent-protocol';
 import type { HubConnection, RealtimeHub } from '@agent-poker/realtime';
-import { LOBBY_TOPIC } from '@agent-poker/realtime';
+import { AGENT_STATUS_TOPIC_PREFIX, LOBBY_TOPIC } from '@agent-poker/realtime';
 
 interface WsRoutesOptions extends FastifyPluginOptions {
   hub: RealtimeHub;
@@ -81,6 +81,14 @@ export async function wsRoutes(app: FastifyInstance, opts: WsRoutesOptions) {
             }
           } else if (msg.topic.startsWith('match:')) {
             if (msg.topic === 'match:') break;
+            hub.subscribe(conn, msg.topic);
+          } else if (msg.topic.startsWith(AGENT_STATUS_TOPIC_PREFIX)) {
+            // `agent.status:<agentId>` is public. The agentId is a UUID, so
+            // presence cannot be enumerated; only a client that already
+            // knows the id (via /me/werewolf-agents or match metadata) can
+            // observe it. Subscribers get `agent.online` / `agent.offline`
+            // messages driven by AgentConnectionRegistry (see server.ts).
+            if (msg.topic === AGENT_STATUS_TOPIC_PREFIX) break; // empty id
             hub.subscribe(conn, msg.topic);
           } else if (authedUserId && isOwnPlayerTopic(msg.topic, authedUserId)) {
             hub.subscribe(conn, msg.topic);
