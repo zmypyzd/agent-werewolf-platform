@@ -53,7 +53,11 @@ function toPublicInvite(invite: AgentInviteRecord) {
     expiresAt: invite.expiresAt,
     usedAt: invite.usedAt,
     createdAt: invite.createdAt,
-    registeredAgentId: invite.registeredAgentId,
+    // Wire-name kept stable with the SQLite store + IAgentInviteStore
+    // interface; Postgres internally calls this `registeredAgentId` (the
+    // column is `registered_agent_id`), but every API consumer expects
+    // the platform-level "agent config" terminology.
+    registeredAgentConfigId: invite.registeredAgentId,
     status,
   };
 }
@@ -208,10 +212,36 @@ export async function agentInvitesRoutes(app: FastifyInstance, opts: AgentInvite
           invite: {
             ...toPublicInvite(invite),
             status: 'used' as const,
-            registeredAgentId: agent.id,
+            registeredAgentConfigId: agent.id,
           },
         },
       });
+    },
+  );
+
+  // DELETE /agents/invites/by-hash/:tokenHash — revoke a pending invite by its
+  // sha256 hash. The list/render path only ever sees tokenHash (raw token is
+  // emitted exactly once at creation), so the UI uses this to revoke a
+  // forgotten invite. Distinct route from /:token to keep the raw-token vs
+  // hash semantics unambiguous in URL parameters.
+  app.delete<{ Params: { tokenHash: string } }>(
+    '/agents/invites/by-hash/:tokenHash',
+    { preHandler: [app.requireJwtAuth] },
+    async (req, reply) => {
+      const cfg = requireSupabaseConfig(opts.supabaseConfig);
+
+      const { userId, jwt } = (req as JwtAuthenticatedRequest).jwtUser;
+      const userClient = createUserScopedClient(cfg, jwt);
+      const store = new PostgresAgentInviteStore(userClient);
+
+      const revoked = await store.revokeUnusedByHash(userId, req.params.tokenHash);
+      if (!revoked) {
+        // Collapse "no such hash for this owner" and "already used / revoked
+        // / expired" into one error — by-hash callers cannot distinguish via
+        // a separate findByHash without leaking that the hash exists.
+        throw new AgentInviteNotFoundError(req.params.tokenHash);
+      }
+      reply.status(204).send();
     },
   );
 }

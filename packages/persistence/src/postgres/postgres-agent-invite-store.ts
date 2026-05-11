@@ -38,6 +38,9 @@ export interface IAgentInviteStorePg {
   findByRawToken(rawToken: string): Promise<AgentInviteRecord | null>;
   markUsed(rawToken: string, registeredAgentId: string): Promise<void>;
   revokeUnused(ownerId: string, rawToken: string): Promise<boolean>;
+  // Hash-keyed revoke: list responses only carry tokenHash (raw is shown
+  // once at creation), so the UI revokes a forgotten invite via its hash.
+  revokeUnusedByHash(ownerId: string, tokenHash: string): Promise<boolean>;
 }
 
 interface InviteRow {
@@ -112,7 +115,10 @@ export class PostgresAgentInviteStore implements IAgentInviteStorePg {
   }
 
   async revokeUnused(ownerId: string, rawToken: string): Promise<boolean> {
-    const tokenHash = hashToken(rawToken);
+    return this.revokeUnusedByHash(ownerId, hashToken(rawToken));
+  }
+
+  async revokeUnusedByHash(ownerId: string, tokenHash: string): Promise<boolean> {
     const { data, error } = await this.client
       .from('agent_invites')
       .update({ revoked_at: new Date().toISOString() })
@@ -121,7 +127,7 @@ export class PostgresAgentInviteStore implements IAgentInviteStorePg {
       .is('used_at', null)
       .is('revoked_at', null)
       .select('token_hash');
-    if (error) throw new Error(`revokeUnused failed: ${error.message}`);
+    if (error) throw new Error(`revokeUnusedByHash failed: ${error.message}`);
     return (data?.length ?? 0) > 0;
   }
 }

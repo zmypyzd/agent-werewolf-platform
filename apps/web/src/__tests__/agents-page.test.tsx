@@ -37,7 +37,10 @@ const agents: UserAgentConfigPublic[] = [
 
 const invites: AgentInvitePublic[] = [
   {
-    token: 'invite-ready',
+    // Hash of the raw token, sha256 hex. The list endpoint never returns
+    // the raw token — that is shown exactly once at creation — so the UI
+    // keys, displays, and revokes by hash for forgotten invites.
+    tokenHash: 'a1b2c3d4e5f6'.repeat(8).slice(0, 64),
     displayName: 'Solver seat',
     notes: 'external evaluator',
     expiresAt: 1_777_280_900_000,
@@ -47,7 +50,7 @@ const invites: AgentInvitePublic[] = [
     status: 'pending',
   },
   {
-    token: 'invite-used',
+    tokenHash: 'fedcba987654'.repeat(8).slice(0, 64),
     displayName: 'Caller',
     notes: null,
     expiresAt: 1_777_280_900_000,
@@ -113,7 +116,12 @@ describe('AgentsPageContent', () => {
     expect(html).toContain('Pending Invites');
     expect(html).toContain('Solver seat');
     expect(html).toContain('external evaluator');
-    expect(html).toContain('invite-ready');
+    // The pending list intentionally does not display the token (raw is
+    // emitted only at creation, hash is unactionable to the user). The
+    // Revoke button still routes by hash to the by-hash endpoint.
+    expect(html).not.toContain('<dt>Token</dt>');
+    expect(html).toContain('Created');
+    expect(html).toContain('Expires');
     expect(html).toContain('Revoke');
     expect(html).not.toContain('tableId');
   });
@@ -167,14 +175,40 @@ describe('AgentsPageContent', () => {
     expect(wolfCoding).toContain('validActions');
     expect(wolfCoding).toContain('a.type');
     expect(wolfCoding).toContain('"speak"');
-    expect(wolfCoding).toContain('docs/werewolf-http-agent-guide.md');
+    // Docs reference must be a fetchable URL derived from the registerUrl
+    // origin, not the unreachable repo-relative path the prompt used to cite.
+    // External coding agents have no FS access to docs/*.md.
+    expect(wolfCoding).toContain('http://localhost:3000/api/v1/docs/werewolf-agent-guide');
+    expect(wolfCoding).not.toContain('docs/werewolf-http-agent-guide.md');
     expect(wolfCoding).not.toContain('"actionType": "fold"');
+    // Embedded request schema example so the AI doesn't need to fetch docs to
+    // know field shapes — e.g. selfRole / publicState.players / phase enum.
+    expect(wolfCoding).toContain('selfRole');
+    expect(wolfCoding).toContain('hunter-shoot');
 
     const wolfHttp = buildHttpAgentInvitePrompt(invite, 'werewolf');
     expect(wolfHttp).toMatch(/WEREWOLF/i);
     expect(wolfHttp).toContain('validActions');
-    expect(wolfHttp).toContain('docs/werewolf-http-agent-guide.md');
+    expect(wolfHttp).toContain('http://localhost:3000/api/v1/docs/werewolf-agent-guide');
+    expect(wolfHttp).not.toContain('docs/werewolf-http-agent-guide.md');
     expect(wolfHttp).not.toContain('actionType "fold"');
+  });
+
+  it('embeds inbound request schema so coding agents do not have to ask the operator for the API', () => {
+    const registerUrl = 'http://localhost:3000/api/v1/agents/invites/invite-new/register';
+    const invite = { token: 'invite-new', registerUrl };
+
+    // Poker coding prompt should show legalActions[i].type vs response actionType
+    // so the AI doesn't conflate the two and emit invalid actions.
+    const pokerCoding = buildCodingAgentInvitePrompt(invite, 'poker');
+    expect(pokerCoding).toContain('legalActions');
+    expect(pokerCoding).toContain('holeCards');
+    expect(pokerCoding).toContain('callAmount');
+    expect(pokerCoding).toContain('minRaiseAmount');
+
+    const pokerHttp = buildHttpAgentInvitePrompt(invite, 'poker');
+    expect(pokerHttp).toContain('legalActions');
+    expect(pokerHttp).toContain('holeCards');
   });
 
   it('renders a game-type picker so the invite copy can flip to werewolf', () => {
@@ -192,11 +226,11 @@ describe('AgentsPageContent', () => {
     // prompts intentionally reverse this naming. JSON quotes get HTML-escaped
     // inside <pre>, so unescaped ASCII tokens are the safe assertion vehicle.
     expect(pokerHtml).toContain('Use actionType');
-    expect(pokerHtml).not.toContain('docs/werewolf-http-agent-guide.md');
+    expect(pokerHtml).not.toContain('werewolf-agent-guide');
 
     const wolfHtml = renderAgentsContent({ generatedInvite, gameType: 'werewolf' });
     expect(wolfHtml).toContain('validActions');
-    expect(wolfHtml).toContain('docs/werewolf-http-agent-guide.md');
+    expect(wolfHtml).toContain('werewolf-agent-guide');
     expect(wolfHtml).not.toContain('Use actionType');
   });
 
