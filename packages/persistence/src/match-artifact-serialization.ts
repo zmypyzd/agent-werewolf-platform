@@ -8,6 +8,7 @@ import type {
   MatchArtifactManifest,
   MatchArtifactRecord,
   MatchSummary,
+  PokerReplayEventType,
   PublicHandSummary,
   ReplayEvent,
 } from '@agent-poker/shared';
@@ -190,13 +191,71 @@ function toPublicDecisionTraces(traces: DecisionTrace[]): DecisionTrace[] {
   return traces.map(toPublicDecisionTrace);
 }
 
+// Persistence-side parallel of `replayEventToPublic` in
+// packages/realtime/src/filter.ts. Same exhaustiveness contract:
+// adding a new `PokerReplayEventType` variant fails compile here
+// (the default arm asserts `never`) AND in the realtime filter, so
+// both broadcast and artifact paths get the new variant classified
+// before it can carry private state through unredacted. Without this,
+// the realtime filter's compile guard catches new event types but
+// the artifact-write path silently passes them through with only a
+// holeCards strip — exactly the bug the realtime fix was written to
+// prevent, one layer down.
 function replayEventToPublicArtifact(event: ReplayEvent): ReplayEvent | null {
-  if (event.eventType === 'hole_cards.dealt') return null;
+  switch (event.eventType) {
+    // Never broadcast — private to one seat. hole_cards.dealt is
+    // dropped from the artifact entirely.
+    case 'hole_cards.dealt':
+      return null;
+
+    // Public events (incl. showdown.started, which embeds per-player
+    // holeCards in the internal form). Defense-in-depth: every
+    // payload is deep-stripped for any `holeCards` field at any
+    // nesting depth before persistence. Returns the original
+    // reference when nothing matches for cheap pass-through.
+    case 'hand.started':
+    case 'hand.completed':
+    case 'blinds.posted':
+    case 'community_cards.dealt':
+    case 'betting_round.started':
+    case 'betting_round.complete':
+    case 'action.requested':
+    case 'action.received':
+    case 'action.applied':
+    case 'agent.timeout':
+    case 'agent.invalid_action':
+    case 'pot.awarded':
+    case 'showdown.started':
+    case 'showdown.result':
+      return scrubIfPrivateCards(event);
+
+    default: {
+      // Exhaustiveness guard — adding a new PokerReplayEventType
+      // variant in @agent-poker/shared forces this default arm to
+      // fail compilation until the new variant gets an explicit
+      // case above.
+      const _exhaustive: never = event.eventType;
+      void _exhaustive;
+      // Runtime fail-closed: an unknown event type at runtime gets
+      // deep-stripped for holeCards. The compile guard is the real
+      // protection — this is the belt-and-braces fallback for a
+      // stale build that shipped against a newer shared release.
+      return scrubIfPrivateCards(event);
+    }
+  }
+}
+
+function scrubIfPrivateCards(event: ReplayEvent): ReplayEvent {
   if (containsPrivateCards(event.data)) {
     return { ...event, data: stripPrivateCards(event.data) as Record<string, unknown> };
   }
   return event;
 }
+
+// Re-exported so callers that want to iterate the exhaustive event
+// classification (e.g., a future audit script) can do so without
+// reaching into @agent-poker/shared directly.
+export type { PokerReplayEventType };
 
 function containsPrivateCards(value: unknown): boolean {
   if (value === null || typeof value !== 'object') return false;
