@@ -276,6 +276,31 @@ describe('/me/werewolf-agents', () => {
     expect(body.data[0]!.online).toBeNull();
   });
 
+  it('GET sets Cache-Control: no-store + Pragma: no-cache (parity with POST/rotate-token)', async () => {
+    // The list endpoint returns per-user agent inventory (names, descriptions,
+    // protocol). It's not credential material — POST and rotate-token already
+    // set no-store because they surface the one-shot rawToken — but a shared
+    // cache or browser bfcache holding the list response could cross-leak
+    // inventory between sessions on the same device. Mirror the defense the
+    // POST routes already have so any caching layer is consistently informed
+    // that /me/werewolf-agents responses must not be retained.
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/me/werewolf-agents',
+      headers: CSRF,
+      cookies: { apk_sid: cookie },
+      payload: JSON.stringify({ name: 'CacheHeaderProbe' }),
+    });
+    const list = await app.inject({
+      method: 'GET',
+      url: '/api/v1/me/werewolf-agents',
+      cookies: { apk_sid: cookie },
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.headers['cache-control']).toBe('no-store');
+    expect(list.headers['pragma']).toBe('no-cache');
+  });
+
   it('GET returns online: true/false for ws agents based on the registry', async () => {
     // Re-build the server with a registry we control so we can flip
     // online state from the test without an actual WS upgrade.
