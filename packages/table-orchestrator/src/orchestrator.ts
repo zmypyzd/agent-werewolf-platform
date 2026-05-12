@@ -224,7 +224,7 @@ export class TableOrchestrator {
     entry.agentInfos.set(agentInfo.agentId, fullInfo);
 
     await this.tableStore.saveTable(tableState);
-    this.hub?.publishTable(tableId, 'table.player_seated', {
+    this.safePublishTable(tableId, 'table.player_seated', {
       seatIndex: seatInfo.seatIndex,
       playerId: seatInfo.playerId,
       adapterType: seatInfo.adapterType,
@@ -257,7 +257,7 @@ export class TableOrchestrator {
     entry.agentInfos.delete(agentId);
 
     await this.tableStore.saveTable(tableState);
-    this.hub?.publishTable(tableId, 'table.player_left', {
+    this.safePublishTable(tableId, 'table.player_left', {
       seatIndex: seatIdx,
       reason: callerUserId === seat.ownerUserId ? 'voluntary' : 'admin',
     });
@@ -276,7 +276,7 @@ export class TableOrchestrator {
     const wasNew = !entry.spectators.has(userId);
     entry.spectators.add(userId);
     if (wasNew) {
-      this.hub?.publishTable(tableId, 'table.viewer_joined', { userId });
+      this.safePublishTable(tableId, 'table.viewer_joined', { userId });
       this.publishLobbyUpdate('lobby.table_updated', entry.tableState);
     }
   }
@@ -285,7 +285,7 @@ export class TableOrchestrator {
     const entry = this.tables.get(tableId);
     if (!entry) throw new NotFoundError('Table', tableId);
     if (!entry.spectators.delete(userId)) return;
-    this.hub?.publishTable(tableId, 'table.viewer_left', { userId });
+    this.safePublishTable(tableId, 'table.viewer_left', { userId });
     this.publishLobbyUpdate('lobby.table_updated', entry.tableState);
   }
 
@@ -309,7 +309,7 @@ export class TableOrchestrator {
     if (entry.tableState.status === 'in_hand') {
       seat.sitOutNextHand = true;
       await this.tableStore.saveTable(entry.tableState);
-      this.hub?.publishTable(tableId, 'table.player_left', {
+      this.safePublishTable(tableId, 'table.player_left', {
         seatIndex: seatIdx,
         reason: 'sit_out_next_hand',
       });
@@ -466,43 +466,75 @@ export class TableOrchestrator {
 
     if (this.hub) {
       const hub = this.hub;
+      // Three independent try/catch arms — public broadcast, hole-cards
+      // fan-out, and human-action fan-out — so a failure in one hub call
+      // cannot prevent the other two. Without this isolation, any throw
+      // inside hub.publish* (transient network error, internal hub bug,
+      // stale subscriber state) propagates back to emitter.emit() inside
+      // hand-runner.ts:647 and aborts the in-flight hand. Mirrors the
+      // werewolf-orchestrator subscriber-isolation fix in PR #38 — same
+      // architectural class (one buggy broadcaster shouldn't kill the
+      // match) but applied to the orchestrator's own internal listener
+      // rather than a public subscribe() API.
+      //
+      // We log via console.error rather than re-emitting because the
+      // hand is still running and the engine state is unaffected — the
+      // ops signal should be "broadcast degraded", not "match dropped".
       emitter.on('replay-event', (event: import('@agent-poker/shared').ReplayEvent) => {
         // Public broadcast (filtered: hole_cards.dealt is suppressed,
         // showdown.started has its holeCards stripped, defense-in-depth.)
-        const pub = replayEventToPublic(event);
-        if (pub) hub.publishTable(tableId, pub.eventType, pub.data);
+        try {
+          const pub = replayEventToPublic(event);
+          if (pub) hub.publishTable(tableId, pub.eventType, pub.data);
+        } catch (err) {
+          console.error(
+            `table-orchestrator: public broadcast failed for table ${tableId} event ${event.eventType}: ${asErrorMessage(err)}`,
+          );
+        }
 
         // Private fan-out for events that reveal information to a single user.
         if (event.eventType === 'hole_cards.dealt') {
-          const playerId = String(event.data['playerId'] ?? '');
-          const seat = tableState.seats.find(s => s?.playerId === playerId);
-          const holeCards = event.data['holeCards'];
-          if (seat && Array.isArray(holeCards) && holeCards.length === 2) {
-            hub.publishSeat(seat.ownerUserId, tableId, 'seat.hole_cards', {
-              handId: event.handId,
-              playerId: seat.playerId,
-              seatIndex: seat.seatIndex,
-              agentId: seat.agentId,
-              holeCards,
-            });
+          try {
+            const playerId = String(event.data['playerId'] ?? '');
+            const seat = tableState.seats.find(s => s?.playerId === playerId);
+            const holeCards = event.data['holeCards'];
+            if (seat && Array.isArray(holeCards) && holeCards.length === 2) {
+              hub.publishSeat(seat.ownerUserId, tableId, 'seat.hole_cards', {
+                handId: event.handId,
+                playerId: seat.playerId,
+                seatIndex: seat.seatIndex,
+                agentId: seat.agentId,
+                holeCards,
+              });
+            }
+          } catch (err) {
+            console.error(
+              `table-orchestrator: hole_cards fan-out failed for table ${tableId}: ${asErrorMessage(err)}`,
+            );
           }
         }
         if (event.eventType === 'action.requested') {
-          const agentId = String(event.data['agentId'] ?? '');
-          const seat = tableState.seats.find(s => s?.agentId === agentId);
-          if (seat && seat.adapterType === 'human') {
-            const requestId = event.data['requestId'];
-            const legalActions = event.data['legalActions'];
-            const timeoutMs = Number(event.data['timeoutMs'] ?? DEFAULT_TIMEOUT_MS);
-            if (typeof requestId === 'string' && Array.isArray(legalActions)) {
-              hub.publishSeat(seat.ownerUserId, tableId, 'seat.action_requested', {
-                handId: event.handId,
-                requestId,
-                legalActions,
-                privateState: { playerId: seat.playerId },
-                deadlineAt: Date.now() + timeoutMs,
-              });
+          try {
+            const agentId = String(event.data['agentId'] ?? '');
+            const seat = tableState.seats.find(s => s?.agentId === agentId);
+            if (seat && seat.adapterType === 'human') {
+              const requestId = event.data['requestId'];
+              const legalActions = event.data['legalActions'];
+              const timeoutMs = Number(event.data['timeoutMs'] ?? DEFAULT_TIMEOUT_MS);
+              if (typeof requestId === 'string' && Array.isArray(legalActions)) {
+                hub.publishSeat(seat.ownerUserId, tableId, 'seat.action_requested', {
+                  handId: event.handId,
+                  requestId,
+                  legalActions,
+                  privateState: { playerId: seat.playerId },
+                  deadlineAt: Date.now() + timeoutMs,
+                });
+              }
             }
+          } catch (err) {
+            console.error(
+              `table-orchestrator: action_requested fan-out failed for table ${tableId}: ${asErrorMessage(err)}`,
+            );
           }
         }
       });
@@ -624,4 +656,38 @@ export class TableOrchestrator {
     if (!entry) return 0;
     return entry.tableState.seats.filter(s => s !== null).length;
   }
+
+  // Wrap every hub broadcast in a try/catch so a transient hub failure
+  // cannot bubble up to caller code that doesn't expect to handle it.
+  // The hand's engine state and the durable persistence write succeed
+  // regardless of whether the realtime fan-out lands; treating a
+  // broadcast hiccup as a fatal error would partial-commit a seat or
+  // viewer change. Logged via console.error so ops sees the degradation
+  // signal without the hand aborting.
+  private safePublishTable(tableId: string, type: string, payload: Record<string, unknown>): void {
+    if (!this.hub) return;
+    try {
+      this.hub.publishTable(tableId, type, payload);
+    } catch (err) {
+      console.error(
+        `table-orchestrator: hub.publishTable failed for table ${tableId} type ${type}: ${asErrorMessage(err)}`,
+      );
+    }
+  }
+
+  private safePublishSeat(userId: string, tableId: string, type: string, payload: Record<string, unknown>): void {
+    if (!this.hub) return;
+    try {
+      this.hub.publishSeat(userId, tableId, type, payload);
+    } catch (err) {
+      console.error(
+        `table-orchestrator: hub.publishSeat failed for table ${tableId} user ${userId} type ${type}: ${asErrorMessage(err)}`,
+      );
+    }
+  }
+}
+
+function asErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
 }
