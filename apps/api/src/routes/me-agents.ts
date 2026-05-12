@@ -49,6 +49,21 @@ function toPublicAgent(agent: AgentRecord) {
 export async function meAgentsRoutes(app: FastifyInstance, opts: MeAgentsPluginOptions) {
   const { agentConfigUsage } = opts;
 
+  // Defense-in-depth: every response from this plugin (success or error)
+  // gets Cache-Control: no-store + Pragma: no-cache. Mirrors the
+  // me-werewolf-agents header model added in PR #35 — personal agent
+  // inventory (names, endpoints, hasAuthHeader booleans, plus the
+  // rawToken on POST/PATCH credential paths) is per-user data that a
+  // shared cache or browser bfcache must not retain. Using an onSend
+  // hook (instead of per-handler `.header(...)` calls) fires on auth
+  // failures and config-missing 501s too, so even error responses are
+  // consistently uncached.
+  app.addHook('onSend', async (_req, reply, payload) => {
+    reply.header('Cache-Control', 'no-store');
+    reply.header('Pragma', 'no-cache');
+    return payload;
+  });
+
   // GET /me/agents — list user's agents
   app.get(
     '/me/agents',
