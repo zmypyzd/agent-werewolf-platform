@@ -116,8 +116,37 @@ export class WerewolfOrchestrator {
     listener: (event: WerewolfReplayEvent) => void,
   ): () => void {
     const entry = this.requireEntry(matchId);
-    entry.emitter.on('replay-event', listener);
-    return () => entry.emitter.off('replay-event', listener);
+    // Wrap the user's listener so a throw cannot propagate back to the
+    // broadcaster (match-runner.ts:451-452 emits in the engine's hot
+    // loop). Without this isolation a single buggy subscriber would
+    // either silence every subscriber registered after it (Node
+    // EventEmitter aborts the listener loop on the first throw) OR —
+    // since match-runner does not catch — crash the entire match.
+    //
+    // Both branches are covered: synchronous throws by the try/catch
+    // directly, and async listeners (whose typed return is `void` but
+    // which actually produce a Promise) by attaching a `.catch` to the
+    // returned value if it looks thenable. Otherwise an `async listener`
+    // that rejects would bypass the wrapper and surface as an
+    // UnhandledPromiseRejection at the Node level.
+    const safeListener = (event: WerewolfReplayEvent): void => {
+      try {
+        const ret = listener(event) as unknown;
+        if (isThenable(ret)) {
+          ret.catch((err: unknown) => {
+            console.error(
+              `WerewolfOrchestrator subscriber async-rejected for match ${matchId} on ${event.eventType}: ${asErrorMessage(err)}`,
+            );
+          });
+        }
+      } catch (err) {
+        console.error(
+          `WerewolfOrchestrator subscriber threw for match ${matchId} on ${event.eventType}: ${asErrorMessage(err)}`,
+        );
+      }
+    };
+    entry.emitter.on('replay-event', safeListener);
+    return () => entry.emitter.off('replay-event', safeListener);
   }
 
   subscribePrivate(
@@ -125,8 +154,28 @@ export class WerewolfOrchestrator {
     listener: (event: WerewolfPrivateStateEvent) => void,
   ): () => void {
     const entry = this.requireEntry(matchId);
-    entry.emitter.on('private-state', listener);
-    return () => entry.emitter.off('private-state', listener);
+    // Same isolation rationale as subscribe() — see comment above. The
+    // private-state channel is even more important to keep flowing: the
+    // mailbox runner depends on private-state events to deliver each
+    // agent's per-decision private view.
+    const safeListener = (event: WerewolfPrivateStateEvent): void => {
+      try {
+        const ret = listener(event) as unknown;
+        if (isThenable(ret)) {
+          ret.catch((err: unknown) => {
+            console.error(
+              `WerewolfOrchestrator private subscriber async-rejected for match ${matchId} player ${event.playerId}: ${asErrorMessage(err)}`,
+            );
+          });
+        }
+      } catch (err) {
+        console.error(
+          `WerewolfOrchestrator private subscriber threw for match ${matchId} player ${event.playerId}: ${asErrorMessage(err)}`,
+        );
+      }
+    };
+    entry.emitter.on('private-state', safeListener);
+    return () => entry.emitter.off('private-state', safeListener);
   }
 
   async runMatch(
@@ -231,4 +280,22 @@ export class WerewolfOrchestrator {
     };
     await this.artifactStore.saveMatchArtifact(input);
   }
+}
+
+// Module-private helper used by subscribe / subscribePrivate to attach a
+// `.catch` to a listener's return value when the listener turned out to be
+// async-shaped. Duck-typed thenable check — we cannot assume the listener
+// returned a real Promise (some host code wraps with custom thenables).
+function isThenable(v: unknown): v is { catch: (onRejected: (e: unknown) => void) => unknown } {
+  return (
+    typeof v === 'object' &&
+    v !== null &&
+    typeof (v as { then?: unknown }).then === 'function' &&
+    typeof (v as { catch?: unknown }).catch === 'function'
+  );
+}
+
+function asErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
 }

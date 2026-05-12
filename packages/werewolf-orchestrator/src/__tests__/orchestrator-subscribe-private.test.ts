@@ -31,15 +31,21 @@ describe('WerewolfOrchestrator.subscribePrivate', () => {
       orch.registerAgent(matchId, p.id, new WerewolfRandomMockAgent(`a-${p.id}`, p.name, { seed: `r-${p.id}` }));
     }
 
-    // Listener that fails the test if called. We unsubscribe immediately, so
-    // running the match must NOT invoke it. If unsubscribe() were a no-op,
-    // this listener would throw and propagate out of orch.runMatch.
+    // Counter-based "should-not-fire" sentinel. The previous form of this
+    // test threw inside the listener and relied on the throw propagating
+    // out of runMatch — that pattern was silently broken when subscribe()
+    // started wrapping listeners in try/catch for error isolation, since
+    // the wrapper swallows synchronous throws by design. Use an explicit
+    // call counter and `expect(...).toBe(0)` so a regressed `unsubscribe()`
+    // surfaces as a counter mismatch instead of being silenced.
+    let listenerCallCount = 0;
     const unsubscribe = orch.subscribePrivate(matchId, () => {
-      throw new Error('listener should have been detached before runMatch');
+      listenerCallCount += 1;
     });
     unsubscribe();
 
     await expect(orch.runMatch(matchId)).resolves.toBeDefined();
+    expect(listenerCallCount).toBe(0);
   });
 
   it('throws when subscribePrivate is called for an unknown matchId', () => {
