@@ -4,20 +4,9 @@ import { act, fireEvent, render } from '@testing-library/react';
 import { WerewolfTableSurface } from '../WerewolfTableSurface.js';
 import { emptyRoomState, type WerewolfRoomState, type SeatVM } from '../werewolfRoomTypes.js';
 
-// jsdom doesn't implement ResizeObserver, but `AgentPickerPopover` uses one
-// to reposition itself on viewport changes. Stub it as a no-op so popover
-// mount doesn't crash the test. The popover's positioning is not what this
-// regression test exercises — we only care about focus restoration on
-// close. Keep this stub local to the file so it doesn't leak into the
-// (default) node-environment tests.
-if (typeof globalThis.ResizeObserver === 'undefined') {
-  class StubResizeObserver {
-    observe(): void {}
-    unobserve(): void {}
-    disconnect(): void {}
-  }
-  (globalThis as { ResizeObserver: unknown }).ResizeObserver = StubResizeObserver;
-}
+// ResizeObserver and other jsdom-missing browser APIs are stubbed in the
+// shared `apps/web/src/test-setup-jsdom.ts` file (loaded via vitest's
+// setupFiles). Individual jsdom tests don't have to repeat the stub.
 
 // Regression: clicking an empty seat's "邀请..." button opens the
 // AgentPickerPopover. Before this fix, closing the popover (Escape, click
@@ -108,6 +97,74 @@ describe('WerewolfTableSurface — popover focus restore (jsdom regression)', ()
     // Popover gone, focus restored to the original trigger.
     expect(document.body.querySelector('.ww-agent-picker-cancel')).toBeNull();
     expect(document.activeElement).toBe(firstInvite);
+  });
+
+  it('falls back to seat-arc focus when the original trigger has unmounted by close time', async () => {
+    // The most common close path in production is a successful invite:
+    // popover finishes its POST, parent reducer flips the seat to occupied
+    // via state propagation, and SeatCard switches from the empty branch
+    // (which renders the .ww-seat-invite button) to the occupied branch
+    // (which doesn't). The button we captured as the trigger is now
+    // detached from the DOM. `focus()` on a detached element silently
+    // shifts focus to document.body — exactly the bug this regression
+    // test is supposed to prevent.
+    //
+    // Simulating the full invite-success flow would require coordinating
+    // the popover's async handlePickNpc with a manual rerender. Instead
+    // this test simulates the same condition directly: open the popover,
+    // rerender with the trigger seat now occupied, then close. The
+    // fallback to seat-arc focus should fire because the original target
+    // is no longer connected.
+    const initial = makeWaitingLobby();
+    const { container, rerender } = render(
+      <WerewolfTableSurface
+        state={initial}
+        onInvite={async () => {}}
+        onInviteAgent={async () => {}}
+      />,
+    );
+    const firstInvite = container.querySelector<HTMLButtonElement>('.ww-seat-invite')!;
+    firstInvite.focus();
+    fireEvent.click(firstInvite);
+
+    const cancel = document.body.querySelector<HTMLButtonElement>('.ww-agent-picker-cancel');
+    expect(cancel).not.toBeNull();
+    cancel!.focus();
+
+    // Parent reducer reacts to "seat 0 was just filled". After this
+    // rerender, the trigger button (firstInvite) is detached: still a
+    // valid JS reference, but `isConnected === false`.
+    const filledSeats: SeatVM[] = [
+      {
+        seatIndex: 0,
+        playerId: 'p1',
+        occupant: { kind: 'npc', agentId: 'a1', displayName: 'Bot 1' },
+        alive: true,
+      },
+      ...initial.seats.slice(1),
+    ];
+    rerender(
+      <WerewolfTableSurface
+        state={{ ...initial, seats: filledSeats }}
+        onInvite={async () => {}}
+        onInviteAgent={async () => {}}
+      />,
+    );
+    expect(firstInvite.isConnected).toBe(false);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+
+    // Focus did NOT land on body (which would be the silent-loss bug),
+    // and did NOT land on the now-detached firstInvite. It landed on
+    // the seat-arc container, which the parent renders unconditionally.
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).not.toBe(firstInvite);
+    expect(document.activeElement).toBe(container.querySelector('.ww-seat-arc'));
   });
 
   it('restores focus to the invite button when the popover closes via the Cancel button', async () => {

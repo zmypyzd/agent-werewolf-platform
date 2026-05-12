@@ -246,6 +246,14 @@ export function WerewolfTableSurface({
   // because focusing on close shouldn't trigger an extra re-render, and the
   // DOM element identity outlives any state change.
   const lastTriggerRef = useRef<HTMLElement | null>(null);
+  // Fallback focus target for the case where the original trigger was
+  // unmounted between popover open and close (most common reason: the
+  // invite succeeded and the seat is no longer empty, so SeatCard's
+  // empty branch — which renders .ww-seat-invite — is gone). The
+  // seat-arc container has a stable DOM identity across that flip;
+  // rendering it with tabIndex=-1 makes it a programmatic-focus target
+  // without putting it in the normal tab order.
+  const seatArcRef = useRef<HTMLDivElement | null>(null);
 
   const handlePickerClose = () => {
     const target = lastTriggerRef.current;
@@ -253,11 +261,23 @@ export function WerewolfTableSurface({
     // Defer focus to the next animation frame so React has a chance to
     // unmount the popover first; otherwise the focus call can race with
     // the popover's own teardown and land on document.body.
-    if (target) {
-      requestAnimationFrame(() => {
+    //
+    // `target.isConnected` matters for the successful-invite close path:
+    // once the invite completes, the seat reducer flips from empty →
+    // occupied and SeatCard's empty branch unmounts. `focus()` on a
+    // detached element silently no-ops, dumping focus to document.body —
+    // the exact bug this PR is supposed to prevent, for the most common
+    // close path. Fall back to the seat-arc container.
+    requestAnimationFrame(() => {
+      if (target && target.isConnected) {
         target.focus();
-      });
-    }
+        return;
+      }
+      const fallback = seatArcRef.current;
+      if (fallback) {
+        fallback.focus();
+      }
+    });
   };
   // ISSUE-005 — broadcast view: roles are visible to spectators from
   // match-start. The reducer lifts revealedRole onto each SeatVM as soon as
@@ -283,7 +303,7 @@ export function WerewolfTableSurface({
   return (
     <div className={`ww-board-wrapper${isNight ? '' : ' is-day'}`}>
       <div className="ww-board-night-overlay" />
-      <div className="ww-seat-arc">
+      <div className="ww-seat-arc" ref={seatArcRef} tabIndex={-1}>
         {state.seats.map((seat, i) => {
           const pos = SEAT_POSITIONS[i] ?? { left: '50%', top: '50%' };
           const isLive = state.speakingActor === seat.playerId;
