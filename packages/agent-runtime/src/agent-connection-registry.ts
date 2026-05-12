@@ -341,9 +341,39 @@ export class AgentConnectionRegistry {
   }
 
   on(event: AgentRegistryEvent, handler: (agentId: string) => void): () => void {
-    this.emitter.on(event, handler);
+    // Wrap the handler so a throw cannot propagate back to whoever called
+    // emitter.emit() in register() / unregister() — those callers are
+    // the WS upgrade flow at agents-ws.ts:122 and the connection-close
+    // unregister path. Without this isolation, a handler that does
+    // hub.publish(...) (which the api server wires online/offline events
+    // through) would surface a transient hub failure as a WS-upgrade
+    // crash, partial-committing the registry mutation while the caller
+    // sees an error.
+    //
+    // Mirrors werewolf-orchestrator PR #38 (subscribe()/subscribePrivate()
+    // safeListener wrapping) — same architectural class applied to the
+    // AgentConnectionRegistry's public on() API. Both sync throws and
+    // async-shaped listeners (typed `void` but returning a Promise) are
+    // covered.
+    const safeHandler = (agentId: string): void => {
+      try {
+        const ret = handler(agentId) as unknown;
+        if (isThenable(ret)) {
+          ret.catch((err: unknown) => {
+            console.error(
+              `AgentConnectionRegistry ${event} listener async-rejected for ${agentId}: ${asErrorMessage(err)}`,
+            );
+          });
+        }
+      } catch (err) {
+        console.error(
+          `AgentConnectionRegistry ${event} listener threw for ${agentId}: ${asErrorMessage(err)}`,
+        );
+      }
+    };
+    this.emitter.on(event, safeHandler);
     return () => {
-      this.emitter.off(event, handler);
+      this.emitter.off(event, safeHandler);
     };
   }
 
@@ -360,4 +390,18 @@ export class AgentConnectionRegistry {
     }
     this.connections.clear();
   }
+}
+
+function isThenable(v: unknown): v is { catch: (onRejected: (e: unknown) => void) => unknown } {
+  return (
+    typeof v === 'object' &&
+    v !== null &&
+    typeof (v as { then?: unknown }).then === 'function' &&
+    typeof (v as { catch?: unknown }).catch === 'function'
+  );
+}
+
+function asErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
 }
