@@ -1,13 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import type { Card, ReplayEvent } from '@agent-poker/shared';
+import type { Card, PokerReplayEventType, ReplayEvent } from '@agent-poker/shared';
 import { replayEventToPublic } from '../filter.js';
 
 const HOLE: [Card, Card] = [{ rank: 'A', suit: 's' }, { rank: 'K', suit: 'h' }];
 
+// `makeEvent` accepts an arbitrary string for `eventType` and casts into
+// `PokerReplayEventType` so the fuzz / fail-closed tests below can plant
+// unknown event types ('mystery.event', 'community_cards.dealt', etc.)
+// at runtime — the cast is the test's deliberate misuse of the narrow
+// union, exercising the filter's runtime fail-closed default arm.
 function makeEvent(eventType: string, data: Record<string, unknown>): ReplayEvent {
   return {
     eventId: 'e-1', handId: 'h-1', tableId: 't-1',
-    sequence: 0, eventType, timestamp: 1, data,
+    sequence: 0, eventType: eventType as PokerReplayEventType, timestamp: 1, data,
   };
 }
 

@@ -295,12 +295,36 @@ export type PublicHandSummary = Omit<HandSummary, 'players' | 'seed'> & {
   players: PublicHandPlayerSummary[];
 };
 
+// Poker replay-event type union — kept narrow so the public filter and any
+// future event-classification code can use TS exhaustiveness guards. Adding
+// a new event variant in hand-runner.ts forces the developer to also
+// classify it in `replayEventToPublic` (packages/realtime/src/filter.ts),
+// because the filter's switch on this union goes `never` at the default
+// arm. Mirrors the werewolf-replay-event.ts pattern and the same fix
+// pattern landed for the werewolf public filter in PR #37.
+export type PokerReplayEventType =
+  | 'hand.started'
+  | 'hand.completed'
+  | 'hole_cards.dealt'
+  | 'blinds.posted'
+  | 'community_cards.dealt'
+  | 'betting_round.started'
+  | 'betting_round.complete'
+  | 'action.requested'
+  | 'action.received'
+  | 'action.applied'
+  | 'agent.timeout'
+  | 'agent.invalid_action'
+  | 'pot.awarded'
+  | 'showdown.started'
+  | 'showdown.result';
+
 export interface ReplayEvent {
   eventId: string;
   handId: string;
   tableId: string;
   sequence: number;
-  eventType: string;
+  eventType: PokerReplayEventType;
   timestamp: number;
   data: Record<string, unknown>;
 }

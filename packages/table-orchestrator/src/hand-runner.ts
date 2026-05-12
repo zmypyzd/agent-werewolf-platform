@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
 import type {
   GameState, HandSummary, HandPlayerSummary, HandResult, ReplayEvent,
+  PokerReplayEventType,
   PlayerInHand, HandPhase, Pot, GameAction, BettingRoundState,
   PublicGameState, PublicPlayer, LegalAction, AgentDecisionRequest,
   AgentDecisionResponse, ActionType, DecisionTrace, DecisionTraceFallbackReason,
@@ -631,7 +632,7 @@ export class HandRunner {
     });
   }
 
-  private emit(eventType: string, data: Record<string, unknown>): void {
+  private emit(eventType: PokerReplayEventType, data: Record<string, unknown>): void {
     const event: ReplayEvent = {
       eventId: randomUUID(),
       handId: this.gameState.handId,

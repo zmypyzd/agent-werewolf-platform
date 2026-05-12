@@ -44,7 +44,7 @@ export function makeEvent(handId: string, tableId: string, seq: number): ReplayE
     handId,
     tableId,
     sequence: seq,
-    eventType: 'test.event',
+    eventType: 'action.applied',
     timestamp: Date.now(),
     data: { seq },
   };

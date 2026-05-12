@@ -40,7 +40,7 @@ function makeEvent(handId: string, tableId: string, seq: number): ReplayEvent {
     handId,
     tableId,
     sequence: seq,
-    eventType: 'test.event',
+    eventType: 'action.applied',
     timestamp: Date.now(),
     data: { seq },
   };
