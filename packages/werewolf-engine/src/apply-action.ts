@@ -138,6 +138,16 @@ function applyWitch(
       }
       const target = findPlayer(state, action.targetId);
       if (!target.alive) throw new InvalidWerewolfActionError('cannot poison a dead player');
+      // Self-target guard. valid-actions.ts:64 already filters the witch
+      // out of the offered poison targets, but the engine is the trust
+      // boundary: agents construct their own action payloads (HTTP/WS/
+      // longpoll) and can submit anything well-typed. Mirrors the parallel
+      // self-check on seer-divine (line ~167) so both private night roles
+      // enforce the same menu-vs-engine consistency invariant.
+      const witch = state.players.find((p) => p.role === 'witch')!;
+      if (target.id === witch.id) {
+        throw new InvalidWerewolfActionError('witch cannot poison herself');
+      }
       return advanceToNightSeer({
         ...state,
         witchPotions: { ...state.witchPotions, hasPoison: false },
