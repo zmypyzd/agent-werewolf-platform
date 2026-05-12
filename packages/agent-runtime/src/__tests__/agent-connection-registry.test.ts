@@ -498,6 +498,95 @@ describe('AgentConnectionRegistry', () => {
     expect(offlineEvents).toEqual(['agent-A']);
   });
 
+  // Regression: `on(event, handler)` registers handlers with the internal
+  // EventEmitter. Node EventEmitter delivers listeners synchronously
+  // inside emit(); if any one throws, the listener loop aborts and the
+  // throw propagates back to whoever called emit. In this registry's
+  // case the emit callers are `register()` and `unregister()` — both
+  // invoked from the WS upgrade flow (agents-ws.ts:122) and the
+  // connection-close path. A handler that does hub.publish (which
+  // apps/api/src/server.ts:150-165 wires for agent.online / agent.offline
+  // status fan-out) could surface a transient hub failure as a WS-upgrade
+  // crash, partial-committing the registry mutation. The fix wraps the
+  // handler in a try/catch + isThenable async catch — same pattern as
+  // werewolf-orchestrator PR #38 — so a throwing handler logs + continues
+  // without aborting register/unregister.
+
+  it('on() handler that throws does not crash register() and does not starve other handlers', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    let throwingCount = 0;
+    registry.on('online', () => {
+      throwingCount += 1;
+      throw new Error('synthetic handler bomb');
+    });
+    const observed: string[] = [];
+    registry.on('online', (agentId) => {
+      observed.push(agentId);
+    });
+
+    const sock = new FakeSocket();
+    const conn = buildConn(sock, 'agent-A');
+    // Without the fix, the throwing handler would abort registry.register()
+    // (Node EventEmitter aborts the listener loop on first throw) and the
+    // observer registered AFTER it would never fire.
+    registry.register(conn);
+
+    expect(throwingCount).toBe(1);
+    expect(observed).toEqual(['agent-A']);
+    // Registry mutation completed despite the handler throwing.
+    expect(registry.acquire('agent-A')).toBe(conn);
+    // Logging path actually fired — one console.error per swallowed throw.
+    expect(spy).toHaveBeenCalledTimes(throwingCount);
+
+    spy.mockRestore();
+  });
+
+  it('on() unsubscribe still detaches the wrapped handler', () => {
+    let calls = 0;
+    const unsubscribe = registry.on('online', () => {
+      calls += 1;
+    });
+    unsubscribe();
+
+    const sock = new FakeSocket();
+    const conn = buildConn(sock, 'agent-A');
+    registry.register(conn);
+
+    expect(calls).toBe(0);
+  });
+
+  it('on() handler that returns a rejecting Promise is isolated (async-rejection guard)', async () => {
+    // The handler signature is `(agentId) => void`, but TypeScript happily
+    // accepts `async (agentId) => { ... }` because Promise<void> is
+    // assignable to void. A pure sync try/catch wouldn't catch a
+    // rejecting Promise from such a handler — it would surface as an
+    // UnhandledPromiseRejection. The isThenable guard in on() closes
+    // that gap.
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    let asyncCount = 0;
+    registry.on('online', ((agentId: string) => {
+      asyncCount += 1;
+      // Returns a rejecting Promise via the typed-void channel.
+      return Promise.reject(new Error(`async bomb on ${agentId}`));
+    }) as unknown as (agentId: string) => void);
+
+    const sock = new FakeSocket();
+    const conn = buildConn(sock, 'agent-A');
+    registry.register(conn);
+
+    // Flush the microtask queue so the .catch on the rejected Promise
+    // fires before we assert.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(asyncCount).toBe(1);
+    expect(registry.acquire('agent-A')).toBe(conn);
+    expect(spy).toHaveBeenCalled();
+
+    spy.mockRestore();
+  });
+
   it('closeAll closes every registered conn with server_shutdown goodbye', () => {
     const s1 = new FakeSocket();
     const s2 = new FakeSocket();
