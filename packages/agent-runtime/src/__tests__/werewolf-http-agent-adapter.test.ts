@@ -225,4 +225,59 @@ describe('WerewolfHttpAgentAdapter', () => {
     expect(stub.received[0]!.headers['authorization']).toBe('Bearer DO-NOT-LEAK');
     expect(writes.join('')).not.toContain('DO-NOT-LEAK');
   });
+
+  // Regression: on a non-2xx response, the adapter previously threw
+  // without consuming the response body. Node's undici fetch keeps the
+  // underlying socket pinned to the agent until the body is read or
+  // cancelled — even after the Response goes out of scope, GC can be
+  // tens of seconds away. A slow / stalled remote that sends headers +
+  // dribbles body bytes pins the connection; under high concurrency
+  // (9-player matches, many simultaneous decisions), repeated 5xx
+  // responses could exhaust the global Agent socket pool. The fix
+  // calls `resp.body?.cancel()` before throwing.
+  it('cancels the response body before throwing on a 5xx (PR #40 deferred)', async () => {
+    // Hand-rolled global fetch mock — the existing Fastify-stub harness
+    // can't observe whether body.cancel() was called because the
+    // Response object surfaced at the adapter layer is opaque to the
+    // stub. Substitute global fetch to inject a ReadableStream whose
+    // cancel() pushes to a spy array.
+    const cancelCalls: number[] = [];
+    const fakeBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        // Send a chunk so the body isn't trivially empty — cancel()
+        // should still fire because the adapter never reads it.
+        controller.enqueue(new TextEncoder().encode('partial body\n'));
+        // Leave open: a stalled remote that hasn't sent the final chunk.
+      },
+      cancel() {
+        cancelCalls.push(Date.now());
+      },
+    });
+    const fakeResponse = new Response(fakeBody, {
+      status: 502,
+      statusText: 'Bad Gateway',
+      headers: { 'content-type': 'application/json' },
+    });
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = (async () => fakeResponse) as typeof fetch;
+
+    try {
+      const adapter = new WerewolfHttpAgentAdapter({
+        agentId: 'agent-drain',
+        name: 'A',
+        endpointUrl: 'http://localhost:0/decide',
+        timeoutMs: 2000,
+      });
+      await expect(adapter.requestDecision(baseReq)).rejects.toThrow(/HTTP 502/);
+
+      // Yield to the microtask queue so the fire-and-forget cancel
+      // promise's .catch can settle before we assert.
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      // cancel() was called exactly once on the unread body.
+      expect(cancelCalls.length).toBe(1);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
 });

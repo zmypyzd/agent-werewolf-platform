@@ -67,6 +67,21 @@ export class WerewolfHttpAgentAdapter
     }
 
     if (!resp.ok) {
+      // Drain the unread body before throwing. Node's undici fetch holds
+      // the underlying socket open until the body is consumed or
+      // cancelled — even on a 5xx response. Without an explicit cancel,
+      // the connection lingers in the pool until GC runs (which can be
+      // tens of seconds), and a slow / stalled remote endpoint that
+      // sends headers + dribbles body bytes pins the socket indefinitely.
+      // In high-concurrency matches (9-player werewolf games, many
+      // concurrent decisions) repeated 5xx responses could exhaust the
+      // global Agent socket pool and stall later requestDecision() calls
+      // even for healthy endpoints. `body?.cancel()` returns a Promise
+      // we explicitly ignore — drain is best-effort, the throw below is
+      // the authoritative signal to the caller.
+      void resp.body?.cancel().catch(() => {
+        /* swallow: drain failure is not actionable from the call-site */
+      });
       throw new Error(`WerewolfHttpAgentAdapter ${this.agentId}: HTTP ${resp.status}`);
     }
 
