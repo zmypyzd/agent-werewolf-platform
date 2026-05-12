@@ -425,6 +425,52 @@ describe('AgentConnectionRegistry', () => {
     expect(onlineEvents).toEqual(['agent-A']);
   });
 
+  it('replace rejects in-flight RPCs on the evicted connection (the comment-at-line-305 contract)', async () => {
+    // The registry comment at agent-connection-registry.ts:305-307 documents:
+    //   "the older connection receives `goodbye{replaced}` and is closed;
+    //    in-flight RPCs on the old reject. This makes 'laptop sleeps →
+    //    agent restarts → reconnect' cost at most one fallback action per
+    //    match instead of crashing."
+    //
+    // Existing 'last-write-wins' test pins the goodbye frame + conn1.isClosed.
+    // This pins the in-flight-rejection arm so a future refactor of
+    // closeWithGoodbye() (or AgentConnection.handleSocketClosed) cannot
+    // silently break the orchestrator's fallback flow — without rejection,
+    // a pending decision RPC would hang until its deadline and the
+    // orchestrator would deliver a real reply much later than expected.
+    const sock1 = new FakeSocket();
+    const conn1 = buildConn(sock1, 'agent-A');
+    conn1.start();
+    registry.register(conn1);
+
+    // Start an in-flight RPC on conn1 BEFORE conn2 registers. Do not await;
+    // the response will arrive via the rejection from replacement.
+    const inflight = conn1.rpc(buildRequest());
+    inflight.catch(() => {
+      /* swallowed — we assert via expect.rejects below */
+    });
+    expect(conn1.pendingCount()).toBe(1);
+
+    // Now register conn2 — this should evict conn1.
+    const sock2 = new FakeSocket();
+    const conn2 = buildConn(sock2, 'agent-A');
+    registry.register(conn2);
+
+    // Registry should now point at conn2; conn1 must be closed.
+    expect(registry.acquire('agent-A')).toBe(conn2);
+    expect(conn1.isClosed()).toBe(true);
+
+    // The pending RPC on conn1 rejects with AgentConnectionClosedError.
+    await expect(inflight).rejects.toBeInstanceOf(AgentConnectionClosedError);
+
+    // After rejection, conn1's pending map is drained.
+    expect(conn1.pendingCount()).toBe(0);
+
+    // Pending RPCs on conn2 are independent — registering conn2 didn't
+    // create any pending state on it.
+    expect(conn2.pendingCount()).toBe(0);
+  });
+
   it('unregister identity-checks: stale unregister from replaced conn does not evict successor', () => {
     const sock1 = new FakeSocket();
     const conn1 = buildConn(sock1, 'agent-A');
