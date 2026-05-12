@@ -209,7 +209,15 @@ describe('TableOrchestrator — hub publish error isolation (PR #38 poker parall
     ).resolves.toBeDefined();
 
     const summary = await orch.startHand(tableId);
-    expect(summary.completedAt).toBeGreaterThan(summary.startedAt);
+    // `toBeGreaterThanOrEqual` (not `toBeGreaterThan`) because the whole
+    // hand runs synchronously against in-memory stores + mock agents,
+    // and Date.now() resolves to millisecond granularity — startedAt and
+    // completedAt frequently land in the same millisecond. The contract
+    // we want to pin is "the hand finished after starting", not "the
+    // hand took at least 1ms"; that the function resolved at all + has
+    // a non-empty allActions list (asserted below) is the real signal.
+    expect(summary.completedAt).toBeGreaterThanOrEqual(summary.startedAt);
+    expect(summary.allActions.length).toBeGreaterThan(0);
 
     // Every safe helper rerouted the throw through console.error.
     expect(hub.publishTableCalls).toBeGreaterThan(0);
