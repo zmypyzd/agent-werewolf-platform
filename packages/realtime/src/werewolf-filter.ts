@@ -1,10 +1,8 @@
-import type { WerewolfPhase, WerewolfReplayEvent } from '@agent-poker/shared';
-
-const PRIVATE_PHASES: ReadonlySet<WerewolfPhase> = new Set([
-  'night-werewolf-vote',
-  'night-witch',
-  'night-seer',
-]);
+import type {
+  WerewolfPhase,
+  WerewolfReplayEvent,
+  WerewolfReplayEventType,
+} from '@agent-poker/shared';
 
 const ACTOR_FIELDS_TO_STRIP = ['playerId', 'agentId'] as const;
 
@@ -22,7 +20,7 @@ export function werewolfReplayEventToPublic(
   let next = event;
   if (isAgentActionEvent(event.eventType)) {
     const phase = event.data['phase'];
-    if (typeof phase === 'string' && PRIVATE_PHASES.has(phase as WerewolfPhase)) {
+    if (typeof phase === 'string' && isPrivatePhase(phase as WerewolfPhase)) {
       next = stripActorFields(next);
     }
   }
@@ -37,13 +35,63 @@ export function werewolfReplayEventToPublic(
   return next;
 }
 
-function isAgentActionEvent(eventType: string): boolean {
-  return (
-    eventType === 'agent.action_requested' ||
-    eventType === 'agent.action_received' ||
-    eventType === 'agent.timeout' ||
-    eventType === 'agent.invalid_action'
-  );
+// Exhaustiveness guard — adding a new WerewolfReplayEventType variant in
+// shared forces the default arm here to fail compilation until the new
+// event is explicitly classified as agent-action or not. Without this
+// switch, a string-list check would silently let a new event type leak
+// actor IDs in private phases. The runtime default is fail-closed
+// (returns true → strip more rather than less) as defense-in-depth
+// against a stale build that ships ahead of this file.
+function isAgentActionEvent(eventType: WerewolfReplayEventType): boolean {
+  switch (eventType) {
+    case 'agent.action_requested':
+    case 'agent.action_received':
+    case 'agent.timeout':
+    case 'agent.invalid_action':
+      return true;
+    case 'match.started':
+    case 'match.completed':
+    case 'engine.action_applied':
+    case 'phase.changed':
+      return false;
+    default: {
+      const _exhaustive: never = eventType;
+      void _exhaustive;
+      // Fail-closed: an unknown event type at runtime is treated as an
+      // agent-action so the actor-stripping path can still engage if the
+      // phase is private. Pairs with isPrivatePhase's fail-closed default.
+      return true;
+    }
+  }
+}
+
+// Exhaustiveness guard — adding a new WerewolfPhase variant in shared
+// forces the default arm here to fail compilation until the new phase is
+// explicitly classified as public or private. The runtime default is
+// fail-closed (returns true → treated as private → strip actor fields)
+// because info-isolation invariants are more important to preserve than
+// the optical loss of stripping a field on an unrecognised public phase.
+function isPrivatePhase(phase: WerewolfPhase): boolean {
+  switch (phase) {
+    case 'night-werewolf-vote':
+    case 'night-witch':
+    case 'night-seer':
+      return true;
+    case 'setup':
+    case 'night-resolve':
+    case 'day-announce':
+    case 'day-speeches':
+    case 'day-vote':
+    case 'day-resolve':
+    case 'hunter-shoot':
+    case 'game-over':
+      return false;
+    default: {
+      const _exhaustive: never = phase;
+      void _exhaustive;
+      return true;
+    }
+  }
 }
 
 function stripActorFields(event: WerewolfReplayEvent): WerewolfReplayEvent {
@@ -53,4 +101,3 @@ function stripActorFields(event: WerewolfReplayEvent): WerewolfReplayEvent {
   }
   return { ...event, data: next };
 }
-
