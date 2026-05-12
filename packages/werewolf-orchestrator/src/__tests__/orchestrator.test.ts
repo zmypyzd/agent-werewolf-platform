@@ -133,8 +133,9 @@ describe('WerewolfOrchestrator', () => {
 
     const summary = await orch.runMatch(matchId);
 
-    consoleErrorSpy.mockRestore();
-
+    // Assert BEFORE mockRestore — vitest's mockRestore wipes the call
+    // history along with the implementation, so any toHaveBeenCalled
+    // assertion after restore reads 0.
     expect(['good', 'werewolf']).toContain(summary.winner);
     expect(throwingCallCount).toBeGreaterThan(0);
     expect(collected.length).toBeGreaterThan(0);
@@ -142,6 +143,12 @@ describe('WerewolfOrchestrator', () => {
     // match.completed, so the broadcast made it through A's throws end-to-end.
     expect(collected[0]!.eventType).toBe('match.started');
     expect(collected[collected.length - 1]!.eventType).toBe('match.completed');
+    // The logging path actually fired — one console.error per swallowed
+    // throw. Spying on the call count distinguishes the wrapper's catch
+    // from some unrelated console.error elsewhere.
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(throwingCallCount);
+
+    consoleErrorSpy.mockRestore();
   });
 
   it('subscribePrivate exception is isolated — other private listeners still receive events', async () => {
@@ -158,17 +165,70 @@ describe('WerewolfOrchestrator', () => {
       throwingCount++;
       throw new Error('private subscriber bomb');
     });
-    const collected: WerewolfPrivateState[] = [];
-    orch.subscribePrivate(matchId, ({ privateState }) => {
-      collected.push(privateState);
+    const collected: Array<{ playerId: string; privateState: WerewolfPrivateState }> = [];
+    orch.subscribePrivate(matchId, (event) => {
+      collected.push({ playerId: event.playerId, privateState: event.privateState });
     });
 
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     await orch.runMatch(matchId);
-    consoleErrorSpy.mockRestore();
 
     expect(throwingCount).toBeGreaterThan(0);
     expect(collected.length).toBeGreaterThan(0);
+    // Structural check: every private-state event must pair playerId with
+    // the matching selfId in the payload. If the wrapper somehow swapped
+    // or dropped events, this invariant breaks. Mirrors the assertion in
+    // orchestrator-subscribe-private.test.ts.
+    for (const c of collected) {
+      expect(c.privateState.selfId).toBe(c.playerId);
+    }
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(throwingCount);
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('async subscriber rejection is isolated — match completes and the rejection is logged', async () => {
+    // The `listener` parameter is typed `(event) => void`, but TypeScript
+    // happily accepts `async (event) => { ... }` because Promise<void>
+    // is assignable to void. A pure sync `try/catch` wrapper would not
+    // catch a rejection from such a listener — it would surface as an
+    // UnhandledPromiseRejection in the Node event loop. The wrapper
+    // attaches `.catch` to a thenable return value to close that gap.
+    const orch = new WerewolfOrchestrator();
+    const { matchId, initialState } = orch.createMatch({
+      gameId: 'g-async-iso',
+      seed: 'seed-async-iso',
+    });
+    for (const p of initialState.players) {
+      orch.registerAgent(matchId, p.id, new WerewolfMockAgent(`agent-${p.id}`, p.name));
+    }
+
+    let asyncCallCount = 0;
+    orch.subscribe(matchId, ((event: WerewolfReplayEvent) => {
+      asyncCallCount++;
+      // Returns a rejecting Promise via the `void` typed channel. Host
+      // frameworks (Fastify hooks, async webhooks) frequently look like
+      // this in practice — typed sync but returning a thenable.
+      return Promise.reject(new Error(`async bomb on ${event.eventType}`));
+    }) as unknown as (e: WerewolfReplayEvent) => void);
+    const collected: WerewolfReplayEvent[] = [];
+    orch.subscribe(matchId, (e) => {
+      collected.push(e);
+    });
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const summary = await orch.runMatch(matchId);
+    // Yield to the microtask queue so the .catch on each rejected promise
+    // gets a chance to fire before we assert. Without this, the last few
+    // async rejections may settle after the test ends.
+    await new Promise((res) => setImmediate(res));
+
+    expect(['good', 'werewolf']).toContain(summary.winner);
+    expect(asyncCallCount).toBeGreaterThan(0);
+    expect(collected.length).toBeGreaterThan(0);
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(asyncCallCount);
+
+    consoleErrorSpy.mockRestore();
   });
 
   it('runMatch lands in a terminal failed state after an error and refuses retry', async () => {
