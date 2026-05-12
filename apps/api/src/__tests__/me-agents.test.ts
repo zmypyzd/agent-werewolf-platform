@@ -132,4 +132,48 @@ describe('me-agents routes (JWT path)', () => {
       expect(res.json().error.code).toBe('NOT_IMPLEMENTED');
     });
   });
+
+  // ─── C) Cache-Control: no-store on every /me/agents response ─────────────
+  // Parallels PR #35 (me-werewolf-agents GET no-store). The agent inventory
+  // returned by /me/agents is per-user personal data (names, endpoints,
+  // hasAuthHeader booleans). Even on auth-failure or config-missing error
+  // responses, a shared cache or browser bfcache could cross-leak inventory
+  // between sessions on the same device. An `onSend` hook (rather than
+  // per-handler `.header(...)`) ensures the defense applies uniformly
+  // across success + error paths.
+  describe('Cache-Control: no-store on every response (PR #35 parallel)', () => {
+    it('401 response on missing auth carries Cache-Control: no-store + Pragma: no-cache', async () => {
+      const res = await app.inject({ method: 'GET', url: '/api/v1/me/agents' });
+      expect(res.statusCode).toBe(401);
+      expect(res.headers['cache-control']).toBe('no-store');
+      expect(res.headers['pragma']).toBe('no-cache');
+    });
+
+    it('501 response on missing supabaseConfig carries Cache-Control: no-store + Pragma: no-cache', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/me/agents',
+        headers: { authorization: 'Bearer mock-token' },
+      });
+      expect(res.statusCode).toBe(501);
+      expect(res.headers['cache-control']).toBe('no-store');
+      expect(res.headers['pragma']).toBe('no-cache');
+    });
+
+    it('POST 501 response also carries the headers (covers the credential-bearing path)', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/me/agents',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer mock-token' },
+        payload: JSON.stringify({
+          agentName: 'Bot',
+          endpointUrl: 'https://example.com/decide',
+          timeoutMs: 5000,
+        }),
+      });
+      expect(res.statusCode).toBe(501);
+      expect(res.headers['cache-control']).toBe('no-store');
+      expect(res.headers['pragma']).toBe('no-cache');
+    });
+  });
 });
