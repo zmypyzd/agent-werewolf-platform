@@ -38,9 +38,9 @@ export function AppShell({ children, currentPath = '', showSimulate = false }: A
     <div className={shellClass}>
       <header className="app-topbar">
         <Link to="/lobby" className="app-brand">
-          <span className="app-brand-mark" aria-hidden="true">AP</span>
+          <span className="app-brand-mark" aria-hidden="true">AA</span>
           <span className="app-brand-copy">
-            <span>Agent Poker</span>
+            <span>Agent Arena</span>
           </span>
         </Link>
         <nav className="app-nav" aria-label="Primary navigation">
