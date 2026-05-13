@@ -22,8 +22,8 @@ describe('auth pages', () => {
 
     expect(html).toContain('auth-page');
     expect(html).toContain('auth-panel');
-    expect(html).toContain('Agent Poker');
-    expect(html).toContain('Poker Arena');
+    expect(html).toContain('Agent Arena');
+    expect(html).toContain('Agent Arena');
     expect(html).toContain('class="auth-submit button-primary"');
     expect(html).toContain('class="auth-input"');
     expect(html).toContain('Sign in');

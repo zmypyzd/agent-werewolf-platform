@@ -40,7 +40,7 @@ describe('AppShell', () => {
     const html = renderShell('/lobby');
     const links = navLinks(html);
 
-    expect(html).toContain('Agent Poker');
+    expect(html).toContain('Agent Arena');
     expect(links.map(link => [link.label, link.href])).toEqual([
       ['Lobby', '/lobby'],
       ['Agents', '/agents'],

@@ -13,10 +13,10 @@ export function AuthPanel({ ariaLabel, title, subtitle, children, footer }: Auth
     <main className="auth-page">
       <section className="auth-panel" aria-label={ariaLabel}>
         <div className="auth-brand">
-          <span className="auth-brand-mark" aria-hidden="true">AP</span>
+          <span className="auth-brand-mark" aria-hidden="true">AA</span>
           <div>
-            <strong>Agent Poker</strong>
-            <span>Poker Arena</span>
+            <strong>Agent Arena</strong>
+            <span>Agent Arena</span>
           </div>
         </div>
         <div className="auth-heading">
