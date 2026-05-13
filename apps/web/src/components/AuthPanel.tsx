@@ -16,7 +16,7 @@ export function AuthPanel({ ariaLabel, title, subtitle, children, footer }: Auth
           <span className="auth-brand-mark" aria-hidden="true">AA</span>
           <div>
             <strong>Agent Arena</strong>
-            <span>Poker Arena</span>
+            <span>Agent Arena</span>
           </div>
         </div>
         <div className="auth-heading">
