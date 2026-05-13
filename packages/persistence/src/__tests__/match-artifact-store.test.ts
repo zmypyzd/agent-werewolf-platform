@@ -72,7 +72,7 @@ function makeEvent(handId: string, sequence: number): ReplayEvent {
     handId,
     tableId: 'tbl-12345678',
     sequence,
-    eventType: 'test.event',
+    eventType: 'action.applied',
     timestamp: 1_777_280_002_000 + sequence,
     data: { sequence },
   };
