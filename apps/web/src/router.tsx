@@ -49,8 +49,8 @@ const routes: RouteObject[] = [
   { path: '/simulate', element: <ProtectedRoute><AppShellRoute><SimulatePage /></AppShellRoute></ProtectedRoute> },
   { path: '/werewolf', element: <AppShellRoute><WerewolfLobbyPage /></AppShellRoute> },
   { path: '/werewolf/:gameId', element: <AppShellRoute><WerewolfRoomPage /></AppShellRoute> },
-  { path: '/', element: <Navigate to="/lobby" replace /> },
-  { path: '*', element: <Navigate to="/lobby" replace /> },
+  { path: '/', element: <Navigate to="/werewolf" replace /> },
+  { path: '*', element: <Navigate to="/werewolf" replace /> },
 ];
 
 export const router = createBrowserRouter(routes);
