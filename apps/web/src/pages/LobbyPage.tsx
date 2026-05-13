@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, api } from '../lib/api.js';
 import { WsClient, type WsMessage } from '../lib/ws.js';
 import { useAuth } from '../auth/AuthContext.js';
+import { signOut as supabaseSignOut } from '../lib/auth.js';
 
 export interface BlindConfig {
   smallBlind: number;
@@ -151,7 +152,15 @@ export function LobbyPage() {
         <h1>Lobby</h1>
         <div className="page-actions">
           <span className="muted">{user?.displayName} ({user?.email})</span>
-          <button className="button-secondary" onClick={() => void logout()}>Log out</button>
+          <button
+            className="button-secondary"
+            onClick={async () => {
+              await supabaseSignOut();
+              await logout();
+            }}
+          >
+            Log out
+          </button>
         </div>
       </div>
 
