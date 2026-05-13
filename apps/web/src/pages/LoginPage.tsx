@@ -23,7 +23,7 @@ export function LoginPage() {
   const location = useLocation();
 
   if (user) {
-    const next = new URLSearchParams(location.search).get('next') ?? '/lobby';
+    const next = new URLSearchParams(location.search).get('next') ?? '/werewolf';
     return <Navigate to={next} replace />;
   }
 
@@ -37,7 +37,7 @@ export function LoginPage() {
       setSubmitting(false);
       return;
     }
-    const next = new URLSearchParams(location.search).get('next') ?? '/lobby';
+    const next = new URLSearchParams(location.search).get('next') ?? '/werewolf';
     navigate(next, { replace: true });
   }
 

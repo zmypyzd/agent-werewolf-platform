@@ -26,7 +26,7 @@ export function RegisterPage() {
   const location = useLocation();
 
   if (user) {
-    const next = new URLSearchParams(location.search).get('next') ?? '/lobby';
+    const next = new URLSearchParams(location.search).get('next') ?? '/werewolf';
     return <Navigate to={next} replace />;
   }
 
@@ -40,7 +40,7 @@ export function RegisterPage() {
       setSubmitting(false);
       return;
     }
-    const next = new URLSearchParams(location.search).get('next') ?? '/lobby';
+    const next = new URLSearchParams(location.search).get('next') ?? '/werewolf';
     navigate(next, { replace: true });
   }
 
