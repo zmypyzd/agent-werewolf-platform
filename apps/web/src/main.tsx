@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext.js';
+import { ClipboardToastProvider } from './components/ClipboardToast.js';
 import { router } from './router.js';
 import './styles.css';
 import './styles-werewolf.css';
@@ -12,7 +13,9 @@ if (!container) throw new Error('#root element missing');
 ReactDOM.createRoot(container).render(
   <React.StrictMode>
     <AuthProvider>
-      <RouterProvider router={router} />
+      <ClipboardToastProvider>
+        <RouterProvider router={router} />
+      </ClipboardToastProvider>
     </AuthProvider>
   </React.StrictMode>,
 );
