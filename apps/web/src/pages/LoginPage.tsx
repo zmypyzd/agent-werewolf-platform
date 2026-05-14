@@ -1,7 +1,14 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AuthPanel } from '../components/AuthPanel.js';
 import { signIn, useSession } from '../lib/auth.js';
+import { mintAndCopyInvite, type InviteAgentKind } from '../components/InvitePopover.js';
+import { useClipboardToast } from '../components/ClipboardToast.js';
+
+function readPendingInvite(search: string): InviteAgentKind | null {
+  const value = new URLSearchParams(search).get('pendingInvite');
+  return value === 'coding' || value === 'http' ? value : null;
+}
 
 export interface LoginPageContentProps {
   email: string;
@@ -21,9 +28,32 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { showToast } = useClipboardToast();
+  // Guards against re-running the pendingInvite handler if React re-renders
+  // before the navigate() below unmounts this component.
+  const pendingHandledRef = useRef(false);
 
-  if (user) {
-    const next = new URLSearchParams(location.search).get('next') ?? '/werewolf';
+  // Already-logged-in visitors with ?pendingInvite=... finish the invite-and-
+  // copy flow here too — without this branch, hitting /login while already
+  // signed in would Navigate away before the invite ever mints.
+  useEffect(() => {
+    if (!user || pendingHandledRef.current) return;
+    const pending = readPendingInvite(location.search);
+    if (!pending) return;
+    pendingHandledRef.current = true;
+    const next = new URLSearchParams(location.search).get('next') ?? '/';
+    void (async () => {
+      try {
+        await mintAndCopyInvite(pending, showToast);
+      } catch {
+        /* toast already shown by mintAndCopyInvite on failure */
+      }
+      navigate(next, { replace: true });
+    })();
+  }, [user, location.search, navigate, showToast]);
+
+  if (user && !readPendingInvite(location.search)) {
+    const next = new URLSearchParams(location.search).get('next') ?? '/';
     return <Navigate to={next} replace />;
   }
 
@@ -37,7 +67,15 @@ export function LoginPage() {
       setSubmitting(false);
       return;
     }
-    const next = new URLSearchParams(location.search).get('next') ?? '/werewolf';
+    const pending = readPendingInvite(location.search);
+    const next = new URLSearchParams(location.search).get('next') ?? '/';
+    if (pending) {
+      try {
+        await mintAndCopyInvite(pending, showToast);
+      } catch {
+        /* toast shown by mintAndCopyInvite */
+      }
+    }
     navigate(next, { replace: true });
   }
 

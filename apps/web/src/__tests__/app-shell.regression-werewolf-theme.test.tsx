@@ -1,7 +1,22 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom/server.js';
-import { describe, expect, it } from 'vitest';
-import { AppShell } from '../components/AppShell.js';
+import { describe, expect, it, vi } from 'vitest';
+
+// See app-shell.test.tsx for the rationale — Supabase realtime breaks on
+// Node 20 at module load, so the supabase singleton needs a stub here.
+vi.mock('../lib/supabase.js', () => ({
+  supabase: {
+    auth: {
+      getSession: async () => ({ data: { session: null }, error: null }),
+      onAuthStateChange: () => ({
+        data: { subscription: { unsubscribe: () => {} } },
+      }),
+      signOut: async () => ({ error: null }),
+    },
+  },
+}));
+
+const { AppShell } = await import('../components/AppShell.js');
 
 // Regression: ISSUE-004 — DESIGN.md mandates a dark "industrial/mysterious"
 // surveillance-room aesthetic for the werewolf module, but AppShell unconditionally
@@ -13,7 +28,7 @@ import { AppShell } from '../components/AppShell.js';
 function render(currentPath: string): string {
   return renderToStaticMarkup(
     <StaticRouter location={currentPath}>
-      <AppShell currentPath={currentPath} showSimulate>
+      <AppShell currentPath={currentPath}>
         <main>page</main>
       </AppShell>
     </StaticRouter>,

@@ -15,6 +15,13 @@ import { MatchReplayPage } from './pages/MatchReplayPage.js';
 import { SimulatePage } from './pages/SimulatePage.js';
 import { WerewolfLobbyPage } from './pages/WerewolfLobbyPage.js';
 import { WerewolfRoomPage } from './pages/WerewolfRoomPage.js';
+import { WerewolfHomeResolver } from './pages/WerewolfHomeResolver.js';
+
+// Toggle to re-expose the poker module + agent-config CRUD UI + replay list +
+// simulate batch form. When false, those routes redirect to /werewolf so the
+// public surface is werewolf-only (per product direction May 2026). All page
+// components are still imported and tree-shaken back in by a single flip.
+const ENABLE_LEGACY_MODULES = false;
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   // Accept EITHER a cookie session (legacy useAuth) OR a Supabase JWT session.
@@ -33,24 +40,41 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 
 function AppShellRoute({ children }: { children: ReactNode }) {
   const location = useLocation();
-  return <AppShell currentPath={location.pathname} showSimulate>{children}</AppShell>;
+  return <AppShell currentPath={location.pathname}>{children}</AppShell>;
 }
+
+const legacyRoutes: RouteObject[] = ENABLE_LEGACY_MODULES
+  ? [
+      { path: '/matches', element: <AppShellRoute><MatchesPage /></AppShellRoute> },
+      { path: '/matches/:matchId', element: <AppShellRoute><MatchReplayPage /></AppShellRoute> },
+      { path: '/lobby', element: <ProtectedRoute><AppShellRoute><LobbyPage /></AppShellRoute></ProtectedRoute> },
+      { path: '/tables/:tableId', element: <ProtectedRoute><AppShellRoute><TablePage /></AppShellRoute></ProtectedRoute> },
+      { path: '/agents', element: <ProtectedRoute><AppShellRoute><AgentsPage /></AppShellRoute></ProtectedRoute> },
+      { path: '/agents/new', element: <ProtectedRoute><AppShellRoute><AgentEditPage mode="new" /></AppShellRoute></ProtectedRoute> },
+      { path: '/agents/:agentId/edit', element: <ProtectedRoute><AppShellRoute><AgentEditPage mode="edit" /></AppShellRoute></ProtectedRoute> },
+      { path: '/simulate', element: <ProtectedRoute><AppShellRoute><SimulatePage /></AppShellRoute></ProtectedRoute> },
+    ]
+  : [
+      // Quiet redirects keep deep links from external systems alive while the
+      // legacy modules are hidden — they all land on the werewolf home.
+      { path: '/matches', element: <Navigate to="/" replace /> },
+      { path: '/matches/:matchId', element: <Navigate to="/" replace /> },
+      { path: '/lobby', element: <Navigate to="/" replace /> },
+      { path: '/tables/:tableId', element: <Navigate to="/" replace /> },
+      { path: '/agents', element: <Navigate to="/" replace /> },
+      { path: '/agents/new', element: <Navigate to="/" replace /> },
+      { path: '/agents/:agentId/edit', element: <Navigate to="/" replace /> },
+      { path: '/simulate', element: <Navigate to="/" replace /> },
+    ];
 
 const routes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
   { path: '/register', element: <RegisterPage /> },
-  { path: '/matches', element: <AppShellRoute><MatchesPage /></AppShellRoute> },
-  { path: '/matches/:matchId', element: <AppShellRoute><MatchReplayPage /></AppShellRoute> },
-  { path: '/lobby', element: <ProtectedRoute><AppShellRoute><LobbyPage /></AppShellRoute></ProtectedRoute> },
-  { path: '/tables/:tableId', element: <ProtectedRoute><AppShellRoute><TablePage /></AppShellRoute></ProtectedRoute> },
-  { path: '/agents', element: <ProtectedRoute><AppShellRoute><AgentsPage /></AppShellRoute></ProtectedRoute> },
-  { path: '/agents/new', element: <ProtectedRoute><AppShellRoute><AgentEditPage mode="new" /></AppShellRoute></ProtectedRoute> },
-  { path: '/agents/:agentId/edit', element: <ProtectedRoute><AppShellRoute><AgentEditPage mode="edit" /></AppShellRoute></ProtectedRoute> },
-  { path: '/simulate', element: <ProtectedRoute><AppShellRoute><SimulatePage /></AppShellRoute></ProtectedRoute> },
+  ...legacyRoutes,
   { path: '/werewolf', element: <AppShellRoute><WerewolfLobbyPage /></AppShellRoute> },
   { path: '/werewolf/:gameId', element: <AppShellRoute><WerewolfRoomPage /></AppShellRoute> },
-  { path: '/', element: <Navigate to="/werewolf" replace /> },
-  { path: '*', element: <Navigate to="/werewolf" replace /> },
+  { path: '/', element: <AppShellRoute><WerewolfHomeResolver /></AppShellRoute> },
+  { path: '*', element: <Navigate to="/" replace /> },
 ];
 
 export const router = createBrowserRouter(routes);
