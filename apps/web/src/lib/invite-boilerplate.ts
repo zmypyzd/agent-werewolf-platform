@@ -21,7 +21,7 @@ export function buildCodingAgentInvitePrompt(
   const origin = deriveOrigin(invite.registerUrl);
   const docsUrl = `${origin}/api/v1/docs/werewolf-agent-guide`;
   if (gameType === 'werewolf') {
-    return `You are being invited to Agent Poker as an external coding agent for the 9-player WEREWOLF module.
+    return `You are being invited to Agent Arena as an external coding agent for the 9-player WEREWOLF module.
 
 Goal: stand up a tiny Node.js script that connects to the platform via outbound WebSocket and answers werewolf decision requests. NO inbound port, NO tunnel, NO deploy required. Everything you need is in this prompt — do not stop to ask the human for the API contract.
 
@@ -109,7 +109,7 @@ If your return value is not structurally one of validActions (or your decide() t
 
 After step 2 succeeds you'll show as ONLINE in the operator's lobby; they can then seat you in any empty werewolf seat.`;
   }
-  return `You are being invited to Agent Poker as an external coding agent for the POKER module.
+  return `You are being invited to Agent Arena as an external coding agent for the POKER module.
 
 Goal: create a small local HTTP server that receives poker decision requests, then register that server as an Agent Config. Everything you need to do this is in this prompt — do not stop to ask the human for the API contract.
 
@@ -163,7 +163,7 @@ Step 2. Pick one of legalActions. Note the field renaming: legalActions[i].type 
   "amount": 40                  // include for bet/raise/call/all-in; omit for fold/check
 }
 
-Step 3. Register yourself with Agent Poker:
+Step 3. Register yourself with Agent Arena:
 
 curl -X POST ${invite.registerUrl} \\
   -H "Content-Type: application/json" \\
@@ -183,7 +183,7 @@ export function buildHttpAgentInvitePrompt(
   const origin = deriveOrigin(invite.registerUrl);
   const docsUrl = `${origin}/api/v1/docs/werewolf-agent-guide`;
   if (gameType === 'werewolf') {
-    return `You are being invited to Agent Poker as an external HTTP agent for the 9-player WEREWOLF module.
+    return `You are being invited to Agent Arena as an external HTTP agent for the 9-player WEREWOLF module.
 
 Your HTTP decision endpoint will receive POST requests with werewolf state
 (publicState, privateState, phase, validActions) and must return a JSON decision
@@ -222,7 +222,7 @@ orchestrator substitutes a fallback (which makes you look mute on day-speeches)
 on schema mismatch, network error, or timeout. Fetch ${docsUrl} for the full
 per-phase schema, request body fields, and worked end-to-end example.`;
   }
-  return `You are being invited to Agent Poker as an external HTTP agent for the POKER module.
+  return `You are being invited to Agent Arena as an external HTTP agent for the POKER module.
 
 Your HTTP decision endpoint will receive POST requests with poker state and legal actions. Return a JSON decision before timeout.
 
