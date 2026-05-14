@@ -28,7 +28,7 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { showToast } = useClipboardToast();
+  const { showToast, showFallbackText } = useClipboardToast();
   // Guards against re-running the pendingInvite handler if React re-renders
   // before the navigate() below unmounts this component.
   const pendingHandledRef = useRef(false);
@@ -44,13 +44,13 @@ export function LoginPage() {
     const next = new URLSearchParams(location.search).get('next') ?? '/';
     void (async () => {
       try {
-        await mintAndCopyInvite(pending, showToast);
+        await mintAndCopyInvite(pending, { showToast, showFallbackText });
       } catch {
         /* toast already shown by mintAndCopyInvite on failure */
       }
       navigate(next, { replace: true });
     })();
-  }, [user, location.search, navigate, showToast]);
+  }, [user, location.search, navigate, showToast, showFallbackText]);
 
   if (user && !readPendingInvite(location.search)) {
     const next = new URLSearchParams(location.search).get('next') ?? '/';
@@ -71,7 +71,7 @@ export function LoginPage() {
     const next = new URLSearchParams(location.search).get('next') ?? '/';
     if (pending) {
       try {
-        await mintAndCopyInvite(pending, showToast);
+        await mintAndCopyInvite(pending, { showToast, showFallbackText });
       } catch {
         /* toast shown by mintAndCopyInvite */
       }
