@@ -327,6 +327,43 @@ body {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
   pointer-events: none;
 }
+.clipboard-toast-fallback {
+  width: min(640px, calc(100vw - 32px));
+  border-radius: 12px;
+  padding: 14px 16px;
+  pointer-events: auto;
+  display: grid;
+  gap: 8px;
+}
+.clipboard-toast-message {
+  font-weight: 600;
+}
+.clipboard-toast-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #fff;
+  padding: 8px 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  resize: vertical;
+}
+.clipboard-toast-dismiss {
+  justify-self: end;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+.clipboard-toast-dismiss:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
 .ww-resolver-loading {
   display: flex;
   align-items: center;
