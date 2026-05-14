@@ -122,7 +122,7 @@ export function AgentEditPage({ mode }: { mode: 'new' | 'edit' }) {
       <div className="page-header">
         <div>
           <h1>{mode === 'new' ? 'New agent' : 'Edit agent'}</h1>
-          <p className="muted">Configure the endpoint Agent Poker calls for decisions.</p>
+          <p className="muted">Configure the endpoint Agent Arena calls for decisions.</p>
         </div>
       </div>
 
