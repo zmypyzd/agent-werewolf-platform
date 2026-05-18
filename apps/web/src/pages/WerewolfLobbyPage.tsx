@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../lib/api.js';
+import { LiveTicker } from '../components/LiveTicker.js';
+import { HeroCard } from '../components/HeroCard.js';
+import { GameRow } from '../components/GameRow.js';
 
 export interface WerewolfLobbySummary {
   gameId: string;
@@ -13,14 +16,6 @@ export interface WerewolfLobbySummary {
 interface WerewolfLobbyEntryWire {
   gameId: string;
 }
-
-const STATUS_LABELS: Record<WerewolfLobbySummary['status'], string> = {
-  waiting:   'WAITING',
-  ready:     'READY',
-  running:   'RUNNING',
-  completed: 'COMPLETED',
-  failed:    'FAILED',
-};
 
 export function WerewolfLobbyPage() {
   const navigate = useNavigate();
@@ -65,76 +60,100 @@ export function WerewolfLobbyPage() {
     }
   }
 
+  // Pre-bucket the games once per render. The hero picks the first running
+  // match (most recently started — list is newest-first from the API);
+  // open/queued slots feed the secondary list. Completed and failed games
+  // get their own list further down so finished work stays visible without
+  // crowding the live area.
+  const running = games.filter((g) => g.status === 'running');
+  const featured = running[0] ?? null;
+  const openGames = games.filter(
+    (g) => g.status === 'waiting' || g.status === 'ready' || g.status === 'running',
+  );
+  const finishedGames = games.filter(
+    (g) => g.status === 'completed' || g.status === 'failed',
+  );
+
   return (
     <div className="ww-lobby">
-      <div className="ww-lobby-header">
-        <h1 className="ww-lobby-title">Werewolf · 大厅</h1>
-        <div className="ww-lobby-live-indicator">
-          <div className="ww-lobby-live-dot" />
-          <span>{games.filter((g) => g.status === 'running').length} live</span>
-        </div>
-      </div>
+      <LiveTicker games={games} />
 
       <div className="ww-lobby-body">
         {error ? <div className="ww-lobby-error">{error}</div> : null}
 
-        <div className="ww-game-list-section">
-          <h2 className="ww-section-heading">当前游戏</h2>
-          {games.length === 0 ? (
-            <div className="ww-empty-state">还没有任何狼人杀对局，先建一个看看。</div>
-          ) : (
-            <ul className="ww-game-list">
-              {games.map((g) => (
-                <li key={g.gameId} className="ww-game-row">
-                  <Link to={`/werewolf/${g.gameId}`}>
-                    <div className="ww-game-row-left">
-                      <div className="ww-game-row-top">
-                        <span className={`ww-pill ww-pill-${g.status}`}>
-                          {STATUS_LABELS[g.status]}
-                        </span>
-                        <span className="ww-game-name">{g.name || g.gameId.slice(0, 8)}</span>
-                      </div>
-                      <span className="ww-game-meta">
-                        {g.seatedCount}/9 seated
-                      </span>
-                    </div>
-                    <span className="ww-game-seated">{g.seatedCount}/9</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <section className="ww-lobby-hero-row" aria-label="Featured live match">
+          <HeroCard featured={featured} />
+        </section>
 
-        <div className="ww-create-panel">
-          <h2 className="ww-section-heading">新建游戏</h2>
-          <form onSubmit={onCreate}>
-            <div className="ww-field">
-              <label htmlFor="ww-name">局名称</label>
-              <input
-                id="ww-name"
-                className="ww-input"
-                placeholder="局名称（可选）"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                maxLength={100}
-              />
-            </div>
-            <div className="ww-field">
-              <label htmlFor="ww-seed">Seed</label>
-              <input
-                id="ww-seed"
-                className="ww-input"
-                placeholder="seed（可选，用于复现）"
-                value={seed}
-                onChange={(e) => setSeed(e.target.value)}
-                maxLength={100}
-              />
-            </div>
-            <button type="submit" className="ww-create-btn" disabled={creating}>
-              {creating ? '建局中…' : '建局'}
-            </button>
-          </form>
+        <div className="ww-lobby-grid">
+          <div className="ww-game-list-section">
+            <h2 className="ww-section-heading">
+              当前游戏
+              {openGames.length > 0 ? (
+                <span className="ww-section-heading-count">{openGames.length}</span>
+              ) : null}
+            </h2>
+            {openGames.length === 0 ? (
+              <div className="ww-empty-state">
+                还没有正在进行的对局，先建一个看看。
+              </div>
+            ) : (
+              <ul className="ww-game-list">
+                {openGames.map((g) => (
+                  <li key={g.gameId} className="ww-game-row">
+                    <GameRow game={g} />
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {finishedGames.length > 0 ? (
+              <>
+                <h3 className="ww-section-subheading">
+                  历史战绩
+                  <span className="ww-section-heading-count">{finishedGames.length}</span>
+                </h3>
+                <ul className="ww-game-list ww-game-list-finished">
+                  {finishedGames.slice(0, 5).map((g) => (
+                    <li key={g.gameId} className="ww-game-row">
+                      <GameRow game={g} />
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </div>
+
+          <aside className="ww-create-panel">
+            <h2 className="ww-section-heading">新建游戏</h2>
+            <form onSubmit={onCreate}>
+              <div className="ww-field">
+                <label htmlFor="ww-name">局名称</label>
+                <input
+                  id="ww-name"
+                  className="ww-input"
+                  placeholder="局名称（可选）"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  maxLength={100}
+                />
+              </div>
+              <div className="ww-field">
+                <label htmlFor="ww-seed">Seed</label>
+                <input
+                  id="ww-seed"
+                  className="ww-input"
+                  placeholder="seed（可选，用于复现）"
+                  value={seed}
+                  onChange={(e) => setSeed(e.target.value)}
+                  maxLength={100}
+                />
+              </div>
+              <button type="submit" className="ww-create-btn" disabled={creating}>
+                {creating ? '建局中…' : '建局'}
+              </button>
+            </form>
+          </aside>
         </div>
       </div>
     </div>

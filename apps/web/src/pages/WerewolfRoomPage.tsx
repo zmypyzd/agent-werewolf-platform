@@ -14,6 +14,9 @@ import {
 import { WerewolfTableSurface } from '../werewolf-room/WerewolfTableSurface.js';
 import { WerewolfPhaseIndicator } from '../werewolf-room/WerewolfPhaseIndicator.js';
 import { WerewolfEventTimeline } from '../werewolf-room/WerewolfEventTimeline.js';
+import { MatchMetaStrip } from '../components/MatchMetaStrip.js';
+import { StatsPanel } from '../components/StatsPanel.js';
+import { AudienceStrip } from '../components/AudienceStrip.js';
 
 type ServerLobbyEntry = Extract<
   WerewolfRoomAction,
@@ -34,25 +37,31 @@ export function WerewolfRoomPage() {
   const navigate = useNavigate();
   const [state, dispatch] = useReducer(werewolfRoomReducer, gameId, emptyRoomState);
   const [error, setError] = useState<string | null>(null);
+  // Track the most-recent ServerLobbyEntry so MatchMetaStrip can read name
+  // and startedAt without us re-deriving them from the reducer (the reducer
+  // intentionally normalizes seats/timeline but drops the raw entry fields
+  // we don't need for game logic). Updated on every fetchEntry success.
+  const [entry, setEntry] = useState<ServerLobbyEntry | null>(null);
   const sseRef = useRef<SseClient | null>(null);
 
   const fetchEntry = useCallback(async () => {
     try {
-      const entry = await api.get<ServerLobbyEntry>(
+      const next = await api.get<ServerLobbyEntry>(
         `/werewolf-games/${encodeURIComponent(gameId)}`,
       );
-      dispatch({ type: 'lobby-sync', entry });
-      if (entry.status === 'completed' && entry.winner && entry.finalPlayers) {
+      setEntry(next);
+      dispatch({ type: 'lobby-sync', entry: next });
+      if (next.status === 'completed' && next.winner && next.finalPlayers) {
         dispatch({
           type: 'match-completed',
-          winner: entry.winner,
-          finalPlayers: entry.finalPlayers,
+          winner: next.winner,
+          finalPlayers: next.finalPlayers,
         });
       }
-      if (entry.status === 'failed' && entry.failureReason) {
-        dispatch({ type: 'match-failed', reason: entry.failureReason });
+      if (next.status === 'failed' && next.failureReason) {
+        dispatch({ type: 'match-failed', reason: next.failureReason });
       }
-      return entry;
+      return next;
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Failed to load room');
       return null;
@@ -170,14 +179,16 @@ export function WerewolfRoomPage() {
   return (
     <div className="ww-room">
       <header className="ww-room-header">
-        <h1 className="ww-room-title">
-          狼人杀房间
-          <span>· {state.gameId.slice(0, 8)}</span>
-        </h1>
         <button onClick={() => navigate('/werewolf')} className="ww-back">
-          返回大厅
+          ← 返回大厅
         </button>
       </header>
+
+      <MatchMetaStrip
+        state={state}
+        name={entry?.name}
+        startedAt={entry?.startedAt}
+      />
 
       <WerewolfPhaseIndicator state={state} />
 
@@ -197,6 +208,7 @@ export function WerewolfRoomPage() {
 
       {isLive ? (
         <div className="ww-game-area">
+          <StatsPanel state={state} />
           <WerewolfTableSurface state={state} />
           <WerewolfEventTimeline lines={state.timeline} />
         </div>
@@ -236,6 +248,10 @@ export function WerewolfRoomPage() {
         <div className="ww-banner is-error">
           异常终止：{state.failureReason ?? '未知错误'}
         </div>
+      ) : null}
+
+      {isLive ? (
+        <AudienceStrip episodeId={state.gameId} />
       ) : null}
     </div>
   );
