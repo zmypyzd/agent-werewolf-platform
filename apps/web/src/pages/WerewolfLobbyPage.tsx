@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../lib/api.js';
 import { LiveTicker } from '../components/LiveTicker.js';
 import { HeroCard } from '../components/HeroCard.js';
+import { LiveCommentary } from '../components/LiveCommentary.js';
 import { GameRow } from '../components/GameRow.js';
 
 // Tab keys for the new Twitch-Directory chrome. Filter state is local-only;
@@ -183,6 +184,7 @@ export function WerewolfLobbyPage() {
 
         <section className="ww-lobby-hero-row" aria-label="Featured live match">
           <HeroCard featured={featured} />
+          <LiveCommentary featured={featured} />
         </section>
 
         <div className="ww-lobby-grid">

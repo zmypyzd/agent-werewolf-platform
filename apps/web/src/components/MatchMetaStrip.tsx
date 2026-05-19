@@ -9,6 +9,22 @@ export interface MatchMetaStripProps {
   // Wall-clock start of the match (ServerLobbyEntry.startedAt). Drives the
   // elapsed counter. Absent pre-start; in that case we show "—:—:—".
   startedAt?: number | undefined;
+  // Live spectator count. Backend exposure pending; pass undefined to omit
+  // the cell entirely rather than show a fake number.
+  viewerCount?: number | undefined;
+  // Stable episode label derived deterministically from gameId so the strip
+  // matches the approved mockup's "EP-47" affordance without needing a
+  // backend episode counter. Caller decides the derivation (or omits).
+  episodeLabel?: string | undefined;
+  // Pre-formatted model matchup tally, e.g. "3×GPT-4 · 4×Claude · 2×Llama".
+  // Computed by the caller from seats so this component stays presentational.
+  modelMatchup?: string | undefined;
+  // Engine version string. Pulled from package.json at the call site; passed
+  // through so the strip is still useful in storybook / future demos.
+  engineVersion?: string | undefined;
+  // True when the room is rendering omniscient spectator view. Drives the
+  // amber "OBSERVER ROLES ON" pill that signals "you can see all roles".
+  observerMode?: boolean | undefined;
 }
 
 function fmtElapsed(ms: number): string {
@@ -43,7 +59,16 @@ function roundLabel(state: WerewolfRoomState): string | null {
   return `NIGHT ${n}`;
 }
 
-export function MatchMetaStrip({ state, name, startedAt }: MatchMetaStripProps) {
+export function MatchMetaStrip({
+  state,
+  name,
+  startedAt,
+  viewerCount,
+  episodeLabel,
+  modelMatchup,
+  engineVersion,
+  observerMode,
+}: MatchMetaStripProps) {
   // Re-render once per second while the match is running so the elapsed
   // counter actually ticks. Outside of running we leave the timer frozen
   // (waiting → no startedAt yet; completed → server should freeze it).
@@ -75,18 +100,56 @@ export function MatchMetaStrip({ state, name, startedAt }: MatchMetaStripProps) 
         <span className="ww-match-meta-name" title={state.gameId}>
           {displayName}
         </span>
+        {viewerCount !== undefined ? (
+          <>
+            <span className="ww-match-meta-sep" aria-hidden="true">|</span>
+            <span className="ww-match-meta-cell">
+              <strong>{viewerCount}</strong> watching
+            </span>
+          </>
+        ) : null}
+        {episodeLabel ? (
+          <>
+            <span className="ww-match-meta-sep" aria-hidden="true">|</span>
+            <span className="ww-match-meta-cell ww-match-meta-cell-ep">{episodeLabel}</span>
+          </>
+        ) : null}
         {elapsedText ? (
-          <span className="ww-match-meta-cell">
-            elapsed <strong>{elapsedText}</strong>
-          </span>
+          <>
+            <span className="ww-match-meta-sep" aria-hidden="true">|</span>
+            <span className="ww-match-meta-cell">
+              elapsed <strong>{elapsedText}</strong>
+            </span>
+          </>
         ) : null}
         {round ? <span className="ww-match-meta-round">{round}</span> : null}
+        {observerMode ? (
+          <span className="ww-match-meta-observer" aria-label="Observer roles visible">
+            OBSERVER ROLES ON
+          </span>
+        ) : null}
       </div>
       <div className="ww-match-meta-strip-r">
         <span className="ww-match-meta-cell">
           seed <strong>#{state.gameId.slice(0, 8)}</strong>
         </span>
-        <span className="ww-match-meta-sep" aria-hidden="true">·</span>
+        {modelMatchup ? (
+          <>
+            <span className="ww-match-meta-sep" aria-hidden="true">|</span>
+            <span className="ww-match-meta-cell ww-match-meta-cell-matchup">
+              {modelMatchup}
+            </span>
+          </>
+        ) : null}
+        {engineVersion ? (
+          <>
+            <span className="ww-match-meta-sep" aria-hidden="true">|</span>
+            <span className="ww-match-meta-cell ww-match-meta-cell-engine">
+              engine <strong>{engineVersion}</strong>
+            </span>
+          </>
+        ) : null}
+        <span className="ww-match-meta-sep" aria-hidden="true">|</span>
         <span className="ww-match-meta-cell">
           {state.seats.filter((s) => s.occupant.kind !== 'empty').length}/9 seated
         </span>

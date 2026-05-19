@@ -32,6 +32,25 @@ export function StatsPanel({ state }: StatsPanelProps) {
   const totalOccupied = occupiedSeats.length;
   const speaker = speakerSeat(state);
 
+  // VOTES CAST: count `kind: 'vote'` timeline entries since the last
+  // phase-day/phase-night marker, so the block reads "votes in this round"
+  // rather than cumulative match-life votes. Falls back to 0 when no
+  // phase marker has landed yet (early-match), which renders as 0/<alive>.
+  const lastPhaseIdx = (() => {
+    for (let i = state.timeline.length - 1; i >= 0; i--) {
+      const k = state.timeline[i]?.kind;
+      if (k === 'phase-day' || k === 'phase-night') return i;
+    }
+    return -1;
+  })();
+  const votesThisPhase = state.timeline
+    .slice(lastPhaseIdx + 1)
+    .filter((l) => l.kind === 'vote').length;
+  const votesDenominator = aliveSeats.length;
+  const votesPct = votesDenominator > 0
+    ? Math.min(100, (votesThisPhase / votesDenominator) * 100)
+    : 0;
+
   // Recent kills: dead seats with a cause. Order is best-effort
   // (lobby state doesn't carry kill timestamps), so we go newest-first by
   // seat index as a stable, scrollable list. Cap at 4 to avoid pushing the
@@ -60,6 +79,20 @@ export function StatsPanel({ state }: StatsPanelProps) {
           <div
             className="ww-stats-fill ww-stats-fill-alive"
             style={{ width: `${totalOccupied ? (aliveSeats.length / totalOccupied) * 100 : 0}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="ww-stats-block">
+        <div className="ww-stats-l">VOTES CAST</div>
+        <div className="ww-stats-v">
+          <span className="ww-stats-big ww-stats-big-votes">{votesThisPhase}</span>
+          <span className="ww-stats-sub">/ {votesDenominator}</span>
+        </div>
+        <div className="ww-stats-bar">
+          <div
+            className="ww-stats-fill ww-stats-fill-votes"
+            style={{ width: `${votesPct}%` }}
           />
         </div>
       </div>

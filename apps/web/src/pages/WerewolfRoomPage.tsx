@@ -4,6 +4,7 @@ import { api, ApiError } from '../lib/api.js';
 import { SseClient, type SseMessage, werewolfStreamUrl } from '../lib/sse.js';
 import {
   emptyRoomState,
+  type SeatVM,
   type WerewolfReplayEvent,
   type WerewolfReplayEventType,
 } from '../werewolf-room/werewolfRoomTypes.js';
@@ -18,9 +19,43 @@ import {
 } from '../werewolf-room/WerewolfOmniscientTable.js';
 import { WerewolfPhaseIndicator } from '../werewolf-room/WerewolfPhaseIndicator.js';
 import { WerewolfEventTimeline } from '../werewolf-room/WerewolfEventTimeline.js';
+import { WerewolfSpeechBoard } from '../werewolf-room/WerewolfSpeechBoard.js';
+import { inferModelTag } from '../werewolf-room/inferModelTag.js';
 import { MatchMetaStrip } from '../components/MatchMetaStrip.js';
 import { StatsPanel } from '../components/StatsPanel.js';
 import { AudienceStrip } from '../components/AudienceStrip.js';
+
+// Pulled from apps/web/package.json. Hardcoded here so the meta strip can
+// surface an engine-version badge without wiring a Vite define. Update by
+// hand when bumping the web app version — caught easily in PR review.
+const APP_VERSION = 'v0.1.0';
+
+// Episode label derived deterministically from the gameId so every match
+// gets a stable "EP-N" affordance that matches the approved meta-strip
+// design, without the backend having to track episodes. Pure presentation.
+function deriveEpisodeLabel(gameId: string): string {
+  const hex = gameId.replace(/-/g, '').slice(0, 6);
+  const n = parseInt(hex, 16);
+  return `EP-${Number.isFinite(n) ? n % 1000 : 0}`;
+}
+
+// Tally seats by inferred model family so the meta strip can render a
+// "3×GPT-4 · 4×Claude · 2×Llama" string. Returns undefined when no seat
+// matches a known agent-name pattern (caller hides the cell).
+function buildModelMatchup(seats: readonly SeatVM[]): string | undefined {
+  const counts = new Map<string, number>();
+  for (const s of seats) {
+    if (s.occupant.kind === 'empty') continue;
+    const m = inferModelTag(s.occupant.displayName);
+    if (!m) continue;
+    counts.set(m, (counts.get(m) ?? 0) + 1);
+  }
+  if (counts.size === 0) return undefined;
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([m, n]) => `${n}×${m}`)
+    .join(' · ');
+}
 
 // Demo omniscient lineup — hardcoded role map matching the approved R-K
 // mockup (3 wolves, 1 seer, 1 witch, 1 hunter, 3 villagers). The backend
@@ -231,6 +266,10 @@ export function WerewolfRoomPage() {
         state={state}
         name={entry?.name}
         startedAt={entry?.startedAt}
+        episodeLabel={deriveEpisodeLabel(state.gameId)}
+        modelMatchup={buildModelMatchup(state.seats)}
+        engineVersion={APP_VERSION}
+        observerMode={omniscientView}
       />
 
       <WerewolfPhaseIndicator state={state} />
@@ -266,6 +305,7 @@ export function WerewolfRoomPage() {
               thinkingActor={state.thinkingActor}
               omniscientRoles={omniscientRoles}
               currentPhaseTag={omniscientPhaseTag}
+              centerSlot={<WerewolfSpeechBoard state={state} />}
             />
           ) : (
             <WerewolfTableSurface state={state} />

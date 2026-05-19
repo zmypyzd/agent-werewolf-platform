@@ -3,8 +3,9 @@
 // callers choose which to render based on view mode (omniscient vs. hidden).
 // Approved direction: see /Users/zmy/.gstack/projects/5-4-claude/designs/
 // werewolf-twitch-livestream-20260518/approved.json
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { SeatVM, WerewolfRole, WerewolfSide } from './werewolfRoomTypes.js';
+import { inferModelTag } from './inferModelTag.js';
 
 // Seat position class maps seatIndex (0-8) to layout slot (p1-p9).
 // The mapping follows the user's approved 1+3+3+2 layout:
@@ -53,17 +54,6 @@ const SIDE_LABEL: Record<WerewolfSide, string> = {
   good: 'GOOD',
 };
 
-// Concise model badge inferred from the agent display name. The backend
-// doesn't yet expose model per seat, so we degrade to a best-effort string
-// or hide it when unknown.
-function inferModelTag(displayName: string): string | undefined {
-  const lower = displayName.toLowerCase();
-  if (lower.includes('gpt') || lower.includes('nova') || lower.includes('echo')) return 'GPT-4';
-  if (lower.includes('claude') || lower.includes('atlas') || lower.includes('sigma') || lower.includes('vector') || lower.includes('quanta')) return 'Claude';
-  if (lower.includes('llama') || lower.includes('pulse') || lower.includes('nimbus')) return 'Llama';
-  return undefined;
-}
-
 // Human-readable cause-of-death suffix (matches existing seat-status copy).
 const DEATH_CAUSE_LABEL: Record<NonNullable<SeatVM['causeOfDeath']>, string> = {
   'wolf-kill': 'wolf-kill',
@@ -91,6 +81,11 @@ export interface WerewolfOmniscientTableProps {
   readonly thinkingActor?: string | undefined;
   readonly omniscientRoles?: OmniscientRolesMap | undefined;
   readonly currentPhaseTag?: string | undefined;
+  // Optional slot rendered as a child of .ww-omni-board. Callers pass the
+  // center testimony / speech-board JSX here so it positions itself over
+  // the seat ring (the slot's content owns its own absolute positioning;
+  // .ww-omni-board is already position:relative).
+  readonly centerSlot?: ReactNode;
 }
 
 // Resolve which role to display for a given seat. Omniscient map wins; else
@@ -110,7 +105,7 @@ function resolveRole(
 }
 
 export function WerewolfOmniscientTable(props: WerewolfOmniscientTableProps) {
-  const { seats, speakingActor, thinkingActor, omniscientRoles, currentPhaseTag } = props;
+  const { seats, speakingActor, thinkingActor, omniscientRoles, currentPhaseTag, centerSlot } = props;
 
   return (
     <section
@@ -216,6 +211,8 @@ export function WerewolfOmniscientTable(props: WerewolfOmniscientTableProps) {
           </article>
         );
       })}
+
+      {centerSlot}
     </section>
   );
 }

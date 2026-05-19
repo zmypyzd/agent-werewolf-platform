@@ -906,8 +906,21 @@
   padding: 24px;
 }
 
+/* Approved lobby-A direction: HeroCard (65%) + LiveCommentary feed (35%)
+   side-by-side. Falls back to a single column under 900px so the small-
+   screen experience stays readable rather than cramming the feed into
+   a too-narrow column. */
 .ww-lobby-hero-row {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 65fr) minmax(0, 35fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+@media (max-width: 900px) {
+  .ww-lobby-hero-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .ww-lobby-grid {
@@ -1123,6 +1136,117 @@
   font-size: 13px;
   color: var(--ww-death);
   font-family: 'JetBrains Mono', monospace;
+}
+
+/* ---- LiveCommentary (lobby-A 35% column beside HeroCard) ---------------- */
+/* Fixed-height scrollable feed of recent global events. Demo entries today;
+   swappable for an SSE-driven stream when /api/v1/global-commentary lands.
+   Sits in the .ww-lobby-hero-row grid so its height naturally matches the
+   HeroCard via `align-items: stretch`. */
+.ww-live-commentary {
+  display: flex;
+  flex-direction: column;
+  min-height: 280px;
+  background: var(--ww-surface);
+  border: 1px solid var(--ww-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.ww-live-commentary-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ww-border);
+  background: var(--ww-surface-el);
+}
+
+.ww-live-commentary-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ww-death);
+  box-shadow: 0 0 0 3px rgba(232, 53, 53, 0.14), 0 0 8px var(--ww-death);
+  animation: ww-pulse 1.8s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.ww-live-commentary-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--ww-text);
+  text-transform: uppercase;
+}
+
+.ww-live-commentary-meta-game {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--ww-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 55%;
+}
+
+.ww-live-commentary-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ww-live-commentary-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px 8px 14px;
+  border-left: 3px solid transparent;
+  transition: background 120ms;
+}
+
+.ww-live-commentary-entry:hover {
+  background: var(--ww-surface-hover);
+}
+
+/* Per DESIGN.md Live Commentary spec: phase-colored 3px left border.
+   speak=indigo, vote=amber, kill=red, phase=neutral structural border. */
+.ww-live-commentary-entry.kind-speak { border-left-color: rgba(123, 111, 255, 0.42); }
+.ww-live-commentary-entry.kind-vote  { border-left-color: var(--ww-day-border); }
+.ww-live-commentary-entry.kind-kill  { border-left-color: rgba(232, 53, 53, 0.5); }
+.ww-live-commentary-entry.kind-phase { border-left-color: var(--ww-border-strong); }
+
+.ww-live-commentary-entry-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--ww-text-dim);
+  letter-spacing: 0.04em;
+}
+
+.ww-live-commentary-entry-body {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--ww-text-muted);
+  line-height: 1.4;
+}
+
+.ww-live-commentary-empty .ww-live-commentary-body {
+  align-items: center;
+  justify-content: center;
+}
+
+.ww-live-commentary-empty-msg {
+  padding: 24px 16px;
+  text-align: center;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: var(--ww-text-muted);
+  font-style: italic;
 }
 
 /* ---- Agent picker popover (D3=C / D4=A / D5=A / D6=A) -------------------- */
@@ -1834,6 +1958,44 @@
 }
 .ww-match-meta-sep {
   color: var(--ww-text-dim);
+  font-weight: 500;
+}
+/* Approved R-K-polished mockup uses an amber pill alongside ROUND-N to
+   signal that all roles are visible to the spectator. Pairs with the
+   .ww-observer-chip rendered in the room header — the strip is the
+   persistent reminder, the chip is the entry-point hint. */
+.ww-match-meta-observer {
+  padding: 3px 8px;
+  border-radius: 9999px;
+  background: var(--ww-day-bg);
+  border: 1px solid var(--ww-day-border);
+  color: var(--ww-day);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+/* The EP / matchup / engine cells are technical metadata — slightly
+   dimmer than the live values so the eye lands on elapsed/round first. */
+.ww-match-meta-cell-ep,
+.ww-match-meta-cell-matchup,
+.ww-match-meta-cell-engine {
+  color: var(--ww-text-muted);
+}
+.ww-match-meta-cell-matchup {
+  font-feature-settings: 'tnum';
+}
+
+/* When a SpeechBoard is rendered as the centerSlot of WerewolfOmniscientTable,
+   trim it to the approved 340×184 testimony footprint so it sits inside the
+   1+3+3+2 ring without colliding with the side-column seat cards (margin 58)
+   or the bottom-row pair (margin 240). The default SpeechBoard size
+   (min(50%, 460px) × min(72%, 320px)) is sized for the older TableSurface
+   where seats live further from center. */
+.ww-omni-board .ww-speech-board {
+  width: min(48%, 340px);
+  max-height: min(48%, 184px);
 }
 
 /* ── StatsPanel ───────────────────────────────────────── */
@@ -1910,6 +2072,7 @@
 }
 .ww-stats-big-alive { color: var(--ww-alive); }
 .ww-stats-big-wolf  { color: var(--ww-death); }
+.ww-stats-big-votes { color: var(--ww-day); }
 .ww-stats-sub {
   font-size: 12px;
   color: var(--ww-text-muted);
@@ -1926,6 +2089,7 @@
   transition: width 250ms ease-out;
 }
 .ww-stats-fill-alive { background: var(--ww-alive); }
+.ww-stats-fill-votes { background: var(--ww-day); }
 .ww-stats-speaker {
   display: flex;
   align-items: center;
