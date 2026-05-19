@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../lib/api.js';
 import { SseClient, type SseMessage, werewolfStreamUrl } from '../lib/sse.js';
 import {
@@ -12,11 +12,34 @@ import {
   type WerewolfRoomAction,
 } from '../werewolf-room/werewolfRoomReducer.js';
 import { WerewolfTableSurface } from '../werewolf-room/WerewolfTableSurface.js';
+import {
+  WerewolfOmniscientTable,
+  type OmniscientRolesMap,
+} from '../werewolf-room/WerewolfOmniscientTable.js';
 import { WerewolfPhaseIndicator } from '../werewolf-room/WerewolfPhaseIndicator.js';
 import { WerewolfEventTimeline } from '../werewolf-room/WerewolfEventTimeline.js';
 import { MatchMetaStrip } from '../components/MatchMetaStrip.js';
 import { StatsPanel } from '../components/StatsPanel.js';
 import { AudienceStrip } from '../components/AudienceStrip.js';
+
+// Demo omniscient lineup — hardcoded role map matching the approved R-K
+// mockup (3 wolves, 1 seer, 1 witch, 1 hunter, 3 villagers). The backend
+// does NOT expose live roles to spectators (information isolation invariant
+// in CLAUDE.md), so this is a CLIENT-ONLY preview map used when the user
+// opts into `?view=omniscient`. Real omniscient integration would route
+// through a separate server-side spectator-mode endpoint with explicit
+// permission, which is out of scope for the visual mockup wire-up.
+const DEMO_OMNISCIENT_ROLES: OmniscientRolesMap = {
+  0: { role: 'villager', side: 'good' },
+  1: { role: 'werewolf', side: 'werewolf' },
+  2: { role: 'seer', side: 'good' },
+  3: { role: 'werewolf', side: 'werewolf' },
+  4: { role: 'werewolf', side: 'werewolf' },
+  5: { role: 'witch', side: 'good' },
+  6: { role: 'villager', side: 'good' },
+  7: { role: 'hunter', side: 'good' },
+  8: { role: 'villager', side: 'good' },
+};
 
 type ServerLobbyEntry = Extract<
   WerewolfRoomAction,
@@ -35,6 +58,13 @@ const ERROR_AUTO_DISMISS_MS = 5000;
 export function WerewolfRoomPage() {
   const { gameId = '' } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // ?view=omniscient toggles the approved R-K-polished spectator design
+  // (1+3+3+2 layout with role-art portraits). When off, the room renders
+  // the original WerewolfTableSurface unchanged. Flag is intentionally
+  // URL-only for now so the new design can be exercised side-by-side with
+  // the existing one without touching state stores or feature flags.
+  const omniscientView = searchParams.get('view') === 'omniscient';
   const [state, dispatch] = useReducer(werewolfRoomReducer, gameId, emptyRoomState);
   const [error, setError] = useState<string | null>(null);
   // Track the most-recent ServerLobbyEntry so MatchMetaStrip can read name
@@ -176,12 +206,25 @@ export function WerewolfRoomPage() {
 
   const isLive = state.status === 'running' || state.status === 'completed';
 
+  // Memoize the omniscient roles so React doesn't see a new object on every
+  // render — keeps WerewolfOmniscientTable's prop identity stable.
+  const omniscientRoles = useMemo(() => DEMO_OMNISCIENT_ROLES, []);
+  const omniscientPhaseTag = useMemo(() => {
+    if (!omniscientView) return undefined;
+    return `${state.currentPhase} · observer view`;
+  }, [omniscientView, state.currentPhase]);
+
   return (
-    <div className="ww-room">
+    <div className={`ww-room${omniscientView ? ' is-omniscient' : ''}`}>
       <header className="ww-room-header">
         <button onClick={() => navigate('/werewolf')} className="ww-back">
           ← 返回大厅
         </button>
+        {omniscientView ? (
+          <span className="ww-observer-chip" aria-label="observer mode active">
+            OBSERVER ROLES ON
+          </span>
+        ) : null}
       </header>
 
       <MatchMetaStrip
@@ -191,6 +234,13 @@ export function WerewolfRoomPage() {
       />
 
       <WerewolfPhaseIndicator state={state} />
+
+      {omniscientView ? (
+        <p className="ww-observer-sub" aria-live="polite">
+          Observer mode: all roles are visible to the spectator. Wired via
+          <code> ?view=omniscient</code> · demo lineup is client-side only.
+        </p>
+      ) : null}
 
       {error ? (
         <div className="ww-error" role="alert">
@@ -209,9 +259,27 @@ export function WerewolfRoomPage() {
       {isLive ? (
         <div className="ww-game-area">
           <StatsPanel state={state} />
-          <WerewolfTableSurface state={state} />
+          {omniscientView ? (
+            <WerewolfOmniscientTable
+              seats={state.seats}
+              speakingActor={state.speakingActor}
+              thinkingActor={state.thinkingActor}
+              omniscientRoles={omniscientRoles}
+              currentPhaseTag={omniscientPhaseTag}
+            />
+          ) : (
+            <WerewolfTableSurface state={state} />
+          )}
           <WerewolfEventTimeline lines={state.timeline} />
         </div>
+      ) : omniscientView ? (
+        <WerewolfOmniscientTable
+          seats={state.seats}
+          speakingActor={state.speakingActor}
+          thinkingActor={state.thinkingActor}
+          omniscientRoles={omniscientRoles}
+          currentPhaseTag={omniscientPhaseTag}
+        />
       ) : (
         <WerewolfTableSurface
           state={state}
