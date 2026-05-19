@@ -24,6 +24,11 @@ import { inferModelTag } from '../werewolf-room/inferModelTag.js';
 import { MatchMetaStrip } from '../components/MatchMetaStrip.js';
 import { StatsPanel } from '../components/StatsPanel.js';
 import { AudienceStrip } from '../components/AudienceStrip.js';
+import {
+  WerewolfChannelCard,
+  type WerewolfChannelChip,
+  type WerewolfChannelChipVariant,
+} from '../components/WerewolfChannelCard.js';
 
 // Pulled from apps/web/package.json. Hardcoded here so the meta strip can
 // surface an engine-version badge without wiring a Vite define. Update by
@@ -55,6 +60,45 @@ function buildModelMatchup(seats: readonly SeatVM[]): string | undefined {
     .sort((a, b) => b[1] - a[1])
     .map(([m, n]) => `${n}×${m}`)
     .join(' · ');
+}
+
+// Channel-card chips break the meta-strip's single matchup string into
+// per-model badges that pick up faction-style accent colors (GPT green,
+// Claude amber, Llama blue). Falls back to a neutral chip when the model
+// family doesn't map to one of our three accent variants — keeps future
+// providers from looking broken in the UI.
+function chipVariantForModel(model: string): WerewolfChannelChipVariant {
+  const lower = model.toLowerCase();
+  if (lower.includes('gpt')) return 'gpt';
+  if (lower.includes('claude')) return 'claude';
+  if (lower.includes('llama')) return 'llama';
+  return 'neutral';
+}
+
+function buildChannelCardChips(
+  seats: readonly SeatVM[],
+  gameId: string,
+  version: string,
+): ReadonlyArray<WerewolfChannelChip> {
+  const counts = new Map<string, number>();
+  for (const s of seats) {
+    if (s.occupant.kind === 'empty') continue;
+    const m = inferModelTag(s.occupant.displayName);
+    if (!m) continue;
+    counts.set(m, (counts.get(m) ?? 0) + 1);
+  }
+  const modelChips: WerewolfChannelChip[] = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([model, n]) => ({
+      label: `${n} × ${model}`,
+      variant: chipVariantForModel(model),
+    }));
+  const seedSlice = gameId.replace(/-/g, '').slice(0, 8);
+  return [
+    ...modelChips,
+    ...(seedSlice ? [{ label: `SEED #${seedSlice}` }] : []),
+    { label: version },
+  ];
 }
 
 // Demo omniscient lineup — hardcoded role map matching the approved R-K
@@ -272,7 +316,12 @@ export function WerewolfRoomPage() {
         observerMode={omniscientView}
       />
 
-      <WerewolfPhaseIndicator state={state} />
+      {/* Pre-match: the phase indicator anchors directly under the meta
+          strip so the lobby/ready states still show round + phase context.
+          Once a match is live, the indicator moves INTO the workbench's
+          center column (below) so phase + board + channel-card + audience
+          stack cleanly without the meta strip pushing the board down. */}
+      {!isLive ? <WerewolfPhaseIndicator state={state} /> : null}
 
       {omniscientView ? (
         <p className="ww-observer-sub" aria-live="polite">
@@ -298,18 +347,27 @@ export function WerewolfRoomPage() {
       {isLive ? (
         <div className="ww-game-area">
           <StatsPanel state={state} />
-          {omniscientView ? (
-            <WerewolfOmniscientTable
-              seats={state.seats}
-              speakingActor={state.speakingActor}
-              thinkingActor={state.thinkingActor}
-              omniscientRoles={omniscientRoles}
-              currentPhaseTag={omniscientPhaseTag}
-              centerSlot={<WerewolfSpeechBoard state={state} />}
+          <div className="ww-game-area-center">
+            <WerewolfPhaseIndicator state={state} />
+            {omniscientView ? (
+              <WerewolfOmniscientTable
+                seats={state.seats}
+                speakingActor={state.speakingActor}
+                thinkingActor={state.thinkingActor}
+                omniscientRoles={omniscientRoles}
+                currentPhaseTag={omniscientPhaseTag}
+                centerSlot={<WerewolfSpeechBoard state={state} />}
+              />
+            ) : (
+              <WerewolfTableSurface state={state} />
+            )}
+            <WerewolfChannelCard
+              title={`${entry?.name ?? 'WEREWOLF MATCH'} · ${deriveEpisodeLabel(state.gameId)}`}
+              sub={`${state.seats.length} AI agents · 5 roles · ${omniscientView ? 'omniscient spectator' : 'live'} broadcast`}
+              chips={buildChannelCardChips(state.seats, state.gameId, APP_VERSION)}
             />
-          ) : (
-            <WerewolfTableSurface state={state} />
-          )}
+            <AudienceStrip episodeId={state.gameId} />
+          </div>
           <WerewolfEventTimeline lines={state.timeline} />
         </div>
       ) : omniscientView ? (
@@ -356,10 +414,6 @@ export function WerewolfRoomPage() {
         <div className="ww-banner is-error">
           异常终止：{state.failureReason ?? '未知错误'}
         </div>
-      ) : null}
-
-      {isLive ? (
-        <AudienceStrip episodeId={state.gameId} />
       ) : null}
     </div>
   );
