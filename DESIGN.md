@@ -59,6 +59,21 @@
   /* Structural */
   --border:          rgba(255, 255, 255, 0.06);
   --border-strong:   rgba(255, 255, 255, 0.11);
+
+  /* Role accents — used by seat cards, role badges, and the channel-card
+     role roster. Faction color (good/wolf) drives banishment + side pills;
+     specialist colors (seer/witch/hunter) drive role-name chips and seat
+     glow when the spectator omniscient mode is on. */
+  --role-wolf:       #e83535;   /* werewolf — same hue as --death */
+  --role-good:       #20c070;   /* good faction — same hue as --alive */
+  --role-seer:       #7b6fff;   /* seer — same hue as --night */
+  --role-witch:      #b772ff;   /* witch — magenta-leaning indigo */
+  --role-hunter:     #f0a830;   /* hunter — same hue as --day */
+  --role-villager:   #d6b46a;   /* villager — warm parchment */
+
+  /* Elevation */
+  --panel-shadow:    0 24px 80px rgba(0, 0, 0, 0.46),
+                     inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 ```
 
