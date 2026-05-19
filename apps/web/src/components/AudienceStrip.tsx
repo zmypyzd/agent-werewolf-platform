@@ -40,16 +40,25 @@ export function AudienceStrip({ watching, episodeId }: AudienceStripProps) {
   const watchCount = watching ?? 1;
   const labelEp = episodeId ? `EP-${episodeId.slice(0, 6)}` : null;
 
+  // Flattened single-row layout matching the approved finalized.html
+  // .audience strip: AUDIENCE label · WATCHING count · | · BROADCAST EP · |
+  // · 5 reactions inline · "+ REACT" spark right-aligned. Reaction buttons
+  // stay interactive (increment counts on click) so the page still feels
+  // alive even though there's no real reaction stream yet.
   return (
     <footer className="ww-audience-strip" aria-label="Audience">
-      <div className="ww-audience-strip-l">
-        <span className="ww-audience-strip-label">AUDIENCE</span>
-        <span className="ww-audience-strip-count">
-          <strong>{watchCount}</strong> watching
-        </span>
-        {labelEp ? <span className="ww-audience-strip-ep">· {labelEp}</span> : null}
-      </div>
-      <div className="ww-audience-strip-r" role="group" aria-label="React">
+      <b className="ww-audience-strip-label">AUDIENCE</b>
+      <span className="ww-audience-strip-count">
+        <strong>{watchCount}</strong> watching
+      </span>
+      {labelEp ? (
+        <>
+          <span className="ww-audience-strip-sep" aria-hidden="true">|</span>
+          <span className="ww-audience-strip-ep">BROADCAST {labelEp}</span>
+        </>
+      ) : null}
+      <span className="ww-audience-strip-sep" aria-hidden="true">|</span>
+      <div className="ww-audience-strip-reactions" role="group" aria-label="React">
         {reactions.map((r) => (
           <button
             key={r.emoji}
@@ -63,6 +72,7 @@ export function AudienceStrip({ watching, episodeId }: AudienceStripProps) {
           </button>
         ))}
       </div>
+      <span className="ww-audience-strip-spark" aria-hidden="true">+ REACT</span>
     </footer>
   );
 }

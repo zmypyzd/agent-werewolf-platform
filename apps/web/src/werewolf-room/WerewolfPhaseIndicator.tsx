@@ -121,9 +121,12 @@ export function WerewolfPhaseIndicator({ state }: WerewolfPhaseIndicatorProps) {
       aria-label={ariaLabel}
     >
       <div className="ww-phase-row">
-        <div className="ww-phase-dot" />
         <span className="ww-phase-text">{label}</span>
-        <div className="ww-phase-dot" />
+        {/* Single pulse dot to the right of the label, matching the
+            approved Pretext-native finalized.html phase banner. The
+            decorative `◇ — ◇` corner markers come from CSS pseudo-
+            elements on .ww-phase-bar so the JSX stays minimal. */}
+        <div className="ww-phase-dot" aria-hidden="true" />
       </div>
       {subtitle ? <div className="ww-phase-sub">{subtitle}</div> : null}
     </div>

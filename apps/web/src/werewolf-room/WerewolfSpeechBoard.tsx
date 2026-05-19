@@ -76,27 +76,44 @@ export function WerewolfSpeechBoard({ state }: WerewolfSpeechBoardProps) {
       aria-live="polite"
       aria-label="当前发言"
     >
-      <header className="ww-speech-studio">
-        <div className="ww-speech-avatar" aria-hidden="true">{avatar}</div>
-        <div className="ww-speech-id">
+      {/* Testimony-style header: pin + STATEMENT marker + live state badge.
+          Matches the approved Pretext-native finalized.html testimony layout
+          (40px-ish row with `📌` pinned-statement affordance on the left,
+          status pill on the right). */}
+      <header className="ww-speech-top">
+        <div className="ww-speech-pin">
+          <span className="ww-speech-pin-icon" aria-hidden="true">📌</span>
+          <span className="ww-speech-pin-label">
+            STATEMENT{seatTag ? ` · ${seatTag}` : ''}
+          </span>
+        </div>
+        <span className={`ww-speech-live${isLive ? '' : ' is-replay'}`}>
+          {isLive ? 'ON AIR' : 'JUST SPOKE'}
+        </span>
+      </header>
+
+      {/* Testimony body: 64px speaker token on the left, blockquote +
+          tags on the right. Token shows the role emoji + display name +
+          role label (CN · EN). Quote is the actual speech text. */}
+      <div className="ww-speech-body">
+        <div className="ww-speech-token">
+          <div className="ww-speech-avatar" aria-hidden="true">{avatar}</div>
           <div className="ww-speech-name">{displayName}</div>
           <div className="ww-speech-role">{roleLabel}</div>
         </div>
-        <div className="ww-speech-meta">
-          <span className={`ww-speech-live${isLive ? '' : ' is-replay'}`}>
-            {isLive ? 'ON AIR' : 'JUST SPOKE'}
-          </span>
-          {seatTag ? <span className="ww-speech-seat">{seatTag}</span> : null}
+        <div className="ww-speech-quote">
+          <blockquote className="ww-speech-text">{speech.text || '…'}</blockquote>
+          {(speech.performance || speech.intent) ? (
+            <div className="ww-speech-tags">
+              {speech.performance ? (
+                <span className="ww-speech-perf">演技 · {speech.performance}</span>
+              ) : null}
+              {speech.intent ? (
+                <span className="ww-speech-intent">💭 {speech.intent}</span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
-      </header>
-      <div className="ww-speech-body">
-        <p className="ww-speech-text">{speech.text || '…'}</p>
-        {speech.performance ? (
-          <p className="ww-speech-perf">演技 · {speech.performance}</p>
-        ) : null}
-        {speech.intent ? (
-          <p className="ww-speech-intent">💭 {speech.intent}</p>
-        ) : null}
       </div>
     </section>
   );

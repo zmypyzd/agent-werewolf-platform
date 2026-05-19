@@ -176,38 +176,76 @@
 }
 
 /* ── Phase indicator bar ────────────────────────────────── */
+/* Card-styled phase banner. Matches finalized.html .phase: 62px high
+   box with `◇ — ◇` decorative markers in the top corners and a radial
+   indigo gradient overlay. Lives inside .ww-game-area-center when a
+   match is live; renders directly below the meta strip pre-match. */
 .ww-phase-bar {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 10px 20px;
-  border-bottom: 1px solid var(--ww-night-border);
-  background: var(--ww-night-bg);
+  gap: 2px;
+  height: 62px;
+  overflow: hidden;
   flex-shrink: 0;
+  border: 1px solid rgba(123, 111, 255, 0.25);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(123, 111, 255, 0.38), transparent 55%),
+    linear-gradient(90deg, rgba(91, 74, 255, 0.12), rgba(123, 111, 255, 0.25), rgba(91, 74, 255, 0.12)),
+    #111320;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 38px rgba(0, 0, 0, 0.2);
   transition: background 300ms ease-out, border-color 300ms ease-out;
 }
 
+.ww-phase-bar::before,
+.ww-phase-bar::after {
+  content: '◇  —  ◇';
+  position: absolute;
+  top: 20px;
+  color: rgba(199, 195, 255, 0.2);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  pointer-events: none;
+}
+.ww-phase-bar::before { left: 24px; }
+.ww-phase-bar::after { right: 24px; }
+
 .ww-phase-bar.is-day {
-  background: var(--ww-day-bg);
-  border-bottom-color: var(--ww-day-border);
+  border-color: rgba(240, 168, 48, 0.32);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(240, 168, 48, 0.32), transparent 55%),
+    linear-gradient(90deg, rgba(240, 168, 48, 0.08), rgba(240, 168, 48, 0.18), rgba(240, 168, 48, 0.08)),
+    #1a160e;
+}
+.ww-phase-bar.is-day::before,
+.ww-phase-bar.is-day::after {
+  color: rgba(255, 220, 160, 0.22);
 }
 
-.ww-phase-bar.is-waiting {
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom-color: var(--ww-border);
-}
-
+.ww-phase-bar.is-waiting,
 .ww-phase-bar.is-ended {
+  border-color: var(--ww-border);
   background: rgba(255, 255, 255, 0.03);
-  border-bottom-color: var(--ww-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+.ww-phase-bar.is-waiting::before,
+.ww-phase-bar.is-waiting::after,
+.ww-phase-bar.is-ended::before,
+.ww-phase-bar.is-ended::after {
+  color: rgba(255, 255, 255, 0.08);
 }
 
 .ww-phase-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  gap: 13px;
+  height: 37px;
+  padding-top: 8px;
 }
 
 .ww-phase-dot {
@@ -215,49 +253,65 @@
   height: 7px;
   border-radius: 50%;
   background: var(--ww-night);
+  box-shadow:
+    0 0 0 4px rgba(123, 111, 255, 0.13),
+    0 0 14px var(--ww-night);
   animation: ww-pulse 1.8s ease-in-out infinite;
   flex-shrink: 0;
 }
 
 .ww-phase-bar.is-day .ww-phase-dot {
   background: var(--ww-day);
+  box-shadow:
+    0 0 0 4px rgba(240, 168, 48, 0.14),
+    0 0 14px var(--ww-day);
 }
 
 .ww-phase-bar.is-waiting .ww-phase-dot,
 .ww-phase-bar.is-ended .ww-phase-dot {
   background: var(--ww-text-dim);
+  box-shadow: none;
   animation: none;
 }
 
 @keyframes ww-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50%       { opacity: 0.4; transform: scale(0.7); }
+  50%       { opacity: 0.65; transform: scale(0.76); }
 }
 
 .ww-phase-text {
   font-family: 'Syne', sans-serif;
   font-weight: 800;
-  font-size: 22px;
-  color: var(--ww-night);
+  font-size: 26px;
   line-height: 1;
+  letter-spacing: 0.08em;
+  color: #e5e3ff;
+  text-shadow: 0 0 24px rgba(123, 111, 255, 0.55);
 }
 
 .ww-phase-bar.is-day .ww-phase-text {
-  color: var(--ww-day);
+  color: #fff5da;
+  text-shadow: 0 0 24px rgba(240, 168, 48, 0.55);
 }
 
 .ww-phase-bar.is-waiting .ww-phase-text,
 .ww-phase-bar.is-ended .ww-phase-text {
   color: var(--ww-text-muted);
-  font-size: 16px;
+  font-size: 18px;
+  text-shadow: none;
 }
 
 .ww-phase-sub {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  color: var(--ww-text-muted);
+  font-size: 12px;
+  color: #a9add0;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-align: center;
+}
+
+.ww-phase-bar.is-waiting .ww-phase-sub,
+.ww-phase-bar.is-ended .ww-phase-sub {
+  color: var(--ww-text-muted);
 }
 
 /* ── Error banner ───────────────────────────────────────── */
@@ -568,51 +622,95 @@
   border-color: rgba(91, 74, 255, 0.7);
 }
 
-.ww-speech-studio {
+/* Testimony-style header: 43px row with pinned-statement marker on the
+   left + status badge on the right. Mirrors finalized.html .testimony-top. */
+.ww-speech-top {
+  height: 43px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: linear-gradient(
-    135deg,
-    rgba(91, 74, 255, 0.28),
-    rgba(91, 74, 255, 0.10)
-  );
-  border-bottom: 1px solid rgba(91, 74, 255, 0.35);
+  justify-content: space-between;
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: radial-gradient(circle at 50% 0%, rgba(123, 111, 255, 0.18), transparent 70%);
   flex-shrink: 0;
+  color: #bbb8ff;
+  font: 800 10px 'JetBrains Mono', monospace;
+  letter-spacing: 0.055em;
+}
+
+.ww-speech-pin {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.ww-speech-pin-icon {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(123, 111, 255, 0.13);
+  border: 1px solid rgba(123, 111, 255, 0.26);
+  color: #d7d3ff;
+  font-size: 11px;
+}
+
+.ww-speech-pin-label {
+  color: #bbb8ff;
+  letter-spacing: 0.06em;
+}
+
+/* Speech body: 64px speaker token + flex quote area. */
+.ww-speech-body {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 12px;
+  padding: 16px 16px 14px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+}
+
+.ww-speech-token {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
 }
 
 .ww-speech-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
+  width: 56px;
+  height: 76px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
   background: radial-gradient(
     circle at 35% 35%,
     rgba(91, 74, 255, 0.55),
-    rgba(91, 74, 255, 0.15)
+    rgba(91, 74, 255, 0.15) 60%,
+    rgba(12, 14, 21, 0.95) 100%
   );
-  border: 1.5px solid rgba(123, 111, 255, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
+  border: 1px solid rgba(123, 111, 255, 0.42);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+  font-size: 24px;
   flex-shrink: 0;
-  box-shadow: 0 0 14px rgba(91, 74, 255, 0.32);
-}
-
-.ww-speech-id {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
 }
 
 .ww-speech-name {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--ww-text);
+  font-size: 10px;
+  font-weight: 800;
+  color: #c6c2ff;
+  letter-spacing: 0.04em;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   line-height: 1.05;
   letter-spacing: 0.01em;
   overflow: hidden;
@@ -621,20 +719,76 @@
 }
 
 .ww-speech-role {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 11px;
-  color: #a8a4ee;
-  letter-spacing: 0.06em;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  color: #7d8297;
+  letter-spacing: 0.04em;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.ww-speech-meta {
+/* Quote area — blockquote with curly-quote book-ends + optional perf
+   and intent chips. Matches finalized.html .testimony-body's right
+   column. */
+.ww-speech-quote {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  flex-shrink: 0;
+  gap: 9px;
 }
 
+.ww-speech-text {
+  margin: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #f1f2ff;
+  letter-spacing: -0.04em;
+  text-shadow: 0 0 20px rgba(123, 111, 255, 0.13);
+}
+.ww-speech-text::before {
+  content: '\201C';
+  color: var(--ww-night);
+  font-size: 18px;
+  margin-right: 2px;
+}
+.ww-speech-text::after {
+  content: '\201D';
+  color: var(--ww-night);
+  font-size: 18px;
+  margin-left: 2px;
+}
+
+.ww-speech-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ww-speech-perf,
+.ww-speech-intent {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  padding: 4px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.035);
+  color: #9fa6c4;
+}
+
+.ww-speech-intent {
+  border-color: rgba(240, 168, 48, 0.28);
+  background: rgba(240, 168, 48, 0.08);
+  color: rgba(255, 206, 130, 0.95);
+}
+
+/* Live status pill — sits inside .ww-speech-top right-aligned. */
 .ww-speech-live {
   display: inline-flex;
   align-items: center;
@@ -667,49 +821,6 @@
 .ww-speech-live.is-replay::before {
   background: var(--ww-text-muted);
   animation: none;
-}
-
-.ww-speech-seat {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  color: var(--ww-text-muted);
-}
-
-.ww-speech-body {
-  padding: 12px 16px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
-}
-
-.ww-speech-text {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #dadeec;
-  margin: 0;
-}
-
-.ww-speech-perf {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 11px;
-  font-style: italic;
-  color: var(--ww-text-muted);
-  margin: 0;
-}
-
-.ww-speech-intent {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 11px;
-  color: rgba(240, 168, 48, 0.8);
-  background: rgba(240, 168, 48, 0.08);
-  border-left: 2px solid rgba(240, 168, 48, 0.45);
-  padding: 4px 8px;
-  border-radius: 0 4px 4px 0;
-  margin: 2px 0 0;
 }
 
 /* ── Start match button ─────────────────────────────────── */
@@ -771,30 +882,135 @@
   overflow: hidden;
 }
 
-.ww-timeline-header {
-  padding: 9px 14px;
+/* Two-tab strip (AUDIENCE / EVENTS) replacing the old single-row
+   "事件流 · Events" header. Matches finalized.html .chat-tabs. */
+.ww-timeline-tabs {
+  height: 46px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   border-bottom: 1px solid var(--ww-border);
+  flex-shrink: 0;
+}
+
+.ww-timeline-tab {
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  color: #7f849b;
+  font: 800 12px 'JetBrains Mono', monospace;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: color 150ms, background 150ms, border-color 150ms;
+  border-bottom: 2px solid transparent;
+}
+
+.ww-timeline-tab:hover {
+  color: var(--ww-text);
+}
+
+.ww-timeline-tab.is-active {
+  color: #cbc7ff;
+  border-bottom-color: var(--ww-night);
+  background: rgba(123, 111, 255, 0.06);
+}
+
+/* Audience tab — system-card banner + chat lines + read-only input. */
+.ww-timeline-body-audience {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.ww-timeline-system-card {
+  border: 1px solid rgba(232, 53, 53, 0.28);
+  background: rgba(232, 53, 53, 0.045);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.ww-timeline-system-pin {
+  color: #8f95ad;
+  font: 700 10px 'JetBrains Mono', monospace;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.ww-timeline-system-msg {
+  color: #d4d6e2;
+  font: 700 12px/1.35 'JetBrains Mono', monospace;
+}
+
+.ww-timeline-chat-line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.035);
+  padding: 4px 0 8px;
+  align-items: start;
+}
+
+.ww-timeline-chat-username {
+  display: block;
+  font: 800 11px 'JetBrains Mono', monospace;
+  margin-bottom: 4px;
+  letter-spacing: 0.04em;
+}
+
+.ww-timeline-chat-username.is-mod     { color: #ffd069; }
+.ww-timeline-chat-username.is-blue    { color: #79b7ff; }
+.ww-timeline-chat-username.is-green   { color: #6cdf9a; }
+.ww-timeline-chat-username.is-red     { color: #ff7373; }
+.ww-timeline-chat-username.is-neutral { color: #c7c3ff; }
+
+.ww-timeline-chat-msg {
+  color: #d8dae6;
+  font: 12px/1.35 'JetBrains Mono', monospace;
+  grid-column: 1 / 2;
+  grid-row: 2;
+}
+
+.ww-timeline-chat-time {
+  color: #5f6579;
+  font: 10px 'JetBrains Mono', monospace;
+  align-self: start;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.ww-timeline-chat-input {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr 60px;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.ww-timeline-chat-input-fake {
+  height: 38px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  padding: 0 12px;
+  color: #6e7488;
+  border: 1px solid var(--ww-border-strong);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  font: 12px 'DM Sans', sans-serif;
 }
 
-.ww-timeline-live-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--ww-death);
-  animation: ww-pulse 1.8s ease-in-out infinite;
-  flex-shrink: 0;
+.ww-timeline-chat-send {
+  background: var(--ww-night-raw);
+  border: 0;
+  color: #fff;
+  border-radius: 8px;
+  font: 800 12px 'DM Sans', sans-serif;
+  cursor: pointer;
+  opacity: 0.55;
 }
-
-.ww-timeline-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ww-text-muted);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.ww-timeline-chat-send:disabled {
+  cursor: not-allowed;
 }
 
 .ww-timeline-body {
@@ -2223,44 +2439,53 @@
 }
 
 /* ── AudienceStrip ────────────────────────────────────── */
+/* Flattened single-row strip that lives inside .ww-game-area-center
+   below the channel card. Mirrors finalized.html .audience: 44px box,
+   9px radius, single-line whitespace, AUDIENCE label + watching count
+   + BROADCAST EP + reactions + "+ REACT" spark pushed to the right. */
 .ww-audience-strip {
   height: 44px;
-  background: var(--ww-surface);
-  border-top: 1px solid var(--ww-border);
+  border: 1px solid var(--ww-border);
+  border-radius: 9px;
+  background: rgba(17, 19, 30, 0.94);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
   gap: 14px;
+  padding: 0 16px;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--ww-text-muted);
-}
-.ww-audience-strip-l {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  font-size: 12px;
+  color: #8d94aa;
+  overflow: hidden;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .ww-audience-strip-label {
-  font-family: 'Syne', sans-serif;
+  color: #7d83a0;
   font-weight: 800;
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ww-text-muted);
+  letter-spacing: 0.12em;
 }
 .ww-audience-strip-count strong {
   color: var(--ww-text);
   font-weight: 700;
   margin-right: 4px;
 }
-.ww-audience-strip-ep {
-  color: var(--ww-text-dim);
+.ww-audience-strip-sep {
+  color: #34384f;
 }
-.ww-audience-strip-r {
+.ww-audience-strip-ep {
+  color: var(--ww-text-muted);
+  letter-spacing: 0.04em;
+}
+.ww-audience-strip-reactions {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+.ww-audience-strip-spark {
+  margin-left: auto;
+  color: var(--ww-night);
+  font-weight: 800;
+  letter-spacing: 0.08em;
 }
 .ww-audience-react {
   display: inline-flex;
