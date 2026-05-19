@@ -346,20 +346,28 @@
   opacity: 1;
 }
 
-/* ── Game area (running) ────────────────────────────────── */
+/* ── Game area (always rendered) ────────────────────────── */
+/* The .ww-game-area wrapper is rendered on every status so the
+   WerewolfPhaseIndicator + WerewolfTableSurface inside .ww-game-area-
+   center don't need to change parents when a match starts. Default
+   layout is a flex column for pre-match (phase + board only).
+   .is-live adds the modifier that turns it into the three-column
+   dashboard grid (StatsPanel · center · EventTimeline) once the match
+   is running — matches the approved Pretext-native finalized.html
+   workbench column widths. */
 .ww-game-area {
-  display: grid;
-  /* StatsPanel (246px) · center column (flex) · timeline (302px) — the
-     three-column dashboard layout that runs once a match is live. Column
-     widths match the approved Pretext-native finalized.html workbench.
-     Pre-match (status !== 'running' && !== 'completed') the room renders
-     the board solo, so this grid is only ever the three-column version. */
-  grid-template-columns: 246px minmax(820px, 1fr) 302px;
-  gap: 10px;
-  padding: 10px 14px 0;
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  gap: 10px;
+  padding: 10px 14px 0;
+}
+
+.ww-game-area.is-live {
+  display: grid;
+  grid-template-columns: 246px minmax(820px, 1fr) 302px;
 }
 
 /* Center column inside the workbench: phase indicator → board → channel
@@ -367,17 +375,19 @@
    audience strip during live matches so their bottom borders align with
    the board surface (the alignment fix the finalized.html stage punted
    on by using a margin-left hack — here we land the proper structural
-   fix by parenting both into .center). */
+   fix by parenting both into .center). Always rendered, even pre-match,
+   so the inner phase indicator + board never have to migrate parents. */
 .ww-game-area-center {
   display: flex;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
   min-height: 0;
+  flex: 1;
 }
 
 @media (max-width: 1320px) {
-  .ww-game-area {
+  .ww-game-area.is-live {
     grid-template-columns: 232px minmax(760px, 1fr) 288px;
     padding-left: 8px;
     padding-right: 8px;

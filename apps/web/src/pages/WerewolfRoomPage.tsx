@@ -316,13 +316,6 @@ export function WerewolfRoomPage() {
         observerMode={omniscientView}
       />
 
-      {/* Pre-match: the phase indicator anchors directly under the meta
-          strip so the lobby/ready states still show round + phase context.
-          Once a match is live, the indicator moves INTO the workbench's
-          center column (below) so phase + board + channel-card + audience
-          stack cleanly without the meta strip pushing the board down. */}
-      {!isLive ? <WerewolfPhaseIndicator state={state} /> : null}
-
       {omniscientView ? (
         <p className="ww-observer-sub" aria-live="polite">
           Observer mode: all roles are visible to the spectator. Wired via
@@ -344,47 +337,51 @@ export function WerewolfRoomPage() {
         </div>
       ) : null}
 
-      {isLive ? (
-        <div className="ww-game-area">
-          <StatsPanel state={state} />
-          <div className="ww-game-area-center">
-            <WerewolfPhaseIndicator state={state} />
-            {omniscientView ? (
-              <WerewolfOmniscientTable
-                seats={state.seats}
-                speakingActor={state.speakingActor}
-                thinkingActor={state.thinkingActor}
-                omniscientRoles={omniscientRoles}
-                currentPhaseTag={omniscientPhaseTag}
-                centerSlot={<WerewolfSpeechBoard state={state} />}
-              />
-            ) : (
-              <WerewolfTableSurface state={state} />
-            )}
+      {/* Stable layout shell. The wrapping divs (.ww-game-area +
+          .ww-game-area-center) ALWAYS render — even pre-match — and the
+          WerewolfPhaseIndicator + WerewolfTableSurface (or OmniscientTable)
+          live at fixed positions inside the center column across every
+          status. Only the side panels (StatsPanel, ChannelCard,
+          AudienceStrip, EventTimeline) mount/unmount when isLive flips.
+
+          This is the React-safe pattern that replaces the previous
+          ready→running ternary that moved TableSurface from a direct .ww-room
+          child to a deep grandchild in a single render. That move plus the
+          simultaneous PhaseIndicator and AudienceStrip re-parenting caused
+          a commit-phase `Failed to execute insertBefore` error on the
+          status='ready' → 'running' transition reported in production. */}
+      <div className={`ww-game-area${isLive ? ' is-live' : ''}`}>
+        {isLive ? <StatsPanel state={state} /> : null}
+        <div className="ww-game-area-center">
+          <WerewolfPhaseIndicator state={state} />
+          {omniscientView ? (
+            <WerewolfOmniscientTable
+              seats={state.seats}
+              speakingActor={state.speakingActor}
+              thinkingActor={state.thinkingActor}
+              omniscientRoles={omniscientRoles}
+              currentPhaseTag={omniscientPhaseTag}
+              centerSlot={isLive ? <WerewolfSpeechBoard state={state} /> : undefined}
+            />
+          ) : (
+            <WerewolfTableSurface
+              state={state}
+              {...(!isLive
+                ? { onInvite: inviteNpc, onInviteAgent: inviteAgent }
+                : {})}
+            />
+          )}
+          {isLive ? (
             <WerewolfChannelCard
               title={`${entry?.name ?? 'WEREWOLF MATCH'} · ${deriveEpisodeLabel(state.gameId)}`}
               sub={`${state.seats.length} AI agents · 5 roles · ${omniscientView ? 'omniscient spectator' : 'live'} broadcast`}
               chips={buildChannelCardChips(state.seats, state.gameId, APP_VERSION)}
             />
-            <AudienceStrip episodeId={state.gameId} />
-          </div>
-          <WerewolfEventTimeline lines={state.timeline} />
+          ) : null}
+          {isLive ? <AudienceStrip episodeId={state.gameId} /> : null}
         </div>
-      ) : omniscientView ? (
-        <WerewolfOmniscientTable
-          seats={state.seats}
-          speakingActor={state.speakingActor}
-          thinkingActor={state.thinkingActor}
-          omniscientRoles={omniscientRoles}
-          currentPhaseTag={omniscientPhaseTag}
-        />
-      ) : (
-        <WerewolfTableSurface
-          state={state}
-          onInvite={inviteNpc}
-          onInviteAgent={inviteAgent}
-        />
-      )}
+        {isLive ? <WerewolfEventTimeline lines={state.timeline} /> : null}
+      </div>
 
       {state.status === 'waiting' && emptySeatCount > 0 ? (
         <button
