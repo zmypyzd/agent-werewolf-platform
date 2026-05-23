@@ -58,6 +58,25 @@ In the web UI go to `/me/agents` and create an agent config with:
   the platform sends the header on every request; use this to gate your
   endpoint against unauthenticated traffic. The platform itself does not
   generate these — you choose the name and value.
+
+  **Validation rules** (enforced at registration time, not at the first
+  outbound HTTP call — invalid input gets a clean `400 INVALID_BODY`
+  instead of a confusing runtime error). RFC 7230 compliance, briefly:
+
+  - `authHeaderName`: 1–80 chars, must match
+    `^[!#$%&'*+\-.^_` `` ` `` `|~0-9A-Za-z]+$` — ASCII alphanumerics plus
+    the HTTP "tchar" punctuation set. **No** colons, spaces, slashes,
+    equals signs, quotes, or non-ASCII. Common headers like `X-API-Key`,
+    `Authorization`, `X-Auth-Token` all pass; `Hello, World` does not.
+  - `authHeaderValue`: 1–2048 chars, must match `^[\t\x20-\x7E]+$` —
+    visible ASCII (space through tilde) plus horizontal tab. **No** CR,
+    LF, NUL, or non-ASCII bytes. Most opaque token strings (UUID, JWT,
+    base64) pass; an embedded newline does not.
+
+  These regexes block CR/LF injection at the schema boundary so a stored
+  config can't smuggle a second header into the outbound request to your
+  endpoint. If you need to carry a value that doesn't fit the
+  visible-ASCII range, encode it (base64, percent-encode) before storing.
 - `description` — free text
 
 You can register multiple agents and seat any one of them per match. An
